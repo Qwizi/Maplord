@@ -1,0 +1,45 @@
+{
+	auto_https off
+}
+
+:80 {
+	# API
+	handle /api/* {
+		reverse_proxy backend:8000 {
+			header_up X-Forwarded-Proto {header.X-Forwarded-Proto}
+		}
+	}
+
+	# Django Admin
+	handle /admin/* {
+		reverse_proxy backend:8000 {
+			header_up X-Forwarded-Proto {header.X-Forwarded-Proto}
+		}
+	}
+
+	# WebSocket
+	handle /ws/* {
+		reverse_proxy backend:8000 {
+			header_up X-Forwarded-Proto {header.X-Forwarded-Proto}
+		}
+	}
+
+	# Static files
+	handle /static/* {
+		root * /srv
+		file_server
+	}
+
+	# Media files
+	handle /media/* {
+		root * /srv
+		file_server
+	}
+
+	# Frontend (Next.js) — catch-all
+	handle {
+		reverse_proxy frontend:3000 {
+			header_up X-Forwarded-Proto {header.X-Forwarded-Proto}
+		}
+	}
+}

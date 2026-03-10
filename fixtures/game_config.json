@@ -1,0 +1,245 @@
+[
+{
+  "model": "game_config.gamesettings",
+  "pk": "7e45c05d-854f-4bdc-85f1-297e133dbb50",
+  "fields": {
+    "max_players": 2,
+    "min_players": 2,
+    "tick_interval_ms": 1000,
+    "capital_selection_time_seconds": 30,
+    "match_duration_limit_minutes": 60,
+    "base_unit_generation_rate": 0.5,
+    "capital_generation_bonus": 2.0,
+    "attacker_advantage": 0.0,
+    "defender_advantage": 0.1,
+    "combat_randomness": 0.0,
+    "starting_units": 10,
+    "starting_regions": 1,
+    "neutral_region_units": 3,
+    "elo_k_factor": 32
+  }
+},
+{
+  "model": "game_config.buildingtype",
+  "pk": "2a270f85-501e-4540-befd-70ab599b9da6",
+  "fields": {
+    "name": "Port",
+    "slug": "port",
+    "description": "Builds ships. Must be placed on a coastal region.",
+    "icon": "⚓",
+    "cost": 50,
+    "build_time_ticks": 12,
+    "max_per_region": 1,
+    "requires_coastal": true,
+    "defense_bonus": 0.0,
+    "vision_range": 1,
+    "unit_generation_bonus": 0.2,
+    "is_active": true,
+    "order": 4
+  }
+},
+{
+  "model": "game_config.buildingtype",
+  "pk": "2b21d77f-7d97-4ad0-9ea5-0e107feb557c",
+  "fields": {
+    "name": "Barracks",
+    "slug": "barracks",
+    "description": "Trains infantry units. Basic land military building.",
+    "icon": "🏠",
+    "cost": 30,
+    "build_time_ticks": 8,
+    "max_per_region": 1,
+    "requires_coastal": false,
+    "defense_bonus": 0.0,
+    "vision_range": 0,
+    "unit_generation_bonus": 0.5,
+    "is_active": true,
+    "order": 1
+  }
+},
+{
+  "model": "game_config.buildingtype",
+  "pk": "5e501726-f5e4-400f-a69c-406151a779e4",
+  "fields": {
+    "name": "Aircraft Carrier",
+    "slug": "carrier",
+    "description": "Launches fighters with long range. Requires coastal region.",
+    "icon": "🛫",
+    "cost": 100,
+    "build_time_ticks": 25,
+    "max_per_region": 1,
+    "requires_coastal": true,
+    "defense_bonus": 0.1,
+    "vision_range": 3,
+    "unit_generation_bonus": 0.1,
+    "is_active": true,
+    "order": 5
+  }
+},
+{
+  "model": "game_config.buildingtype",
+  "pk": "b7744936-1eb6-4d3d-8694-96f78e09657e",
+  "fields": {
+    "name": "Radar",
+    "slug": "radar",
+    "description": "Extends vision range. Reveals enemy movements nearby.",
+    "icon": "📡",
+    "cost": 35,
+    "build_time_ticks": 6,
+    "max_per_region": 1,
+    "requires_coastal": false,
+    "defense_bonus": 0.0,
+    "vision_range": 5,
+    "unit_generation_bonus": 0.0,
+    "is_active": true,
+    "order": 6
+  }
+},
+{
+  "model": "game_config.buildingtype",
+  "pk": "ced6527c-8259-44d1-bb36-fc51dec4d9b9",
+  "fields": {
+    "name": "Tower",
+    "slug": "tower",
+    "description": "Defensive structure. Grants defense bonus to the region.",
+    "icon": "🗼",
+    "cost": 40,
+    "build_time_ticks": 10,
+    "max_per_region": 1,
+    "requires_coastal": false,
+    "defense_bonus": 0.4,
+    "vision_range": 2,
+    "unit_generation_bonus": 0.0,
+    "is_active": true,
+    "order": 3
+  }
+},
+{
+  "model": "game_config.buildingtype",
+  "pk": "d57c80f4-9e9a-40fa-849b-be5d3772380d",
+  "fields": {
+    "name": "Factory",
+    "slug": "factory",
+    "description": "Produces heavy armored vehicles. Stronger than infantry.",
+    "icon": "🏭",
+    "cost": 60,
+    "build_time_ticks": 15,
+    "max_per_region": 1,
+    "requires_coastal": false,
+    "defense_bonus": 0.0,
+    "vision_range": 0,
+    "unit_generation_bonus": 0.3,
+    "is_active": true,
+    "order": 2
+  }
+},
+{
+  "model": "game_config.unittype",
+  "pk": "0586c222-e4b0-4316-8644-9fa3e50837c3",
+  "fields": {
+    "name": "Ship",
+    "slug": "ship",
+    "description": "Naval unit. Can attack coastal regions.",
+    "icon": "🚢",
+    "attack": 2.0,
+    "defense": 2.0,
+    "speed": 2,
+    "attack_range": 1,
+    "produced_by": "2a270f85-501e-4540-befd-70ab599b9da6",
+    "production_cost": 20,
+    "production_time_ticks": 10,
+    "movement_type": "sea",
+    "is_active": true,
+    "order": 3
+  }
+},
+{
+  "model": "game_config.unittype",
+  "pk": "1da708a2-951e-4a0f-b99a-427a0502c5d2",
+  "fields": {
+    "name": "Fighter",
+    "slug": "fighter",
+    "description": "Air unit with long range. Launched from carriers.",
+    "icon": "✈️",
+    "attack": 2.5,
+    "defense": 1.0,
+    "speed": 3,
+    "attack_range": 3,
+    "produced_by": "5e501726-f5e4-400f-a69c-406151a779e4",
+    "production_cost": 25,
+    "production_time_ticks": 12,
+    "movement_type": "air",
+    "is_active": true,
+    "order": 4
+  }
+},
+{
+  "model": "game_config.unittype",
+  "pk": "65c6f3d6-3f02-465f-85c2-9a6dba3563db",
+  "fields": {
+    "name": "Infantry",
+    "slug": "infantry",
+    "description": "Basic land unit. Cheap and fast to produce.",
+    "icon": "🪖",
+    "attack": 1.0,
+    "defense": 1.0,
+    "speed": 1,
+    "attack_range": 1,
+    "produced_by": null,
+    "production_cost": 0,
+    "production_time_ticks": 0,
+    "movement_type": "land",
+    "is_active": true,
+    "order": 1
+  }
+},
+{
+  "model": "game_config.unittype",
+  "pk": "a3620265-5c70-4bec-b276-3d52e0f7f831",
+  "fields": {
+    "name": "Tank",
+    "slug": "tank",
+    "description": "Heavy armored vehicle. Slow but powerful.",
+    "icon": "🛡️",
+    "attack": 3.0,
+    "defense": 2.5,
+    "speed": 1,
+    "attack_range": 1,
+    "produced_by": "d57c80f4-9e9a-40fa-849b-be5d3772380d",
+    "production_cost": 15,
+    "production_time_ticks": 8,
+    "movement_type": "land",
+    "is_active": true,
+    "order": 2
+  }
+},
+{
+  "model": "game_config.mapconfig",
+  "pk": "ba702a9f-a364-4136-94dc-363ef810a62d",
+  "fields": {
+    "name": "Central Europe",
+    "description": "",
+    "country_codes": [
+      "POL",
+      "DEU",
+      "FRA",
+      "CZE",
+      "SVK",
+      "UKR"
+    ],
+    "is_active": true,
+    "created_at": "2026-03-10T21:10:07.994Z"
+  }
+},
+{
+  "model": "game_config.mapconfig",
+  "pk": "e352cd6f-079e-437b-aaf9-b55c98891234",
+  "fields": {
+    "name": "World",
+    "description": "Cała mapa świata - 172 kraje, ~3949 regionów",
+    "country_codes": [],
+    "is_active": true,
+    "created_at": "2026-03-10T22:19:25.508Z"
+  }
+}
+]
