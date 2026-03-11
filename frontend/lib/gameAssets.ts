@@ -20,20 +20,7 @@ export function getBuildingAsset(slug: string | null | undefined): string | null
   return BUILDING_ASSET_MAP[slug] ?? null;
 }
 
-export function getUnitAsset(
-  kind:
-    | "default"
-    | "moving"
-    | "air"
-    | "infantry"
-    | "tank"
-    | "ship"
-    | "fighter"
-    | "ground_unit"
-    | "ground_unit_sphere"
-    | "ship_1"
-    | "bomber" = "default"
-): string {
+export function getUnitAsset(kind: string | null | undefined = "default"): string {
   switch (kind) {
     case "moving":
       return "/assets/units/moving.webp";

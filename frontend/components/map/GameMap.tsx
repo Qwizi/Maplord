@@ -87,9 +87,9 @@ function loadMapImage(
       return;
     }
 
-    map.loadImage(url, (error, image) => {
-      if (error || !image) {
-        reject(error ?? new Error(`Failed to load image: ${url}`));
+    map.loadImage(url).then(({ data: image }) => {
+      if (!image) {
+        reject(new Error(`Failed to load image: ${url}`));
         return;
       }
 
@@ -97,6 +97,8 @@ function loadMapImage(
         map.addImage(id, image);
       }
       resolve();
+    }).catch((error) => {
+      reject(error);
     });
   });
 }
@@ -228,7 +230,7 @@ export default function GameMap({
     const map = mapRef.current;
     if (!map || !tilesUrl) return;
 
-    const addSourceIfMissing = (id: string, spec: maplibregl.AnySourceData) => {
+    const addSourceIfMissing = (id: string, spec: maplibregl.SourceSpecification) => {
       if (map.getSource(id)) return;
       try {
         map.addSource(id, spec);

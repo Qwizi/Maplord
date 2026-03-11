@@ -133,6 +133,7 @@ export interface UnitType {
   production_cost: number;
   production_time_ticks: number;
   manpower_cost: number;
+  order: number;
 }
 
 export interface GameSettings {

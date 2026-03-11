@@ -1,0 +1,15 @@
+# Dependencies (installed during build)
+node_modules
+.pnpm-store
+
+# Build output (generated during build)
+.next
+
+# Dev artifacts
+.git
+*.log
+tsconfig.tsbuildinfo
+
+# Env files
+.env
+.env.*

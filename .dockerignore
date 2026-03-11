@@ -1,0 +1,22 @@
+# Python
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+
+# Frontend (not needed for backend image)
+frontend/
+
+# Dev artifacts
+.git
+.env
+.env.*
+*.log
+celerybeat-schedule
+celerybeat-schedule-wal
+celerybeat-schedule-shm
+
+# Static/media (generated at runtime)
+static/
+media/
