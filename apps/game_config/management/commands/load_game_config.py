@@ -1,9 +1,11 @@
 import json
 from pathlib import Path
 
+from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 
 from apps.game_config.models import BuildingType, GameSettings, MapConfig, UnitType
+from apps.matchmaking.models import Match
 
 
 DEFAULT_FIXTURE_PATH = (
@@ -14,7 +16,7 @@ DEFAULT_FIXTURE_PATH = (
 
 
 class Command(BaseCommand):
-    help = "Load game config fixture with upserts (safe for GameSettings singleton)"
+    help = "Cleanly reload game config from fixture, then re-import provinces"
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -22,6 +24,11 @@ class Command(BaseCommand):
             type=str,
             default=str(DEFAULT_FIXTURE_PATH),
             help=f"Path to fixture JSON (default: {DEFAULT_FIXTURE_PATH})",
+        )
+        parser.add_argument(
+            "--skip-provinces",
+            action="store_true",
+            help="Skip running import_provinces after loading config",
         )
 
     def handle(self, *args, **options):
@@ -51,47 +58,42 @@ class Command(BaseCommand):
         if not settings_entry:
             raise CommandError("Fixture does not contain game_config.gamesettings")
 
-        self._upsert_settings(settings_entry)
-        building_map = self._upsert_buildings(building_entries)
-        self._upsert_units(unit_entries, building_entries, building_map)
-        self._upsert_maps(map_entries)
+        self.stdout.write("Clearing existing game config...")
+        Match.objects.update(map_config=None)
+        UnitType.objects.all().delete()
+        BuildingType.objects.all().delete()
+        MapConfig.objects.all().delete()
+        GameSettings.objects.all().delete()
+        self.stdout.write("  Cleared.")
+
+        self._load_settings(settings_entry)
+        building_map = self._load_buildings(building_entries)
+        self._load_units(unit_entries, building_entries, building_map)
+        self._load_maps(map_entries)
 
         self.stdout.write(self.style.SUCCESS("Game config loaded successfully"))
 
-    def _upsert_settings(self, entry: dict):
+        if not options["skip_provinces"]:
+            self.stdout.write("\nRunning import_provinces --clear ...")
+            call_command("import_provinces", clear=True, stdout=self.stdout, stderr=self.stderr)
+
+    def _load_settings(self, entry: dict):
         fields = dict(entry.get("fields") or {})
-        instance = GameSettings.objects.first()
-        if instance is None:
-            instance = GameSettings(id=entry.get("pk"))
+        GameSettings.objects.create(**fields)
+        self.stdout.write("  GameSettings: created")
 
-        for field_name, value in fields.items():
-            setattr(instance, field_name, value)
-        instance.save()
-
-        if GameSettings.objects.exclude(pk=instance.pk).exists():
-            GameSettings.objects.exclude(pk=instance.pk).delete()
-
-        self.stdout.write("  GameSettings: upserted")
-
-    def _upsert_buildings(self, entries: list[dict]) -> dict[str, BuildingType]:
+    def _load_buildings(self, entries: list[dict]) -> dict[str, BuildingType]:
         building_map: dict[str, BuildingType] = {}
-        seen_slugs: list[str] = []
 
         for entry in entries:
             fields = dict(entry.get("fields") or {})
-            slug = fields["slug"]
-            seen_slugs.append(slug)
-            defaults = {key: value for key, value in fields.items() if key != "slug"}
-            instance, _ = BuildingType.objects.update_or_create(slug=slug, defaults=defaults)
+            instance = BuildingType.objects.create(**fields)
             building_map[str(entry.get("pk"))] = instance
 
-        if seen_slugs:
-            BuildingType.objects.exclude(slug__in=seen_slugs).update(is_active=False)
-
-        self.stdout.write(f"  BuildingType: {len(seen_slugs)} upserted")
+        self.stdout.write(f"  BuildingType: {len(building_map)} created")
         return building_map
 
-    def _upsert_units(
+    def _load_units(
         self,
         entries: list[dict],
         building_entries: list[dict],
@@ -101,42 +103,28 @@ class Command(BaseCommand):
             str(entry.get("pk")): (entry.get("fields") or {}).get("slug")
             for entry in building_entries
         }
-        seen_slugs: list[str] = []
+        count = 0
 
         for entry in entries:
             fields = dict(entry.get("fields") or {})
-            slug = fields["slug"]
-            seen_slugs.append(slug)
             produced_by_pk = fields.pop("produced_by", None)
             produced_by_slug = building_pk_to_slug.get(str(produced_by_pk)) if produced_by_pk else None
-            produced_by = None
-            if produced_by_slug:
-                produced_by = BuildingType.objects.filter(slug=produced_by_slug).first()
+            fields["produced_by"] = (
+                BuildingType.objects.filter(slug=produced_by_slug).first()
+                if produced_by_slug
+                else None
+            )
+            UnitType.objects.create(**fields)
+            count += 1
 
-            defaults = {key: value for key, value in fields.items() if key != "slug"}
-            defaults["produced_by"] = produced_by
-            UnitType.objects.update_or_create(slug=slug, defaults=defaults)
+        self.stdout.write(f"  UnitType: {count} created")
 
-        if seen_slugs:
-            UnitType.objects.exclude(slug__in=seen_slugs).update(is_active=False)
-
-        self.stdout.write(f"  UnitType: {len(seen_slugs)} upserted")
-
-    def _upsert_maps(self, entries: list[dict]):
-        seen_names: list[str] = []
+    def _load_maps(self, entries: list[dict]):
+        count = 0
 
         for entry in entries:
-            fields = dict(entry.get("fields") or {})
-            name = fields["name"]
-            seen_names.append(name)
-            defaults = {
-                key: value
-                for key, value in fields.items()
-                if key not in {"name", "created_at"}
-            }
-            MapConfig.objects.update_or_create(name=name, defaults=defaults)
+            fields = {k: v for k, v in (entry.get("fields") or {}).items() if k != "created_at"}
+            MapConfig.objects.create(**fields)
+            count += 1
 
-        if seen_names:
-            MapConfig.objects.exclude(name__in=seen_names).update(is_active=False)
-
-        self.stdout.write(f"  MapConfig: {len(seen_names)} upserted")
+        self.stdout.write(f"  MapConfig: {count} created")
