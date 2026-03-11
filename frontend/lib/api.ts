@@ -189,9 +189,12 @@ export async function getRegionsGraph(matchId?: string): Promise<RegionGraphEntr
 }
 
 /** URL template for MVT vector tiles (MapLibre vector source).
+ *  MapLibre requires absolute URLs — use window.location.origin as base.
  *  Pass matchId to restrict tiles to that match's map config. */
 export function getRegionTilesUrl(matchId?: string): string {
-  const base = `${API_BASE}/geo/tiles/{z}/{x}/{y}/`;
+  const origin =
+    typeof window !== "undefined" ? window.location.origin : "";
+  const base = `${origin}/api/v1/geo/tiles/{z}/{x}/{y}/`;
   return matchId ? `${base}?match_id=${matchId}` : base;
 }
 
