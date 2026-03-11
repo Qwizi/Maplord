@@ -1,4 +1,9 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost/api/v1";
+// SSR: use internal container URL; browser: use relative path (same origin via Caddy)
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL ||
+  (typeof window !== "undefined"
+    ? "/api/v1"
+    : process.env.API_URL || "http://backend:8000/api/v1");
 
 interface FetchOptions extends RequestInit {
   token?: string | null;
