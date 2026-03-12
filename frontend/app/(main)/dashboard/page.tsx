@@ -20,17 +20,20 @@ import {
   Swords,
   User,
   Trophy,
-  LogOut,
-  Loader2,
   Search,
 } from "lucide-react";
 
 export default function DashboardPage() {
-  const { user, loading: authLoading, logout, token } = useAuth();
-  const { inQueue, playersInQueue, matchId, joinQueue, leaveQueue } =
+  const { user, loading: authLoading, refreshUser, token } = useAuth();
+  const { inQueue, playersInQueue, matchId, activeMatchId, joinQueue, leaveQueue } =
     useMatchmaking();
   const router = useRouter();
   const [recentMatches, setRecentMatches] = useState<Match[]>([]);
+  const activeMatch = recentMatches.find(
+    (match) =>
+      (match.status === "selecting" || match.status === "in_progress") &&
+      match.players.some((player) => player.user_id === user?.id && player.is_alive)
+  ) ?? null;
 
   useEffect(() => {
     if (authLoading) return;
@@ -41,11 +44,18 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (token) {
-      getMyMatches(token)
-        .then(setRecentMatches)
-        .catch(() => {});
+      const loadDashboardState = () => {
+        refreshUser().catch(() => {});
+        getMyMatches(token)
+          .then(setRecentMatches)
+          .catch(() => {});
+      };
+
+      loadDashboardState();
+      const interval = window.setInterval(loadDashboardState, 10000);
+      return () => window.clearInterval(interval);
     }
-  }, [token]);
+  }, [token, refreshUser]);
 
   // Redirect to game when match found
   useEffect(() => {
@@ -54,76 +64,28 @@ export default function DashboardPage() {
     }
   }, [matchId, router]);
 
+  useEffect(() => {
+    if (activeMatchId) {
+      router.push(`/game/${activeMatchId}`);
+    }
+  }, [activeMatchId, router]);
+
   if (authLoading || !user) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-950">
-        <Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
+        <Image
+          src="/assets/match_making/circle291.webp"
+          alt=""
+          width={48}
+          height={48}
+          className="h-12 w-12 animate-spin object-contain"
+        />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,#1a2740_0%,#09111d_48%,#04070d_100%)] text-zinc-100">
-      <div className="pointer-events-none absolute inset-0 bg-[url('/assets/ui/hex_bg_tile.webp')] bg-[size:240px] opacity-[0.05]" />
-      <div className="pointer-events-none absolute right-0 top-0 h-[420px] w-[420px] opacity-50">
-        <Image
-          src="/assets/match_making/g707.webp"
-          alt=""
-          fill
-          className="object-contain object-top-right"
-        />
-      </div>
-      <div className="pointer-events-none absolute left-0 top-24 h-[320px] w-[320px] opacity-35">
-        <Image
-          src="/assets/match_making/g16.webp"
-          alt=""
-          fill
-          className="object-contain object-left"
-        />
-      </div>
-
-      {/* Top bar */}
-      <header className="relative border-b border-white/10 bg-slate-950/45 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-2">
-              <Image
-                src="/assets/common/world.webp"
-                alt="MapLord"
-                width={26}
-                height={26}
-                className="h-[26px] w-[26px] object-contain"
-              />
-            </div>
-            <div>
-              <p className="font-display text-xs uppercase tracking-[0.32em] text-cyan-200/70">
-                Command Hub
-              </p>
-              <h1 className="font-display text-2xl text-zinc-50">MapLord</h1>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2">
-              <User className="h-4 w-4" />
-              <span className="font-medium">{user.username}</span>
-              <Badge className="border-0 bg-cyan-400/15 text-cyan-200 hover:bg-cyan-400/15">
-                {user.elo_rating} ELO
-              </Badge>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={logout}
-              className="rounded-full border border-white/10 bg-white/[0.03] px-4 text-slate-200 hover:bg-white/[0.08]"
-            >
-              <LogOut className="mr-1 h-4 w-4" />
-              Wyloguj
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      <main className="relative mx-auto max-w-5xl space-y-6 px-6 py-8">
+    <div className="space-y-6">
         <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
           <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/55 p-6 shadow-[0_30px_90px_rgba(0,0,0,0.4)] backdrop-blur-xl">
             <div className="pointer-events-none absolute inset-y-0 right-0 w-1/2 opacity-80">
@@ -152,7 +114,7 @@ export default function DashboardPage() {
                     Kolejka
                   </div>
                   <div className="mt-2 font-display text-2xl text-amber-200">
-                    {inQueue ? "Live" : "Idle"}
+                    {activeMatch ? "Match" : inQueue ? "Live" : "Idle"}
                   </div>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
@@ -199,9 +161,9 @@ export default function DashboardPage() {
                 <span className="font-medium text-zinc-100">{user.email}</span>
               </div>
               <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
-                <span className="text-sm text-slate-400">Aktywny matchmaking</span>
+                <span className="text-sm text-slate-400">Aktywna gra</span>
                 <span className="font-display text-lg text-cyan-200">
-                  {inQueue ? "Tak" : "Nie"}
+                  {activeMatch ? "Tak" : "Nie"}
                 </span>
               </div>
               <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
@@ -219,14 +181,32 @@ export default function DashboardPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Swords className="h-5 w-5 text-red-400" />
-              Szukaj gry
+              {activeMatch ? "Aktywny mecz" : "Szukaj gry"}
             </CardTitle>
             <CardDescription>
-              Dołącz do kolejki i walcz o dominację na mapie
+              {activeMatch
+                ? "Najpierw dokończ aktualną rozgrywkę"
+                : "Dołącz do kolejki i walcz o dominację na mapie"}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {inQueue ? (
+            {activeMatch ? (
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-sm leading-6 text-slate-400">
+                  Masz już aktywny mecz w statusie{" "}
+                  <span className="font-medium text-zinc-100">{activeMatch.status}</span>.
+                  Nie możesz dołączyć do nowej gry, dopóki tamta się nie zakończy.
+                </div>
+                <Button
+                  size="lg"
+                  className="h-11 gap-2 rounded-full border border-cyan-300/30 bg-[linear-gradient(135deg,#38bdf8,#0f766e)] px-6 font-display uppercase tracking-[0.2em] text-slate-950"
+                  onClick={() => router.push(`/game/${activeMatch.id}`)}
+                >
+                  <Search className="h-5 w-5" />
+                  Wróć do gry
+                </Button>
+              </div>
+            ) : inQueue ? (
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
                   <Image
@@ -237,7 +217,6 @@ export default function DashboardPage() {
                     className="h-10 w-10 animate-spin object-contain"
                   />
                   <div className="flex items-center gap-2">
-                    <Loader2 className="h-5 w-5 animate-spin text-yellow-400" />
                     <span>Szukam przeciwnika...</span>
                     <Badge className="border-0 bg-white/10 text-slate-200 hover:bg-white/10">
                       {playersInQueue} w kolejce
@@ -256,8 +235,7 @@ export default function DashboardPage() {
             ) : (
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-sm leading-6 text-slate-400">
-                  Kolejka ma byc glowne CTA dashboardu, nie maly guzik schowany
-                  w jednej z kart.
+                  W kolejce jest teraz {playersInQueue} {playersInQueue === 1 ? "gracz" : playersInQueue < 5 ? "graczy" : "graczy"}.
                 </div>
                 <Button
                   size="lg"
@@ -329,13 +307,13 @@ export default function DashboardPage() {
                               : "secondary"
                           }
                         >
-                          {match.status}
+                      {match.status}
                         </Badge>
                         <span className="text-sm text-zinc-400">
                           {match.players.length} graczy
                         </span>
                       </div>
-                      {match.status === "in_progress" && (
+                      {(match.status === "in_progress" || match.status === "selecting") && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -353,7 +331,6 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </div>
-      </main>
     </div>
   );
 }

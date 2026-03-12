@@ -3,7 +3,7 @@ import copy
 from django.test import SimpleTestCase
 
 from apps.game.consumers import GameConsumer
-from apps.game.engine import GameEngine
+from apps.game.engine import GameEngine, MAX_BUILD_QUEUE_PER_REGION, MAX_UNIT_QUEUE_PER_REGION
 
 
 class GameConsumerDeltaTests(SimpleTestCase):
@@ -148,6 +148,30 @@ class GameConsumerDeltaTests(SimpleTestCase):
         self.assertEqual(changed["1"]["unit_count"], 6)
         self.assertEqual(changed["1"]["units"]["infantry"], 6)
 
+    def test_disconnect_timeout_marks_player_eliminated_and_game_over(self):
+        consumer = GameConsumer()
+        players = {
+            "p1": {
+                "is_alive": True,
+                "connected": False,
+                "disconnect_deadline": 1,
+            },
+            "p2": {
+                "is_alive": True,
+                "connected": True,
+                "disconnect_deadline": None,
+            },
+        }
+
+        changed_events = consumer._resolve_disconnect_timeout_events(players)
+
+        self.assertEqual(changed_events[0]["type"], "player_eliminated")
+        self.assertEqual(changed_events[0]["player_id"], "p1")
+        self.assertEqual(changed_events[0]["reason"], "disconnect_timeout")
+        self.assertEqual(changed_events[1]["type"], "game_over")
+        self.assertEqual(changed_events[1]["winner_id"], "p2")
+        self.assertFalse(players["p1"]["is_alive"])
+
 
 class GameEngineAirMovementTests(SimpleTestCase):
     def test_air_units_can_move_to_owned_region_over_enemy_regions(self):
@@ -196,3 +220,179 @@ class GameEngineAirMovementTests(SimpleTestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["type"], "troops_sent")
         self.assertEqual(events[0]["action_type"], "move")
+
+    def test_move_to_owned_region_keeps_air_units_without_production_building(self):
+        settings = {
+            "default_unit_type_slug": "infantry",
+            "unit_types": {
+                "fighter": {
+                    "attack": 2.5,
+                    "defense": 1.0,
+                    "speed": 1,
+                    "attack_range": 3,
+                    "movement_type": "air",
+                    "production_cost": 25,
+                    "production_time_ticks": 12,
+                    "produced_by_slug": "carrier",
+                    "manpower_cost": 10,
+                }
+            },
+        }
+        engine = GameEngine(settings, {"1": ["2"], "2": ["1"]})
+        regions = {
+            "1": {
+                "owner_id": "p1",
+                "unit_count": 10,
+                "units": {"fighter": 1, "infantry": 10},
+                "is_capital": False,
+                "is_coastal": False,
+                "buildings": {"carrier": 1},
+            },
+            "2": {
+                "owner_id": "p1",
+                "unit_count": 0,
+                "units": {},
+                "is_capital": False,
+                "is_coastal": False,
+                "buildings": {},
+            },
+        }
+        transit_queue: list[dict] = []
+
+        events = engine._process_move(
+            {
+                "action_type": "move",
+                "source_region_id": "1",
+                "target_region_id": "2",
+                "player_id": "p1",
+                "units": 1,
+                "unit_type": "fighter",
+            },
+            regions,
+            transit_queue=transit_queue,
+        )
+
+        self.assertEqual(events[0]["type"], "troops_sent")
+        arrival_events = engine._resolve_move_arrival(transit_queue[0], regions)
+        self.assertEqual(arrival_events[0]["type"], "units_moved")
+        self.assertEqual(regions["2"]["units"]["fighter"], 1)
+
+    def test_move_rejects_sea_units_to_non_coastal_owned_region(self):
+        settings = {
+            "default_unit_type_slug": "infantry",
+            "unit_types": {
+                "ship": {
+                    "attack": 2.0,
+                    "defense": 2.0,
+                    "speed": 4,
+                    "attack_range": 4,
+                    "movement_type": "sea",
+                    "sea_hop_distance_km": 2800,
+                    "production_cost": 20,
+                    "production_time_ticks": 10,
+                    "produced_by_slug": "port",
+                    "manpower_cost": 10,
+                }
+            },
+        }
+        engine = GameEngine(settings, {"1": ["2"], "2": ["1"]})
+        regions = {
+            "1": {
+                "owner_id": "p1",
+                "unit_count": 10,
+                "units": {"ship": 1, "infantry": 10},
+                "is_capital": False,
+                "is_coastal": True,
+                "buildings": {"port": 1},
+            },
+            "2": {
+                "owner_id": "p1",
+                "unit_count": 0,
+                "units": {},
+                "is_capital": False,
+                "is_coastal": False,
+                "buildings": {},
+            },
+        }
+
+        events = engine._process_move(
+            {
+                "action_type": "move",
+                "source_region_id": "1",
+                "target_region_id": "2",
+                "player_id": "p1",
+                "units": 1,
+                "unit_type": "ship",
+            },
+            regions,
+            transit_queue=[],
+        )
+
+        self.assertEqual(events[0]["type"], "action_rejected")
+        self.assertEqual(regions["1"]["units"]["ship"], 1)
+
+
+class GameEngineQueueLimitTests(SimpleTestCase):
+    def test_build_queue_has_region_cap(self):
+        engine = GameEngine(
+            settings={
+                "default_unit_type_slug": "infantry",
+                "building_types": {
+                    "factory": {
+                        "currency_cost": 10,
+                        "build_time_ticks": 5,
+                        "max_per_region": 10,
+                    }
+                },
+            },
+            neighbor_map={},
+        )
+        players = {"p1": {"currency": 100}}
+        regions = {"1": {"owner_id": "p1", "buildings": {}, "is_coastal": False}}
+        buildings_queue = [
+            {"region_id": "1", "building_type": "factory", "player_id": "p1", "ticks_remaining": 3, "total_ticks": 5}
+            for _ in range(MAX_BUILD_QUEUE_PER_REGION)
+        ]
+
+        events = engine._process_build(
+            {"action_type": "build", "region_id": "1", "building_type": "factory", "player_id": "p1"},
+            players,
+            regions,
+            buildings_queue,
+        )
+
+        self.assertEqual(events[0]["type"], "action_rejected")
+        self.assertIn("maksymalna liczbe budow", events[0]["message"])
+
+    def test_unit_queue_has_region_cap(self):
+        engine = GameEngine(
+            settings={
+                "default_unit_type_slug": "infantry",
+                "unit_types": {
+                    "ship": {
+                        "produced_by_slug": "port",
+                        "movement_type": "sea",
+                        "production_cost": 10,
+                        "production_time_ticks": 5,
+                        "manpower_cost": 1,
+                    }
+                },
+            },
+            neighbor_map={},
+        )
+        players = {"p1": {"currency": 100}}
+        regions = {"1": {"owner_id": "p1", "buildings": {"port": 1}, "is_coastal": True, "units": {"infantry": 20}}}
+        unit_queue = [
+            {"region_id": "1", "player_id": "p1", "unit_type": "ship", "quantity": 1, "ticks_remaining": 3, "total_ticks": 5}
+            for _ in range(MAX_UNIT_QUEUE_PER_REGION)
+        ]
+
+        events = engine._process_unit_production(
+            {"action_type": "produce_unit", "region_id": "1", "unit_type": "ship", "player_id": "p1"},
+            players,
+            regions,
+            unit_queue,
+        )
+
+        self.assertEqual(events[0]["type"], "action_rejected")
+        self.assertIn("maksymalna liczbe jednostek", events[0]["message"])

@@ -28,6 +28,9 @@ export interface GamePlayer {
   username: string;
   color: string;
   is_alive: boolean;
+  connected?: boolean;
+  disconnect_deadline?: number | null;
+  left_match_at?: number | null;
   capital_region_id: string | null;
   currency: number;
 }
@@ -81,6 +84,7 @@ interface UseGameSocketReturn {
   move: (sourceRegionId: string, targetRegionId: string, units: number, unitType?: string | null) => void;
   build: (regionId: string, buildingType: string) => void;
   produceUnit: (regionId: string, unitType: string) => void;
+  leaveMatch: () => Promise<boolean>;
 }
 
 export function useGameSocket(matchId: string): UseGameSocketReturn {
@@ -88,6 +92,7 @@ export function useGameSocket(matchId: string): UseGameSocketReturn {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [events, setEvents] = useState<GameEvent[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
+  const leaveResolverRef = useRef<((value: boolean) => void) | null>(null);
 
   const handleMessage = useCallback((msg: WSMessage) => {
     switch (msg.type) {
@@ -116,6 +121,17 @@ export function useGameSocket(matchId: string): UseGameSocketReturn {
         const isGameOver = tickEvents.some((e) => e.type === "game_over");
         setGameState((prev) => {
           if (!prev) return prev;
+          const mergedRegions = msg.regions
+            ? Object.fromEntries(
+                Object.entries(msg.regions as Record<string, GameRegion>).map(([regionId, regionUpdate]) => [
+                  regionId,
+                  {
+                    ...prev.regions[regionId],
+                    ...regionUpdate,
+                  },
+                ])
+              )
+            : null;
           return {
             ...prev,
             meta: {
@@ -124,8 +140,8 @@ export function useGameSocket(matchId: string): UseGameSocketReturn {
               ...(isGameOver ? { status: "finished" } : {}),
             },
             players: (msg.players as Record<string, GamePlayer>) || prev.players,
-            regions: msg.regions
-              ? { ...prev.regions, ...(msg.regions as Record<string, GameRegion>) }
+            regions: mergedRegions
+              ? { ...prev.regions, ...mergedRegions }
               : prev.regions,
             buildings_queue: (msg.buildings_queue as BuildingQueueItem[]) ?? prev.buildings_queue,
             unit_queue: (msg.unit_queue as UnitQueueItem[]) ?? prev.unit_queue,
@@ -159,6 +175,12 @@ export function useGameSocket(matchId: string): UseGameSocketReturn {
           { type: "server_error", message: msg.message as string },
         ]);
         break;
+      case "match_left":
+        if (leaveResolverRef.current) {
+          leaveResolverRef.current(true);
+          leaveResolverRef.current = null;
+        }
+        break;
     }
   }, []);
 
@@ -172,6 +194,10 @@ export function useGameSocket(matchId: string): UseGameSocketReturn {
       token,
       handleMessage,
       () => {
+        if (leaveResolverRef.current) {
+          leaveResolverRef.current(false);
+          leaveResolverRef.current = null;
+        }
         if (!disposed) {
           setConnected(false);
         }
@@ -244,6 +270,25 @@ export function useGameSocket(matchId: string): UseGameSocketReturn {
     [send]
   );
 
+  const leaveMatch = useCallback(() => {
+    return new Promise<boolean>((resolve) => {
+      if (wsRef.current?.readyState !== WebSocket.OPEN) {
+        resolve(false);
+        return;
+      }
+
+      leaveResolverRef.current = resolve;
+      wsRef.current.send(JSON.stringify({ action: "leave_match" }));
+
+      window.setTimeout(() => {
+        if (leaveResolverRef.current === resolve) {
+          leaveResolverRef.current = null;
+          resolve(false);
+        }
+      }, 1500);
+    });
+  }, []);
+
   return {
     connected,
     gameState,
@@ -253,5 +298,6 @@ export function useGameSocket(matchId: string): UseGameSocketReturn {
     move,
     build,
     produceUnit,
+    leaveMatch,
   };
 }

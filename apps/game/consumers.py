@@ -22,6 +22,8 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
       - running the asyncio game loop (one loop per match, guarded by Redis lock)
     """
 
+    DISCONNECT_GRACE_SECONDS = 180
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.match_id: str | None = None
@@ -54,12 +56,17 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
         await self.state_manager.connect()
 
         await self._ensure_game_initialized()
+        if not await self._mark_player_connected():
+            await self.close(code=4004)
+            return
 
         meta = await self.state_manager.get_meta()
         if meta.get("status") == "selecting":
+            await self._finalize_expired_disconnects()
             await self._finalize_capital_selection_if_expired()
             await self._try_schedule_capital_selection_timeout()
         elif meta.get("status") == "in_progress":
+            await self._finalize_expired_disconnects()
             # Game is running but the loop owner may have disconnected.
             # Try to acquire the lock and resume — if the lock is already held
             # (another consumer is running the loop) this is a no-op.
@@ -69,6 +76,12 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
         await self.send_json({"type": "game_state", "state": state})
 
     async def disconnect(self, close_code):
+        if self.state_manager and self.user and not self.user.is_anonymous:
+            try:
+                await self._mark_player_disconnected()
+            except Exception:
+                logger.exception("Failed to mark player disconnected for match %s", self.match_id)
+
         if self.capital_selection_task and not self.capital_selection_task.done():
             self.capital_selection_task.cancel()
             try:
@@ -113,6 +126,8 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
 
         if action == "select_capital":
             await self._handle_select_capital(content)
+        elif action == "leave_match":
+            await self._handle_leave_match()
         elif action in ("attack", "move", "build", "produce_unit"):
             await self.state_manager.push_action({
                 "action_type": action,
@@ -265,11 +280,17 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
     async def _check_all_capitals_selected(self):
         players = await self.state_manager.get_all_players()
         meta = await self.state_manager.get_meta()
-        expected = int(meta.get("max_players", 0))
+        alive_players = {
+            player_id: player
+            for player_id, player in players.items()
+            if player.get("is_alive")
+        }
+        if len(alive_players) <= 1:
+            await self._finish_match_with_current_state(players)
+            return
         if (
-            players
-            and len(players) >= expected
-            and all(p.get("capital_region_id") is not None for p in players.values())
+            alive_players
+            and all(p.get("capital_region_id") is not None for p in alive_players.values())
         ):
             await self.state_manager.set_meta_field("status", "in_progress")
             await self._update_match_status_db("in_progress")
@@ -344,7 +365,7 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
         missing_player_ids = [
             player_id
             for player_id, player in players.items()
-            if not player.get("capital_region_id")
+            if player.get("is_alive") and not player.get("capital_region_id")
         ]
 
         if not missing_player_ids:
@@ -544,9 +565,25 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
             tick, players, regions, actions, buildings, unit_queue, transit_queue = (
                 await self.state_manager.get_tick_data()
             )
+            timeout_events = self._resolve_disconnect_timeout_events(players)
+            if timeout_events:
+                await self.state_manager.set_players_bulk(players)
+                for event in timeout_events:
+                    await self._set_match_player_alive_state(str(event["player_id"]), False)
             regions_before_tick = copy.deepcopy(regions)
 
             result = engine.process_tick(players, regions, actions, buildings, unit_queue, transit_queue)
+            if timeout_events:
+                result["events"] = timeout_events + result["events"]
+            for event in result["events"]:
+                if event.get("type") != "player_eliminated":
+                    continue
+                player_id = str(event["player_id"])
+                player = result["players"].get(player_id)
+                if not player:
+                    continue
+                player["eliminated_reason"] = event.get("reason")
+                player["eliminated_tick"] = tick
 
             # Delta broadcast — only send regions that changed this tick,
             # and strip sea_distances (static, sent once on game_state init).
@@ -558,6 +595,10 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
             # Write only dirty regions to Redis — avoids N HSET per tick on large maps.
             dirty_ids = set(changed_regions.keys())
             await self.state_manager.set_tick_result(result, dirty_region_ids=dirty_ids)
+
+            for event in result["events"]:
+                if event.get("type") == "player_eliminated":
+                    await self._set_match_player_alive_state(str(event["player_id"]), False)
 
             await self.channel_layer.group_send(self.game_group, {
                 "type": "game_tick",
@@ -605,12 +646,11 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
         }
 
     async def _dispatch_finalization(self, winner_id: str | None, total_ticks: int):
-        """Get final state from Redis and dispatch Celery tasks for DB persistence."""
-        from apps.game.tasks import cleanup_redis_game_state, finalize_match_results
+        """Finalize match immediately; Redis cleanup can stay deferred."""
+        from apps.game.tasks import cleanup_redis_game_state, finalize_match_results_sync
 
         final_state = await self.state_manager.get_full_state()
-
-        finalize_match_results.delay(
+        await database_sync_to_async(finalize_match_results_sync)(
             str(self.match_id), winner_id, total_ticks, final_state
         )
         # Clean up Redis after a delay (players may still be connected)
@@ -737,6 +777,9 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
         await self.state_manager.set_meta_field(
             "capital_selection_ends_at", int(time.time()) + capital_selection_time_seconds
         )
+        await self.state_manager.set_meta_field(
+            "disconnect_grace_seconds", settings_snapshot.get("disconnect_grace_seconds", self.DISCONNECT_GRACE_SECONDS)
+        )
 
         for p in match_data["players"]:
             await self.state_manager.set_player(p["user_id"], {
@@ -744,6 +787,11 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
                 "username": p["username"],
                 "color": p["color"],
                 "is_alive": True,
+                "connected": False,
+                "disconnect_deadline": None,
+                "left_match_at": None,
+                "eliminated_reason": None,
+                "eliminated_tick": None,
                 "capital_region_id": None,
                 "currency": int(settings_snapshot.get("starting_currency", 120)),
             })
@@ -757,3 +805,200 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
             region["unit_type"] = default_unit_type_slug
             region["units"] = {default_unit_type_slug: region["unit_count"]}
         await self.state_manager.set_regions_bulk(regions)
+
+    async def _handle_leave_match(self):
+        await self._eliminate_player(str(self.user.id), "left_match")
+        await self.send_json({"type": "match_left"})
+        await self.close(code=4000)
+
+    async def _mark_player_connected(self) -> bool:
+        player_id = str(self.user.id)
+        player = await self.state_manager.get_player(player_id)
+        if not player:
+            return False
+
+        now = int(time.time())
+        deadline = int(player.get("disconnect_deadline") or 0)
+        if player.get("is_alive") and deadline and deadline <= now:
+            await self._eliminate_player(player_id, "disconnect_timeout")
+            return False
+
+        player["connected"] = True
+        player["disconnect_deadline"] = None
+        await self.state_manager.set_player(player_id, player)
+        await self.state_manager.redis.incr(self._player_connection_key(player_id))
+        await self.state_manager.redis.expire(self._player_connection_key(player_id), 3600)
+        return True
+
+    async def _mark_player_disconnected(self):
+        meta = await self.state_manager.get_meta()
+        if meta.get("status") not in {"selecting", "in_progress"}:
+            return
+
+        player_id = str(self.user.id)
+        conn_key = self._player_connection_key(player_id)
+        count = await self.state_manager.redis.decr(conn_key)
+        if count > 0:
+            await self.state_manager.redis.expire(conn_key, 3600)
+            return
+
+        await self.state_manager.redis.delete(conn_key)
+        player = await self.state_manager.get_player(player_id)
+        if not player or not player.get("is_alive"):
+            return
+
+        grace_seconds = int(meta.get("disconnect_grace_seconds", self.DISCONNECT_GRACE_SECONDS))
+        player["connected"] = False
+        player["disconnect_deadline"] = int(time.time()) + grace_seconds
+        await self.state_manager.set_player(player_id, player)
+
+        await self.channel_layer.group_send(self.game_group, {
+            "type": "game_tick",
+            "tick": int(meta.get("current_tick", "0") or 0),
+            "events": [{
+                "type": "player_disconnected",
+                "player_id": player_id,
+                "grace_seconds": grace_seconds,
+            }],
+            "regions": {},
+            "players": await self.state_manager.get_all_players(),
+            "buildings_queue": await self.state_manager.get_all_buildings(),
+            "unit_queue": await self.state_manager.get_all_unit_queue(),
+            "transit_queue": await self.state_manager.get_all_transit_queue(),
+        })
+
+    async def _finalize_expired_disconnects(self):
+        meta = await self.state_manager.get_meta()
+        if meta.get("status") not in {"selecting", "in_progress"}:
+            return
+
+        players = await self.state_manager.get_all_players()
+        expired_ids = [
+            player_id
+            for player_id, player in players.items()
+            if player.get("is_alive")
+            and int(player.get("disconnect_deadline") or 0) > 0
+            and int(player.get("disconnect_deadline") or 0) <= int(time.time())
+        ]
+
+        for player_id in expired_ids:
+            await self._eliminate_player(player_id, "disconnect_timeout")
+
+    async def _eliminate_player(self, player_id: str, reason: str):
+        players = await self.state_manager.get_all_players()
+        player = players.get(player_id)
+        if not player or not player.get("is_alive"):
+            return
+
+        player["is_alive"] = False
+        player["connected"] = False
+        player["disconnect_deadline"] = None
+        player["left_match_at"] = int(time.time())
+        meta = await self.state_manager.get_meta()
+        current_tick = int(meta.get("current_tick", "0") or 0)
+        player["eliminated_reason"] = reason
+        player["eliminated_tick"] = current_tick
+        players[player_id] = player
+        await self.state_manager.set_players_bulk(players)
+        await self.state_manager.redis.delete(self._player_connection_key(player_id))
+        await self._set_match_player_alive_state(player_id, False)
+
+        events = [{
+            "type": "player_eliminated",
+            "player_id": player_id,
+            "reason": reason,
+        }]
+
+        winner_id = self._get_alive_winner(players)
+        if winner_id is not None or self._alive_count(players) == 0:
+            await self.state_manager.set_meta_field("status", "finished")
+            await self._update_match_status_db("finished")
+            events.append({
+                "type": "game_over",
+                "winner_id": winner_id,
+            })
+
+        await self.channel_layer.group_send(self.game_group, {
+            "type": "game_tick",
+            "tick": current_tick,
+            "events": events,
+            "regions": {},
+            "players": players,
+            "buildings_queue": await self.state_manager.get_all_buildings(),
+            "unit_queue": await self.state_manager.get_all_unit_queue(),
+            "transit_queue": await self.state_manager.get_all_transit_queue(),
+        })
+
+        if events[-1]["type"] == "game_over":
+            await self._dispatch_finalization(winner_id, current_tick)
+        elif meta.get("status") == "selecting":
+            await self._check_all_capitals_selected()
+
+    async def _finish_match_with_current_state(self, players: dict):
+        winner_id = self._get_alive_winner(players)
+        meta = await self.state_manager.get_meta()
+        current_tick = int(meta.get("current_tick", "0") or 0)
+        await self.state_manager.set_meta_field("status", "finished")
+        await self._update_match_status_db("finished")
+        await self.channel_layer.group_send(self.game_group, {
+            "type": "game_tick",
+            "tick": current_tick,
+            "events": [{
+                "type": "game_over",
+                "winner_id": winner_id,
+            }],
+            "regions": {},
+            "players": players,
+            "buildings_queue": await self.state_manager.get_all_buildings(),
+            "unit_queue": await self.state_manager.get_all_unit_queue(),
+            "transit_queue": await self.state_manager.get_all_transit_queue(),
+        })
+        await self._dispatch_finalization(winner_id, current_tick)
+
+    def _alive_count(self, players: dict) -> int:
+        return sum(1 for player in players.values() if player.get("is_alive"))
+
+    def _get_alive_winner(self, players: dict) -> str | None:
+        alive = [player_id for player_id, player in players.items() if player.get("is_alive")]
+        return alive[0] if len(alive) == 1 else None
+
+    def _player_connection_key(self, player_id: str) -> str:
+        return f"game:{self.match_id}:conn:{player_id}"
+
+    def _resolve_disconnect_timeout_events(self, players: dict) -> list[dict]:
+        now = int(time.time())
+        events: list[dict] = []
+        changed = False
+        for player_id, player in players.items():
+            deadline = int(player.get("disconnect_deadline") or 0)
+            if not player.get("is_alive") or deadline <= 0 or deadline > now:
+                continue
+            player["is_alive"] = False
+            player["connected"] = False
+            player["disconnect_deadline"] = None
+            player["left_match_at"] = now
+            changed = True
+            events.append({
+                "type": "player_eliminated",
+                "player_id": player_id,
+                "reason": "disconnect_timeout",
+            })
+
+        if changed:
+            winner_id = self._get_alive_winner(players)
+            if winner_id is not None or self._alive_count(players) == 0:
+                events.append({
+                    "type": "game_over",
+                    "winner_id": winner_id,
+                })
+
+        return events
+
+    @database_sync_to_async
+    def _set_match_player_alive_state(self, player_id: str, is_alive: bool):
+        from django.utils import timezone
+        from apps.matchmaking.models import MatchPlayer
+
+        updates = {"is_alive": is_alive}
+        updates["eliminated_at"] = None if is_alive else timezone.now()
+        MatchPlayer.objects.filter(match_id=self.match_id, user_id=player_id).update(**updates)

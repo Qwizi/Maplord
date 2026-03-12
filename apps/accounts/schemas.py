@@ -20,3 +20,16 @@ class UserOutSchema(Schema):
 
     class Config:
         from_attributes = True
+
+
+class LeaderboardEntrySchema(Schema):
+    id: uuid.UUID
+    username: str
+    elo_rating: int
+    matches_played: int
+    wins: int
+    win_rate: float
+    average_placement: float
+
+    class Config:
+        from_attributes = True
