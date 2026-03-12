@@ -9,15 +9,15 @@ i walczą o kontrolę nad terytoriami. Przegrana następuje po utracie stolicy.
 
 ### Backend (wzorowany na mapcident)
 - **Django 6.x** + **Django Ninja Extra** + **Django Ninja JWT** (API, kontrolery, Pydantic schemas, auto OpenAPI)
-- **Django Channels** + Daphne (ASGI — HTTP + WebSocket real-time)
-- **Celery** + Redis (zadania poboczne: matchmaking, snapshoty DB, ELO)
+- **Rust Gateway** (axum + tokio) — WebSocket: matchmaking, game loop, engine
+- **Celery** + Redis (zadania poboczne: snapshoty DB, ELO, cleanup)
 - **PostgreSQL 16** + PostGIS (dane gry, dane geospatialne regionów)
-- **Redis** (game state store, channel layer WebSocket, cache, kolejka matchmakingu)
+- **Redis** (game state store, cache, kolejka matchmakingu)
 - **Django Admin** (pełna konfiguracja gry z panelu)
 - **uv** (package manager — szybki, lockfile, Python 3.13)
 - **python-decouple** (env variables)
-- **gunicorn** (prod WSGI) / **daphne** (prod ASGI+WS)
-- **msgpack** (serializacja stanu gry w Redis)
+- **gunicorn** (prod WSGI)
+- **msgpack/rmp-serde** (serializacja stanu gry w Redis — Rust)
 
 ### Frontend (wzorowany na mapcident)
 - **Next.js 16** (App Router, Server Components, standalone output)
@@ -45,7 +45,7 @@ i walczą o kontrolę nad terytoriami. Przegrana następuje po utracie stolicy.
 │   Next.js 16    │◄──────►│  Django Ninja Extra   │
 │   (Frontend)    │  HTTP   │  /api/v1/...          │
 │                 │        │  (Pydantic + OpenAPI)  │
-│  mapcn (MapLibre)│◄──WS──►│  Django Channels      │
+│  mapcn (MapLibre)│◄──WS──►│  Rust Gateway (axum)  │
 │  Game UI        │        │  /ws/game/{match_id}/  │
 │  shadcn/ui      │        │  /ws/matchmaking/      │
 └─────────────────┘        └──────────┬─────────────┘
@@ -107,22 +107,23 @@ i walczą o kontrolę nad terytoriami. Przegrana następuje po utracie stolicy.
 
 ## Game Loop (Real-time w WebSocket + Redis State)
 
-Podejście: **game loop działa w WebSocket konsumerze (asyncio)**, stan gry w **Redis**, Celery do zadań pobocznych.
+Podejście: **game loop działa w Rust Gateway (tokio)**, stan gry w **Redis**, Celery do zadań pobocznych.
 
 ### Architektura real-time:
-1. **GameConsumer** (Django Channels) — jeden na mecz, uruchamia asyncio game loop
-2. **Game loop** (`asyncio.create_task`) w konsumerze:
-   a. `while game.is_active:` → `await asyncio.sleep(tick_interval)`
-   b. Czyta stan gry z Redis (`game:{match_id}:*`)
+1. **Rust Gateway** (axum + tokio) — obsługuje WebSocket, game loop, engine
+2. **Game loop** (`tokio::spawn`) per mecz:
+   a. `loop` → `tokio::time::sleep(tick_interval)`
+   b. Czyta stan gry z Redis (`game:{match_id}:*`) — pipelined
    c. Pobiera akcje graczy z Redis List (`game:{match_id}:actions` — LPOP all)
    d. Generuje jednostki w regionach gracza (rate z admina)
    e. Przetwarza akcje (ataki, ruchy, budowanie)
    f. Rozwiązuje walki (attack vs defense + losowość)
    g. Sprawdza warunek przegranej (stolica przejęta)
-   h. Zapisuje nowy stan do Redis (pipeline — atomowe)
-   i. **Natychmiast broadcastuje** delta stanu do grupy graczy (channel layer)
+   h. Zapisuje nowy stan do Redis (pipeline — atomowe, dirty region optimization)
+   i. **Natychmiast broadcastuje** delta stanu do graczy (DashMap channels)
 3. **Akcje graczy** przychodzą przez WebSocket → RPUSH do `game:{match_id}:actions` (Redis List)
-4. **Stan gry w Redis** (szybko, crash-safe, skalowalnie):
+4. **Django Internal API** (`/api/internal/`) — Rust gateway calls Django for DB ops (match creation, snapshots, ELO)
+5. **Stan gry w Redis** (szybko, crash-safe, skalowalnie):
 
 ### Redis Keys per mecz:
 ```
@@ -143,8 +144,8 @@ game:{match_id}:buildings_queue — List: budynki w trakcie budowy
 - Cleanup: usuwanie kluczy Redis zakończonych meczy
 
 ### Zalety Redis jako game state:
-- **Crash recovery**: restart Daphne → game loop wznawia się z ostatniego stanu w Redis
-- **Skalowalność horyzontalna**: wiele instancji Daphne może obsługiwać różne mecze, wszystkie czytają ten sam Redis
+- **Crash recovery**: restart Gateway → game loop wznawia się z ostatniego stanu w Redis
+- **Skalowalność horyzontalna**: wiele instancji Gateway może obsługiwać różne mecze, wszystkie czytają ten sam Redis
 - **Niski latency**: ~0.5ms per operacja (localhost), pomijalny przy ticku co 1s
 - **Atomowość**: Redis pipeline gwarantuje spójność stanu
 - **Monitoring**: łatwy podgląd stanu gry przez redis-cli/RedisInsight
@@ -240,13 +241,14 @@ game:{match_id}:buildings_queue — List: budynki w trakcie budowy
 
 ## Kluczowe decyzje techniczne
 
-### Django + WebSocket — czy da radę?
-**TAK.** Django Channels z Daphne to dojrzałe rozwiązanie:
-- Daphne jako ASGI server obsługuje HTTP + WebSocket
-- **Game loop w asyncio** wewnątrz WebSocket konsumera — pełny real-time
-- **Redis jako game state store** — crash recovery, skalowanie, ~0.5ms latency
-- Redis channel layer do broadcastu między instancjami
-- Celery tylko do: matchmaking, snapshoty DB, post-match ELO, cleanup
+### Rust Gateway + Django — architektura
+**Rust Gateway** (axum + tokio) obsługuje cały real-time:
+- WebSocket handling: matchmaking queue + game loop
+- Game engine w Rust (pure logic, no I/O) — wydajność, bezpieczeństwo typów
+- Redis state management z rmp-serde (msgpack) — pipelined, dirty region optimization
+- Django jako REST API + ORM + Celery — match creation, snapshots, ELO
+- Internal API (`/api/internal/`) — secured by `X-Internal-Secret` header
+- Celery tylko do: snapshoty DB, post-match ELO, cleanup
 - PostgreSQL jako trwały storage (historia, replay, statystyki)
 
 ### Konfigurowalność z admina

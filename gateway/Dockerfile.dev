@@ -1,0 +1,31 @@
+FROM rust:1.88-bookworm
+
+WORKDIR /app
+
+# Install cargo-watch for dev hot-reload
+RUN cargo install cargo-watch
+
+# Copy manifests first for caching
+COPY Cargo.toml Cargo.lock* ./
+COPY crates/maplord-gateway/Cargo.toml crates/maplord-gateway/Cargo.toml
+COPY crates/maplord-engine/Cargo.toml crates/maplord-engine/Cargo.toml
+COPY crates/maplord-state/Cargo.toml crates/maplord-state/Cargo.toml
+COPY crates/maplord-matchmaking/Cargo.toml crates/maplord-matchmaking/Cargo.toml
+COPY crates/maplord-django/Cargo.toml crates/maplord-django/Cargo.toml
+
+# Create dummy source files for dependency caching
+RUN mkdir -p crates/maplord-gateway/src && echo "fn main() {}" > crates/maplord-gateway/src/main.rs && \
+    mkdir -p crates/maplord-engine/src && echo "" > crates/maplord-engine/src/lib.rs && \
+    mkdir -p crates/maplord-state/src && echo "" > crates/maplord-state/src/lib.rs && \
+    mkdir -p crates/maplord-matchmaking/src && echo "" > crates/maplord-matchmaking/src/lib.rs && \
+    mkdir -p crates/maplord-django/src && echo "" > crates/maplord-django/src/lib.rs
+
+RUN cargo build 2>/dev/null || true
+
+# Copy real source
+COPY . .
+RUN touch crates/*/src/*.rs
+
+# Clean workspace crate artifacts on startup so cargo-watch rebuilds with real source.
+# This preserves the dependency cache while ensuring stale dummy binaries aren't used.
+CMD ["sh", "-c", "cargo clean -p maplord-gateway -p maplord-engine -p maplord-state -p maplord-matchmaking -p maplord-django 2>/dev/null; exec cargo-watch -x 'run --bin maplord-gateway' -w crates"]

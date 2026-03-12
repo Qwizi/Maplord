@@ -20,4 +20,4 @@ RUN SECRET_KEY=build-placeholder uv run python manage.py collectstatic --noinput
 
 EXPOSE 8000
 
-CMD ["uv", "run", "daphne", "-b", "0.0.0.0", "-p", "8000", "config.asgi:application"]
+CMD ["uv", "run", "gunicorn", "config.wsgi:application", "-b", "0.0.0.0:8000"]
