@@ -1,0 +1,439 @@
+use maplord_engine::{
+    Action, BuildingQueueItem, Player, Region, TransitQueueItem, UnitQueueItem,
+};
+use redis::aio::ConnectionManager;
+use redis::AsyncCommands;
+use std::collections::HashMap;
+
+/// Manages game state in Redis using Hashes and Lists with msgpack serialization.
+/// Mirrors the Python GameStateManager exactly.
+#[derive(Clone)]
+pub struct GameStateManager {
+    match_id: String,
+    redis: ConnectionManager,
+}
+
+/// All data needed for one tick.
+pub struct TickData {
+    pub tick: i64,
+    pub players: HashMap<String, Player>,
+    pub regions: HashMap<String, Region>,
+    pub actions: Vec<Action>,
+    pub buildings_queue: Vec<BuildingQueueItem>,
+    pub unit_queue: Vec<UnitQueueItem>,
+    pub transit_queue: Vec<TransitQueueItem>,
+}
+
+/// Full game state for snapshots.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct FullGameState {
+    pub meta: HashMap<String, String>,
+    pub players: HashMap<String, Player>,
+    pub regions: HashMap<String, Region>,
+    pub buildings_queue: Vec<BuildingQueueItem>,
+    pub unit_queue: Vec<UnitQueueItem>,
+    pub transit_queue: Vec<TransitQueueItem>,
+}
+
+impl GameStateManager {
+    pub fn new(match_id: String, redis: ConnectionManager) -> Self {
+        Self { match_id, redis }
+    }
+
+    fn key(&self, suffix: &str) -> String {
+        format!("game:{}:{}", self.match_id, suffix)
+    }
+
+    pub fn redis(&self) -> ConnectionManager {
+        self.redis.clone()
+    }
+
+    // --- Meta ---
+
+    pub async fn init_meta(
+        &self,
+        tick_interval_ms: u64,
+        max_players: u32,
+    ) -> redis::RedisResult<()> {
+        let mut conn = self.redis.clone();
+        redis::cmd("HSET")
+            .arg(self.key("meta"))
+            .arg("status")
+            .arg("selecting")
+            .arg("current_tick")
+            .arg(0)
+            .arg("tick_interval_ms")
+            .arg(tick_interval_ms)
+            .arg("max_players")
+            .arg(max_players)
+            .exec_async(&mut conn)
+            .await
+    }
+
+    pub async fn get_meta(&self) -> redis::RedisResult<HashMap<String, String>> {
+        let mut conn = self.redis.clone();
+        conn.hgetall(self.key("meta")).await
+    }
+
+    pub async fn set_meta_field(&self, field: &str, value: &str) -> redis::RedisResult<()> {
+        let mut conn = self.redis.clone();
+        conn.hset(self.key("meta"), field, value).await
+    }
+
+    // --- Players ---
+
+    pub async fn set_player(&self, player_id: &str, data: &Player) -> redis::RedisResult<()> {
+        let mut conn = self.redis.clone();
+        let packed = rmp_serde::to_vec(data).unwrap();
+        conn.hset(self.key("players"), player_id, packed).await
+    }
+
+    pub async fn get_player(&self, player_id: &str) -> redis::RedisResult<Option<Player>> {
+        let mut conn = self.redis.clone();
+        let raw: Option<Vec<u8>> = conn.hget(self.key("players"), player_id).await?;
+        Ok(raw.map(|data| rmp_serde::from_slice(&data).unwrap()))
+    }
+
+    pub async fn get_all_players(&self) -> redis::RedisResult<HashMap<String, Player>> {
+        let mut conn = self.redis.clone();
+        let raw: HashMap<String, Vec<u8>> = conn.hgetall(self.key("players")).await?;
+        Ok(raw
+            .into_iter()
+            .map(|(k, v)| (k, rmp_serde::from_slice(&v).unwrap()))
+            .collect())
+    }
+
+    pub async fn set_players_bulk(
+        &self,
+        players: &HashMap<String, Player>,
+    ) -> redis::RedisResult<()> {
+        let mut pipe = redis::pipe();
+        let key = self.key("players");
+        for (player_id, data) in players {
+            let packed = rmp_serde::to_vec(data).unwrap();
+            pipe.hset(&key, player_id, packed).ignore();
+        }
+        let mut conn = self.redis.clone();
+        pipe.exec_async(&mut conn).await
+    }
+
+    // --- Regions ---
+
+    pub async fn set_region(&self, region_id: &str, data: &Region) -> redis::RedisResult<()> {
+        let mut conn = self.redis.clone();
+        let packed = rmp_serde::to_vec(data).unwrap();
+        conn.hset(self.key("regions"), region_id, packed).await
+    }
+
+    pub async fn get_region(&self, region_id: &str) -> redis::RedisResult<Option<Region>> {
+        let mut conn = self.redis.clone();
+        let raw: Option<Vec<u8>> = conn.hget(self.key("regions"), region_id).await?;
+        Ok(raw.map(|data| rmp_serde::from_slice(&data).unwrap()))
+    }
+
+    pub async fn get_all_regions(&self) -> redis::RedisResult<HashMap<String, Region>> {
+        let mut conn = self.redis.clone();
+        let raw: HashMap<String, Vec<u8>> = conn.hgetall(self.key("regions")).await?;
+        Ok(raw
+            .into_iter()
+            .map(|(k, v)| (k, rmp_serde::from_slice(&v).unwrap()))
+            .collect())
+    }
+
+    pub async fn set_regions_bulk(
+        &self,
+        regions: &HashMap<String, Region>,
+    ) -> redis::RedisResult<()> {
+        let mut pipe = redis::pipe();
+        let key = self.key("regions");
+        for (region_id, data) in regions {
+            let packed = rmp_serde::to_vec(data).unwrap();
+            pipe.hset(&key, region_id, packed).ignore();
+        }
+        let mut conn = self.redis.clone();
+        pipe.exec_async(&mut conn).await
+    }
+
+    // --- Actions ---
+
+    pub async fn push_action(&self, action: &Action) -> redis::RedisResult<()> {
+        let mut conn = self.redis.clone();
+        let packed = rmp_serde::to_vec(action).unwrap();
+        conn.rpush(self.key("actions"), packed).await
+    }
+
+    // --- Tick helpers (pipelined reads + writes) ---
+
+    pub async fn get_tick_data(&self) -> redis::RedisResult<TickData> {
+        let mut pipe = redis::pipe();
+        pipe.atomic();
+
+        let meta_key = self.key("meta");
+        let players_key = self.key("players");
+        let regions_key = self.key("regions");
+        let actions_key = self.key("actions");
+        let buildings_key = self.key("buildings_queue");
+        let unit_key = self.key("unit_queue");
+        let transit_key = self.key("transit_queue");
+
+        pipe.hincr(&meta_key, "current_tick", 1i64);
+        pipe.hgetall(&players_key);
+        pipe.hgetall(&regions_key);
+        pipe.lrange(&actions_key, 0, -1);
+        pipe.del(&actions_key);
+        pipe.lrange(&buildings_key, 0, -1);
+        pipe.lrange(&unit_key, 0, -1);
+        pipe.lrange(&transit_key, 0, -1);
+
+        let mut conn = self.redis.clone();
+        let results: (
+            i64,
+            HashMap<String, Vec<u8>>,
+            HashMap<String, Vec<u8>>,
+            Vec<Vec<u8>>,
+            (),
+            Vec<Vec<u8>>,
+            Vec<Vec<u8>>,
+            Vec<Vec<u8>>,
+        ) = pipe.query_async(&mut conn).await?;
+
+        let tick = results.0;
+        let players = results
+            .1
+            .into_iter()
+            .map(|(k, v)| (k, rmp_serde::from_slice(&v).unwrap()))
+            .collect();
+        let regions = results
+            .2
+            .into_iter()
+            .map(|(k, v)| (k, rmp_serde::from_slice(&v).unwrap()))
+            .collect();
+        let actions = results
+            .3
+            .iter()
+            .map(|v| rmp_serde::from_slice(v).unwrap())
+            .collect();
+        let buildings_queue = results
+            .5
+            .iter()
+            .map(|v| rmp_serde::from_slice(v).unwrap())
+            .collect();
+        let unit_queue = results
+            .6
+            .iter()
+            .map(|v| rmp_serde::from_slice(v).unwrap())
+            .collect();
+        let transit_queue = results
+            .7
+            .iter()
+            .map(|v| rmp_serde::from_slice(v).unwrap())
+            .collect();
+
+        Ok(TickData {
+            tick,
+            players,
+            regions,
+            actions,
+            buildings_queue,
+            unit_queue,
+            transit_queue,
+        })
+    }
+
+    pub async fn set_tick_result(
+        &self,
+        players: &HashMap<String, Player>,
+        regions: &HashMap<String, Region>,
+        buildings_queue: &[BuildingQueueItem],
+        unit_queue: &[UnitQueueItem],
+        transit_queue: &[TransitQueueItem],
+        dirty_region_ids: Option<&std::collections::HashSet<String>>,
+    ) -> redis::RedisResult<()> {
+        let mut pipe = redis::pipe();
+        pipe.atomic();
+
+        let regions_key = self.key("regions");
+        for (region_id, data) in regions {
+            if dirty_region_ids.is_none()
+                || dirty_region_ids.map_or(false, |ids| ids.contains(region_id))
+            {
+                let packed = rmp_serde::to_vec(data).unwrap();
+                pipe.hset(&regions_key, region_id, packed).ignore();
+            }
+        }
+
+        let players_key = self.key("players");
+        for (pid, pdata) in players {
+            let packed = rmp_serde::to_vec(pdata).unwrap();
+            pipe.hset(&players_key, pid, packed).ignore();
+        }
+
+        let buildings_key = self.key("buildings_queue");
+        pipe.del(&buildings_key).ignore();
+        for b in buildings_queue {
+            let packed = rmp_serde::to_vec(b).unwrap();
+            pipe.rpush(&buildings_key, packed).ignore();
+        }
+
+        let unit_key = self.key("unit_queue");
+        pipe.del(&unit_key).ignore();
+        for item in unit_queue {
+            let packed = rmp_serde::to_vec(item).unwrap();
+            pipe.rpush(&unit_key, packed).ignore();
+        }
+
+        let transit_key = self.key("transit_queue");
+        pipe.del(&transit_key).ignore();
+        for item in transit_queue {
+            let packed = rmp_serde::to_vec(item).unwrap();
+            pipe.rpush(&transit_key, packed).ignore();
+        }
+
+        let mut conn = self.redis.clone();
+        pipe.exec_async(&mut conn).await
+    }
+
+    // --- Full State ---
+
+    pub async fn get_full_state(&self) -> redis::RedisResult<FullGameState> {
+        let mut pipe = redis::pipe();
+        pipe.atomic();
+
+        pipe.hgetall(self.key("meta"));
+        pipe.hgetall(self.key("players"));
+        pipe.hgetall(self.key("regions"));
+        pipe.lrange(self.key("buildings_queue"), 0, -1);
+        pipe.lrange(self.key("unit_queue"), 0, -1);
+        pipe.lrange(self.key("transit_queue"), 0, -1);
+
+        let mut conn = self.redis.clone();
+        let results: (
+            HashMap<String, String>,
+            HashMap<String, Vec<u8>>,
+            HashMap<String, Vec<u8>>,
+            Vec<Vec<u8>>,
+            Vec<Vec<u8>>,
+            Vec<Vec<u8>>,
+        ) = pipe.query_async(&mut conn).await?;
+
+        Ok(FullGameState {
+            meta: results.0,
+            players: results
+                .1
+                .into_iter()
+                .map(|(k, v)| (k, rmp_serde::from_slice(&v).unwrap()))
+                .collect(),
+            regions: results
+                .2
+                .into_iter()
+                .map(|(k, v)| (k, rmp_serde::from_slice(&v).unwrap()))
+                .collect(),
+            buildings_queue: results
+                .3
+                .iter()
+                .map(|v| rmp_serde::from_slice(v).unwrap())
+                .collect(),
+            unit_queue: results
+                .4
+                .iter()
+                .map(|v| rmp_serde::from_slice(v).unwrap())
+                .collect(),
+            transit_queue: results
+                .5
+                .iter()
+                .map(|v| rmp_serde::from_slice(v).unwrap())
+                .collect(),
+        })
+    }
+
+    // --- Cleanup ---
+
+    pub async fn cleanup(&self) -> redis::RedisResult<()> {
+        let mut conn = self.redis.clone();
+        let keys = vec![
+            self.key("meta"),
+            self.key("players"),
+            self.key("regions"),
+            self.key("actions"),
+            self.key("buildings_queue"),
+            self.key("unit_queue"),
+            self.key("transit_queue"),
+        ];
+        redis::cmd("DEL")
+            .arg(&keys)
+            .exec_async(&mut conn)
+            .await
+    }
+
+    // --- Lock helpers ---
+
+    pub async fn try_lock(&self, lock_name: &str, ttl_seconds: u64) -> redis::RedisResult<bool> {
+        let mut conn = self.redis.clone();
+        let key = self.key(lock_name);
+        redis::cmd("SET")
+            .arg(&key)
+            .arg("1")
+            .arg("NX")
+            .arg("EX")
+            .arg(ttl_seconds)
+            .query_async::<Option<String>>(&mut conn)
+            .await
+            .map(|r| r.is_some())
+    }
+
+    pub async fn release_lock(&self, lock_name: &str) -> redis::RedisResult<()> {
+        let mut conn = self.redis.clone();
+        conn.del(self.key(lock_name)).await
+    }
+
+    // --- Connection counter ---
+
+    pub async fn incr_connection(&self, player_id: &str) -> redis::RedisResult<i64> {
+        let mut conn = self.redis.clone();
+        let key = format!("game:{}:conn:{}", self.match_id, player_id);
+        let count: i64 = conn.incr(&key, 1).await?;
+        conn.expire::<_, ()>(&key, 3600).await?;
+        Ok(count)
+    }
+
+    pub async fn decr_connection(&self, player_id: &str) -> redis::RedisResult<i64> {
+        let mut conn = self.redis.clone();
+        let key = format!("game:{}:conn:{}", self.match_id, player_id);
+        let count: i64 = conn.decr(&key, 1).await?;
+        if count <= 0 {
+            conn.del::<_, ()>(&key).await?;
+        } else {
+            conn.expire::<_, ()>(&key, 3600).await?;
+        }
+        Ok(count)
+    }
+
+    // --- Buildings/Unit/Transit queues (for individual reads) ---
+
+    pub async fn get_all_buildings(&self) -> redis::RedisResult<Vec<BuildingQueueItem>> {
+        let mut conn = self.redis.clone();
+        let raw: Vec<Vec<u8>> = conn.lrange(self.key("buildings_queue"), 0, -1).await?;
+        Ok(raw
+            .iter()
+            .map(|v| rmp_serde::from_slice(v).unwrap())
+            .collect())
+    }
+
+    pub async fn get_all_unit_queue(&self) -> redis::RedisResult<Vec<UnitQueueItem>> {
+        let mut conn = self.redis.clone();
+        let raw: Vec<Vec<u8>> = conn.lrange(self.key("unit_queue"), 0, -1).await?;
+        Ok(raw
+            .iter()
+            .map(|v| rmp_serde::from_slice(v).unwrap())
+            .collect())
+    }
+
+    pub async fn get_all_transit_queue(&self) -> redis::RedisResult<Vec<TransitQueueItem>> {
+        let mut conn = self.redis.clone();
+        let raw: Vec<Vec<u8>> = conn.lrange(self.key("transit_queue"), 0, -1).await?;
+        Ok(raw
+            .iter()
+            .map(|v| rmp_serde::from_slice(v).unwrap())
+            .collect())
+    }
+}

@@ -95,6 +95,30 @@ services:
         condition: service_healthy
     command: uv run celery -A config beat -l info
 
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile.dev
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_GAME_DB: "1"
+      DJANGO_INTERNAL_URL: http://backend:8000
+      GATEWAY_PORT: "8080"
+      RUST_LOG: info,maplord_gateway=debug
+    volumes:
+      - ./gateway:/app
+      - gateway_target:/app/target
+    ports:
+      - "8080:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+
   frontend:
     build:
       context: ./frontend
@@ -125,9 +149,11 @@ services:
     depends_on:
       - backend
       - frontend
+      - gateway
 
 volumes:
   postgres_data_dev:
   redis_data_dev:
   backend_venv:
   frontend_modules:
+  gateway_target:

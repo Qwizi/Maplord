@@ -13,9 +13,9 @@
 		}
 	}
 
-	# WebSocket
+	# WebSocket — routed to Rust gateway
 	handle /ws/* {
-		reverse_proxy backend:8000 {
+		reverse_proxy gateway:8080 {
 			header_up X-Forwarded-Proto {scheme}
 		}
 	}

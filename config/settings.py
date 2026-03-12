@@ -10,7 +10,6 @@ ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,backend', c
 CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='', cast=Csv())
 
 INSTALLED_APPS = [
-    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -22,7 +21,6 @@ INSTALLED_APPS = [
     # Third party
     'ninja_extra',
     'ninja_jwt',
-    'channels',
     # Local apps
     'apps.accounts',
     'apps.geo',
@@ -61,7 +59,6 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'config.wsgi.application'
-ASGI_APPLICATION = 'config.asgi.application'
 
 # Database — PostgreSQL + PostGIS
 DATABASES = {
@@ -101,20 +98,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Trust X-Forwarded-Proto from reverse proxy (Caddy / Cloudflare Tunnel)
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-
-# Django Channels — Redis channel layer
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            'hosts': [(config('REDIS_HOST', default='redis'), config('REDIS_PORT', default=6379, cast=int))],
-            # Limit queue depth — prevents tick messages piling up on slow hardware.
-            # If a consumer can't keep up, older ticks are dropped rather than queued forever.
-            'capacity': 50,
-            'expiry': 5,  # seconds — drop stale messages after 5s
-        },
-    },
-}
 
 # Celery
 CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://redis:6379/0')
@@ -157,6 +140,9 @@ NINJA_JWT = {
 }
 
 # CORS
+# Internal API secret for Rust gateway
+INTERNAL_SECRET = config('INTERNAL_SECRET', default='dev-internal-secret')
+
 CORS_ALLOW_ALL_ORIGINS = DEBUG
 CORS_ALLOWED_ORIGINS = config(
     'CORS_ALLOWED_ORIGINS',
