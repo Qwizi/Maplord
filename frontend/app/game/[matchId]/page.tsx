@@ -515,18 +515,20 @@ export default function GamePage({
 
   const handleRegionClick = useCallback(
     (regionId: string) => {
-      if (!mapReady) return;
+      console.log("[handleRegionClick]", { regionId, mapReady, status, hasSelectedCapital, regionsCount: Object.keys(gameState?.regions || {}).length });
+      if (!mapReady) { console.log("[handleRegionClick] mapReady=false, ignoring"); return; }
 
       // Capital selection phase
       if (status === "selecting") {
-        if (hasSelectedCapital) return; // already selected, waiting for server confirmation
+        if (hasSelectedCapital) { console.log("[handleRegionClick] already selected capital"); return; }
         const region = gameState?.regions[regionId];
+        console.log("[handleRegionClick] selecting phase, region=", region ? "found" : "NOT FOUND", regionId);
         // Region not part of this match — silently ignore (player may have clicked
         // on a neighbouring country rendered in the tiles but not in the game)
         if (!region) return;
         // Already owned — player likely clicked near the border of another capital;
         // silently ignore so they can try clicking a different region
-        if (region.owner_id) return;
+        if (region.owner_id) { console.log("[handleRegionClick] region already owned by", region.owner_id); return; }
         // Too close to an existing capital
         if (dimmedRegions.includes(regionId)) {
           const minDist = parseInt(gameState?.meta?.min_capital_distance || "3", 10);
@@ -535,6 +537,7 @@ export default function GamePage({
           );
           return;
         }
+        console.log("[handleRegionClick] calling selectCapital", regionId);
         selectCapital(regionId);
         return;
       }
