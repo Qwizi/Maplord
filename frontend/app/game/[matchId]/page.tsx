@@ -14,7 +14,6 @@ import {
   type BuildingType,
   type UnitType,
 } from "@/lib/api";
-import { getBuildingAsset, getUnitAsset } from "@/lib/gameAssets";
 import { getSeaTravelRange, getTravelDistance } from "@/lib/gameTravel.js";
 import GameMap, {
   type TroopAnimation,
@@ -26,7 +25,6 @@ import ActionBar, { type TargetEntry } from "@/components/game/ActionBar";
 import BuildQueue from "@/components/game/BuildQueue";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import type { GameRegion } from "@/hooks/useGameSocket";
 
 function getUnitRules(units: UnitType[], unitSlug: string | null | undefined) {
   return (
@@ -59,6 +57,10 @@ function getAnimationPower(
   return carrierCount * scale;
 }
 
+function intOrZero(value: unknown) {
+  return typeof value === "number" ? value : Number(value || 0) || 0;
+}
+
 type ReachabilityEntry = {
   moveTargets: Set<string>;
   attackTargets: Set<string>;
@@ -84,6 +86,7 @@ export default function GamePage({
     move,
     build,
     produceUnit,
+    leaveMatch,
   } = useGameSocket(matchId);
 
   const { startMusic, stopMusic, playSound, toggleMute, muted } = useAudio();
@@ -96,7 +99,7 @@ export default function GamePage({
   const [actionTargets, setActionTargets] = useState<string[]>([]);
   const [animations, setAnimations] = useState<TroopAnimation[]>([]);
   const [mapReady, setMapReady] = useState(false);
-  const [nowTs, setNowTs] = useState(() => Math.floor(Date.now() / 1000));
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const myUserId = user?.id || "";
   const status = gameState?.meta?.status || "loading";
 
@@ -143,10 +146,10 @@ export default function GamePage({
 
   useEffect(() => {
     if (status !== "selecting") return;
-    const interval = setInterval(() => {
-      setNowTs(Math.floor(Date.now() / 1000));
+    const timer = window.setInterval(() => {
+      setNowMs(Date.now());
     }, 1000);
-    return () => clearInterval(interval);
+    return () => window.clearInterval(timer);
   }, [status]);
 
   // Build neighbor lookup and centroid map from the lightweight graph
@@ -274,7 +277,7 @@ export default function GamePage({
     }
 
     return result;
-  }, [centroids, gameState?.regions, myUserId, neighborMap, selectedRegion, status, unitConfigBySlug, unitsConfig]);
+  }, [gameState?.regions, myUserId, neighborMap, selectedRegion, status, unitConfigBySlug, unitsConfig]);
 
   const getPreferredReachableUnitType = useCallback((targetId: string) => {
     if (!sourceRegionData) return null;
@@ -312,15 +315,27 @@ export default function GamePage({
     sourceRegionData?.unit_type ||
     null;
 
+  const isTargetReachableForUnitType = useCallback((targetId: string, unitType: string | null | undefined) => {
+    if (!unitType) return false;
+    const targetRegion = gameState?.regions[targetId];
+    if (!targetRegion) return false;
+
+    const reachability = reachabilityByUnitType[unitType];
+    if (!reachability) return false;
+
+    return targetRegion.owner_id === myUserId
+      ? reachability.moveTargets.has(targetId)
+      : reachability.attackTargets.has(targetId);
+  }, [gameState?.regions, myUserId, reachabilityByUnitType]);
+
   const highlightedNeighbors = useMemo(() => {
     if (!isSource || !selectedRegion || status !== "in_progress") return [];
     const sourceRegion = gameState?.regions?.[selectedRegion];
     if (!sourceRegion) return [];
 
-    const candidateUnitTypes =
-      actionTargets.length > 0 && selectedActionUnitType
-        ? [selectedActionUnitType]
-        : Object.keys(sourceRegion.units ?? {});
+    const candidateUnitTypes = selectedUnitTypeForAction
+      ? [selectedUnitTypeForAction]
+      : Object.keys(sourceRegion.units ?? {});
     const reachable = new Set<string>();
 
     for (const unitType of candidateUnitTypes) {
@@ -331,19 +346,13 @@ export default function GamePage({
     }
 
     return Array.from(reachable);
-  }, [actionTargets.length, gameState?.regions, isSource, reachabilityByUnitType, selectedActionUnitType, selectedRegion, status]);
+  }, [gameState?.regions, isSource, reachabilityByUnitType, selectedRegion, selectedUnitTypeForAction, status]);
 
   // Per-map minimum distance between capitals (comes from MapConfig → settings_snapshot → Redis meta)
   const MIN_CAPITAL_DISTANCE = parseInt(
     gameState?.meta?.min_capital_distance || "3",
     10
   );
-  const capitalSelectionEndsAt = parseInt(
-    gameState?.meta?.capital_selection_ends_at || "0",
-    10
-  );
-  const capitalSelectionSecondsLeft = Math.max(0, capitalSelectionEndsAt - nowTs);
-
   // Regions too close to any existing capital — dimmed on the map during selection
   const dimmedRegions = useMemo(() => {
     if (status !== "selecting") return [];
@@ -383,6 +392,11 @@ export default function GamePage({
     return Array.from(tooClose);
   }, [status, gameState?.regions, neighborMap, MIN_CAPITAL_DISTANCE]);
 
+  const players = useMemo(() => gameState?.players || {}, [gameState?.players]);
+  const regions = useMemo(() => gameState?.regions || {}, [gameState?.regions]);
+  const currentTick = parseInt(gameState?.meta?.current_tick || "0", 10);
+  const tickIntervalMs = parseInt(gameState?.meta?.tick_interval_ms || "1000", 10);
+
   // My stats
   const { myRegionCount, myUnitCount, myCurrency } = useMemo(() => {
     if (!gameState) return { myRegionCount: 0, myUnitCount: 0, myCurrency: 0 };
@@ -400,6 +414,31 @@ export default function GamePage({
       myCurrency: gameState.players[myUserId]?.currency ?? 0,
     };
   }, [gameState, myUserId]);
+
+  const rankedPlayers = useMemo(() => {
+    return Object.values(players)
+      .filter((player) => player.is_alive)
+      .map((player) => {
+        const regionCount = Object.values(regions).filter((region) => region.owner_id === player.user_id).length;
+        const unitCount = Object.values(regions)
+          .filter((region) => region.owner_id === player.user_id)
+          .reduce((total, region) => total + intOrZero(region.unit_count), 0);
+        return {
+          user_id: player.user_id,
+          username: player.username,
+          color: player.color,
+          regionCount,
+          unitCount,
+          isAlive: player.is_alive,
+        };
+      })
+      .sort((left, right) =>
+        Number(right.isAlive) - Number(left.isAlive) ||
+        right.regionCount - left.regionCount ||
+        right.unitCount - left.unitCount ||
+        left.username.localeCompare(right.username)
+      );
+  }, [players, regions]);
 
   // ── Event-driven animations (visible to ALL clients) ───────
   //
@@ -519,11 +558,7 @@ export default function GamePage({
         if (
           sourceRegion &&
           effectiveUnitType &&
-          !(
-            gameState?.regions?.[regionId]?.owner_id === myUserId
-              ? (reachabilityByUnitType[effectiveUnitType]?.moveTargets.has(regionId) ?? false)
-              : (reachabilityByUnitType[effectiveUnitType]?.attackTargets.has(regionId) ?? false)
-          )
+          !isTargetReachableForUnitType(regionId, effectiveUnitType)
         ) {
           toast.error("Ten cel nie jest osiągalny dla wybranego typu jednostki");
           return;
@@ -571,8 +606,7 @@ export default function GamePage({
       mapReady,
       hasSelectedCapital,
       getPreferredReachableUnitType,
-      myUserId,
-      reachabilityByUnitType,
+      isTargetReachableForUnitType,
       selectedActionUnitType,
     ]
   );
@@ -654,6 +688,11 @@ export default function GamePage({
     [selectedRegion, produceUnit]
   );
 
+  const handleSelectedActionUnitTypeChange = useCallback((unitType: string) => {
+    setSelectedActionUnitType(unitType);
+    setActionTargets((prev) => prev.filter((targetId) => isTargetReachableForUnitType(targetId, unitType)));
+  }, [isTargetReachableForUnitType]);
+
   // ── Music ───────────────────────────────────────────────────
 
   useEffect(() => {
@@ -693,8 +732,19 @@ export default function GamePage({
         }
       }
       if (e.type === "player_eliminated" && e.player_id === myUserId) {
-        toast.error("Twoja stolica zostala zdobyta");
+        if (e.reason === "disconnect_timeout") {
+          toast.error("Zostales usuniety z meczu przez brak powrotu na czas");
+        } else if (e.reason === "left_match") {
+          toast.error("Opuściłeś mecz");
+        } else {
+          toast.error("Twoja stolica zostala zdobyta");
+        }
         playSound("buzzer");
+      }
+      if (e.type === "player_disconnected" && e.player_id !== myUserId) {
+        const disconnectedPlayer = gameStateRef.current?.players[String(e.player_id)];
+        const graceSeconds = Number(e.grace_seconds || 0);
+        toast.warning(`${disconnectedPlayer?.username || "Gracz"} rozlaczyl sie. Limit powrotu: ${graceSeconds}s`);
       }
       if (e.type === "build_started" && e.player_id === myUserId) {
         playSound("build");
@@ -750,11 +800,6 @@ export default function GamePage({
     );
   }
 
-  const players = gameState?.players || {};
-  const regions = gameState?.regions || {};
-  const currentTick = parseInt(gameState?.meta?.current_tick || "0", 10);
-  const tickIntervalMs = parseInt(gameState?.meta?.tick_interval_ms || "1000", 10);
-
   const visibleActionTargets = actionTargets.filter((regionId) => {
     if (!highlightedNeighbors.includes(regionId)) return false;
     return true;
@@ -771,85 +816,60 @@ export default function GamePage({
       } satisfies TargetEntry;
     })
     .filter(Boolean) as TargetEntry[];
-  const selectedOwner =
-    sourceRegionData?.owner_id ? players[sourceRegionData.owner_id] : null;
-  const intelLabel =
-    status === "selecting"
-      ? "Wybierz bezpieczna stolice z dala od innych graczy."
-      : selectedRegion && sourceRegionData
-        ? isSource
-          ? "Region aktywny. Szczegoly akcji i rozdzial wojsk sa w dolnym action panelu."
-          : "Region podgladowy. Sprawdz wlasciciela, obrone i budynki."
-        : "Kliknij region, aby zobaczyc jego stan i mozliwe akcje.";
-  const topBarMessage =
-    status === "selecting"
-      ? "Wybierz stolice"
-      : status === "finished"
-        ? "Rozgrywka zakonczona"
-        : visibleActionTargets.length > 0
-          ? `Gotowe cele: ${visibleActionTargets.length}`
-          : selectedRegion
-            ? sourceRegionData?.name ?? "Wybrany region"
-            : "Brak aktywnego wyboru";
-
+  const capitalSelectionEndsAt = Number(gameState?.meta?.capital_selection_ends_at || 0);
+  const capitalSelectionRemaining = status === "selecting" && capitalSelectionEndsAt > 0
+    ? Math.max(0, capitalSelectionEndsAt - Math.floor(nowMs / 1000))
+    : 0;
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-[#050b14]">
       <div className="pointer-events-none absolute inset-0 bg-[url('/assets/ui/hex_bg_tile.webp')] bg-[size:240px] opacity-[0.04]" />
 
-      <div className="absolute left-4 right-4 top-4 z-20">
-        <div className="mx-auto flex max-w-[980px] items-center justify-between gap-4 rounded-[26px] border border-white/10 bg-slate-950/82 px-4 py-3 shadow-[0_18px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-2">
-              <Image
-                src="/assets/common/world.webp"
-                alt="MapLord"
-                width={22}
-                height={22}
-                className="h-[22px] w-[22px] object-contain"
-              />
+      {status === "selecting" && (
+        <div className="absolute left-1/2 top-2 z-20 -translate-x-1/2 sm:top-4">
+          <div className="rounded-full border border-amber-300/20 bg-slate-950/88 px-4 py-2 text-center shadow-[0_10px_24px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-amber-200/70">
+              Wybór stolicy
             </div>
-            <div className="min-w-0">
-              <div className="text-[11px] uppercase tracking-[0.28em] text-slate-500">
-                Battle Navbar
-              </div>
-              <div className="truncate font-display text-xl text-zinc-50">
-                {topBarMessage}
-              </div>
+            <div className="mt-0.5 flex items-center justify-center gap-2 text-sm text-zinc-100">
+              <span>Wybierz region startowy</span>
+              <span className="font-display text-amber-200">
+                {capitalSelectionRemaining}s
+              </span>
             </div>
-          </div>
-
-          <div className="hidden items-center gap-3 md:flex">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2">
-              <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
-                Match
-              </div>
-              <div className="font-display text-lg text-cyan-200">
-                {matchId.slice(0, 8)}
-              </div>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2">
-              <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
-                Gracz
-              </div>
-              <div className="font-display text-lg text-zinc-50">
-                {user.username}
-              </div>
-            </div>
-            <button
-              onClick={toggleMute}
-              title={muted ? "Włącz dźwięk" : "Wycisz dźwięk"}
-              className="rounded-full border border-white/10 bg-white/[0.04] p-2 text-slate-400 transition-colors hover:bg-white/[0.08] hover:text-white"
-            >
-              {muted ? "🔇" : "🔊"}
-            </button>
-            <button
-              onClick={() => router.push("/dashboard")}
-              className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-slate-200 transition-colors hover:bg-white/[0.08]"
-            >
-              Wyjdz do lobby
-            </button>
           </div>
         </div>
+      )}
+
+      <div className="absolute right-2 top-2 z-20 flex items-center gap-2 sm:right-4 sm:top-4">
+        <button
+          onClick={toggleMute}
+          title={muted ? "Włącz dźwięk" : "Wycisz dźwięk"}
+          className="rounded-full border border-white/10 bg-slate-950/84 p-2 text-slate-300 shadow-[0_10px_24px_rgba(0,0,0,0.22)] backdrop-blur-xl transition-colors hover:bg-white/[0.08] hover:text-white"
+        >
+          {muted ? "🔇" : "🔊"}
+        </button>
+        <button
+          onClick={() => router.push("/dashboard")}
+          className="rounded-full border border-white/10 bg-slate-950/84 px-3 py-2 text-xs text-slate-200 shadow-[0_10px_24px_rgba(0,0,0,0.22)] backdrop-blur-xl transition-colors hover:bg-white/[0.08] sm:px-4"
+        >
+          Wyjdz
+        </button>
+        {status !== "finished" && (
+          <button
+            onClick={async () => {
+              if (!window.confirm("Na pewno chcesz opuscic mecz calkowicie?")) return;
+              const confirmed = await leaveMatch();
+              if (!confirmed) {
+                toast.error("Nie udalo sie potwierdzic opuszczenia meczu");
+                return;
+              }
+              router.push("/dashboard");
+            }}
+            className="rounded-full border border-red-400/20 bg-red-950/70 px-3 py-2 text-xs text-red-100 shadow-[0_10px_24px_rgba(0,0,0,0.22)] backdrop-blur-xl transition-colors hover:bg-red-900/80 sm:px-4"
+          >
+            Opuść mecz
+          </button>
+        )}
       </div>
 
       {!connected && (
@@ -880,173 +900,6 @@ export default function GamePage({
             />
             <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
             <span className="text-sm text-zinc-300">Ładowanie mapy...</span>
-          </div>
-        </div>
-      )}
-
-      {mapReady && status === "selecting" && (
-        <div className="absolute left-1/2 top-[92px] z-20 flex -translate-x-1/2 items-center gap-3 rounded-full border border-yellow-300/20 bg-slate-950/82 px-5 py-3 text-center text-sm font-medium text-yellow-200 backdrop-blur-xl">
-          <Image
-            src="/assets/units/capital_star.png"
-            alt=""
-            width={22}
-            height={22}
-            className="h-[22px] w-[22px] object-contain"
-          />
-          <span>
-            Wszyscy gracze wybieraja stolice rownoczesnie. Kliknij swoj region.
-          </span>
-          <span className="rounded-full border border-yellow-300/20 bg-yellow-300/10 px-3 py-1 font-display text-base text-yellow-100">
-            {capitalSelectionSecondsLeft}s
-          </span>
-        </div>
-      )}
-
-      {mapReady && status === "in_progress" && !selectedRegion && (
-        <div className="absolute left-1/2 top-[92px] z-20 -translate-x-1/2 rounded-full border border-white/10 bg-slate-950/82 px-4 py-2 text-sm text-zinc-300 backdrop-blur-xl">
-          Kliknij swój region, aby wybrać źródło
-        </div>
-      )}
-
-      {mapReady && status === "in_progress" && isSource && actionTargets.length === 0 && (
-        <div className="absolute left-1/2 top-[92px] z-20 -translate-x-1/2 rounded-full border border-cyan-300/15 bg-slate-950/82 px-4 py-2 text-sm text-cyan-200 backdrop-blur-xl">
-          {availableSourceUnitTypes.length > 1
-            ? "Mapa pokazuje zasieg wszystkich typow jednostek. Dokladny typ wybierzesz w action barze."
-            : "Kliknij region w zasiegu, aby zaatakować lub przenieść jednostki"}
-        </div>
-      )}
-
-      {mapReady && !(sourceRegionData && selectedRegion && actionTargets.length === 0) && (
-        <div className="absolute right-4 top-[104px] z-20 hidden w-[340px] overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/82 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl lg:block">
-          <div className="flex items-center gap-3 border-b border-white/10 px-4 py-3">
-            <Image
-              src="/assets/units/cursor.webp"
-              alt=""
-              width={24}
-              height={24}
-              className="h-6 w-6 object-contain"
-            />
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
-                Map Intel
-              </p>
-              <h3 className="font-display text-xl text-zinc-50">Stan planszy</h3>
-            </div>
-          </div>
-          <div className="space-y-3 px-4 py-4">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-sm leading-6 text-slate-300">
-              {intelLabel}
-            </div>
-            <div className="grid grid-cols-1 gap-3">
-              <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
-                <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">
-                  Stolice
-                </div>
-                <div className="mt-2 font-display text-2xl text-amber-200">
-                  {Object.values(regions).filter((region) => region.is_capital).length}
-                </div>
-              </div>
-            </div>
-
-            {selectedRegion && sourceRegionData ? (
-              <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
-                <div className="mb-3 flex items-center gap-3">
-                  <div
-                    className="h-3 w-3 rounded-full ring-2 ring-white/10"
-                    style={{ backgroundColor: selectedOwner?.color ?? "#64748b" }}
-                  />
-                  <div className="min-w-0">
-                    <div className="truncate font-display text-lg text-zinc-50">
-                      {sourceRegionData.name}
-                    </div>
-                    <div className="text-xs text-slate-400">
-                      {selectedOwner?.username ?? "Region neutralny"}
-                    </div>
-                  </div>
-                </div>
-                <div className="grid gap-2">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="min-w-0 rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2.5">
-                      <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">
-                        Jednostki
-                      </div>
-                      <div className="mt-1 flex min-w-0 items-center gap-2 font-display text-lg text-zinc-50">
-                        <Image
-                          src={getUnitAsset(selectedUnitTypeForAction ?? sourceRegionData.unit_type ?? "default")}
-                          alt=""
-                          width={16}
-                          height={16}
-                          className="h-4 w-4 object-contain"
-                        />
-                        <span className="truncate">{isSource ? sourceRegionData.unit_count : "?"}</span>
-                      </div>
-                    </div>
-                    <div className="min-w-0 rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2.5">
-                      <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">
-                        Obrona
-                      </div>
-                      <div className="mt-1 font-display text-lg text-emerald-300">
-                        {Math.round(sourceRegionData.defense_bonus * 100)}%
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="min-w-0 rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2.5">
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">
-                      Infrastruktura
-                    </div>
-                    <div className="mt-2 flex min-w-0 items-center gap-2 text-amber-200">
-                      {getBuildingAsset(sourceRegionData.building_type) && (
-                        <Image
-                          src={getBuildingAsset(sourceRegionData.building_type)!}
-                          alt=""
-                          width={16}
-                          height={16}
-                          className="h-4 w-4 shrink-0 object-contain"
-                        />
-                      )}
-                      <span className="truncate font-display text-sm">
-                        {sourceRegionData.building_type ?? "Brak"}
-                      </span>
-                    </div>
-                  </div>
-
-                  {Object.entries(sourceRegionData.buildings ?? {}).filter(([, count]) => count > 0).length > 0 && (
-                    <div className="rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2.5">
-                      <div className="mb-2 text-[10px] uppercase tracking-[0.18em] text-slate-500">
-                        Budynki w regionie
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {Object.entries(sourceRegionData.buildings ?? {})
-                          .filter(([, count]) => count > 0)
-                          .map(([slug, count]) => (
-                            <span
-                              key={slug}
-                              className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-zinc-200"
-                            >
-                              {getBuildingAsset(slug) && (
-                                <Image
-                                  src={getBuildingAsset(slug)!}
-                                  alt=""
-                                  width={14}
-                                  height={14}
-                                  className="h-3.5 w-3.5 shrink-0 object-contain"
-                                />
-                              )}
-                              <span className="truncate">{slug}</span>
-                              <span className="text-zinc-500">x{count}</span>
-                            </span>
-                          ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-3 text-sm text-slate-500">
-                Brak aktywnego regionu. Kliknij na mape, aby odczytac dane prowincji.
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -1114,7 +967,7 @@ export default function GamePage({
         tickIntervalMs={tickIntervalMs}
         status={status}
         players={players}
-        events={events}
+        rankedPlayers={rankedPlayers}
         myUserId={myUserId}
         myRegionCount={myRegionCount}
         myUnitCount={myUnitCount}
@@ -1131,8 +984,9 @@ export default function GamePage({
       />
 
       {/* Action Bar (multi-target) */}
-      {visibleActionTargets.length > 0 && sourceRegionData && selectedRegion && (
+      {sourceRegionData && selectedRegion && isSource && (visibleActionTargets.length > 0 || Boolean(selectedUnitTypeForAction)) && (
         <ActionBar
+          key={`${selectedRegion}:${selectedUnitTypeForAction ?? sourceRegionData.unit_type ?? "infantry"}`}
           sourceRegion={sourceRegionData}
           sourceName={sourceRegionData.name}
           targets={targets}
@@ -1140,7 +994,7 @@ export default function GamePage({
           selectedUnitScale={
             unitsConfig.find((unit) => unit.slug === (selectedUnitTypeForAction ?? sourceRegionData.unit_type ?? "infantry"))?.manpower_cost ?? 1
           }
-          onSelectedUnitTypeChange={setSelectedActionUnitType}
+          onSelectedUnitTypeChange={handleSelectedActionUnitTypeChange}
           onConfirm={handleConfirmAction}
           onRemoveTarget={(rid) =>
             setActionTargets((prev) => prev.filter((id) => id !== rid))
@@ -1155,23 +1009,25 @@ export default function GamePage({
 
       {/* Region panel (info + panel-based actions) */}
       {sourceRegionData && selectedRegion && actionTargets.length === 0 && (
-        <RegionPanel
-          regionId={selectedRegion}
-          region={sourceRegionData}
-          players={players}
-          myUserId={myUserId}
-          myCurrency={myCurrency}
-          buildings={buildings}
-          buildingQueue={gameState?.buildings_queue || []}
-          units={unitsConfig}
-          onBuild={handleBuild}
-          onProduceUnit={handleProduceUnit}
-          onClose={() => {
-            setSelectedRegion(null);
-            setSelectedActionUnitType(null);
-            setActionTargets([]);
-          }}
-        />
+        <div className="hidden sm:block">
+          <RegionPanel
+            regionId={selectedRegion}
+            region={sourceRegionData}
+            players={players}
+            myUserId={myUserId}
+            myCurrency={myCurrency}
+            buildings={buildings}
+            buildingQueue={gameState?.buildings_queue || []}
+            units={unitsConfig}
+            onBuild={handleBuild}
+            onProduceUnit={handleProduceUnit}
+            onClose={() => {
+              setSelectedRegion(null);
+              setSelectedActionUnitType(null);
+              setActionTargets([]);
+            }}
+          />
+        </div>
       )}
     </div>
   );

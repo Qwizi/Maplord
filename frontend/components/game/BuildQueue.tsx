@@ -28,7 +28,7 @@ export default function BuildQueue({
   const unitMap = Object.fromEntries(units.map((unit) => [unit.slug, unit]));
 
   return (
-    <div className="absolute bottom-4 left-4 z-20 w-[320px] space-y-3">
+    <div className="absolute bottom-[5.5rem] left-2 right-2 z-20 space-y-2 sm:bottom-4 sm:left-4 sm:right-auto sm:w-[320px] sm:space-y-3 lg:bottom-4">
       {myBuilds.length > 0 && (
         <QueueSection
           title={`Budowa (${myBuilds.length})`}

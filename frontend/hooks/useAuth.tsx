@@ -32,6 +32,7 @@ interface AuthContextType {
     password: string
   ) => Promise<void>;
   logout: () => void;
+  refreshUser: () => Promise<void>;
   token: string | null;
 }
 
@@ -102,8 +103,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null);
   };
 
+  const refreshUser = useCallback(async () => {
+    const accessToken = getAccessToken();
+    if (!accessToken) return;
+    await loadUser(accessToken);
+  }, [loadUser]);
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, token }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser, token }}>
       {children}
     </AuthContext.Provider>
   );

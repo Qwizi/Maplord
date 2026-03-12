@@ -8,6 +8,7 @@ interface UseMatchmakingReturn {
   inQueue: boolean;
   playersInQueue: number;
   matchId: string | null;
+  activeMatchId: string | null;
   joinQueue: () => void;
   leaveQueue: () => void;
 }
@@ -16,6 +17,7 @@ export function useMatchmaking(): UseMatchmakingReturn {
   const [inQueue, setInQueue] = useState(false);
   const [playersInQueue, setPlayersInQueue] = useState(0);
   const [matchId, setMatchId] = useState<string | null>(null);
+  const [activeMatchId, setActiveMatchId] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
   const handleMessage = useCallback((msg: WSMessage) => {
@@ -24,6 +26,12 @@ export function useMatchmaking(): UseMatchmakingReturn {
         setPlayersInQueue(msg.players_in_queue as number);
         break;
       case "match_found":
+        setMatchId(msg.match_id as string);
+        setActiveMatchId(msg.match_id as string);
+        setInQueue(false);
+        break;
+      case "active_match_exists":
+        setActiveMatchId(msg.match_id as string);
         setMatchId(msg.match_id as string);
         setInQueue(false);
         break;
@@ -36,12 +44,17 @@ export function useMatchmaking(): UseMatchmakingReturn {
   const joinQueue = useCallback(() => {
     const token = getAccessToken();
     if (!token) return;
+    if (wsRef.current) return;
 
     const ws = createSocket("/matchmaking/", token, handleMessage, () => {
       setInQueue(false);
+      wsRef.current = null;
     });
 
-    ws.onopen = () => setInQueue(true);
+    ws.onopen = () => {
+      setInQueue(true);
+      ws.send(JSON.stringify({ action: "status" }));
+    };
     wsRef.current = ws;
   }, [handleMessage]);
 
@@ -60,5 +73,5 @@ export function useMatchmaking(): UseMatchmakingReturn {
     };
   }, []);
 
-  return { inQueue, playersInQueue, matchId, joinQueue, leaveQueue };
+  return { inQueue, playersInQueue, matchId, activeMatchId, joinQueue, leaveQueue };
 }

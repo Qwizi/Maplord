@@ -94,6 +94,20 @@ export async function getMe(token: string): Promise<User> {
   return fetchAPI<User>("/auth/me", { token });
 }
 
+export interface LeaderboardEntry {
+  id: string;
+  username: string;
+  elo_rating: number;
+  matches_played: number;
+  wins: number;
+  win_rate: number;
+  average_placement: number;
+}
+
+export async function getLeaderboard(token: string): Promise<LeaderboardEntry[]> {
+  return fetchAPI<LeaderboardEntry[]>("/auth/leaderboard", { token });
+}
+
 // --- Config ---
 
 export interface BuildingType {

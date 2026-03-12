@@ -11,26 +11,41 @@ class MatchmakingConsumer(AsyncJsonWebsocketConsumer):
 
     async def connect(self):
         self.user = self.scope.get('user')
+        self.joined_queue = False
         if not self.user or self.user.is_anonymous:
             await self.close(code=4001)
             return
 
         await self.channel_layer.group_add(self.queue_group, self.channel_name)
         await self.accept()
+        active_match_id = await self.get_active_match_id()
+        if active_match_id:
+            await self.remove_from_queue()
+            await self.send_json({
+                'type': 'active_match_exists',
+                'match_id': active_match_id,
+            })
+            await self.close()
+            return
         await self.add_to_queue()
+        self.joined_queue = True
+        await self.broadcast_queue_count()
         
         # Check if we have enough players
         await self.try_match()
 
     async def disconnect(self, close_code):
-        if hasattr(self, 'user') and self.user and not self.user.is_anonymous:
+        if getattr(self, 'joined_queue', False) and hasattr(self, 'user') and self.user and not self.user.is_anonymous:
             await self.remove_from_queue()
+            await self.broadcast_queue_count()
         await self.channel_layer.group_discard(self.queue_group, self.channel_name)
 
     async def receive_json(self, content):
         action = content.get('action')
         if action == 'cancel':
             await self.remove_from_queue()
+            self.joined_queue = False
+            await self.broadcast_queue_count()
             await self.send_json({'type': 'queue_left'})
             await self.close()
         elif action == 'status':
@@ -51,6 +66,21 @@ class MatchmakingConsumer(AsyncJsonWebsocketConsumer):
     def get_queue_count(self):
         from apps.matchmaking.models import MatchQueue
         return MatchQueue.objects.count()
+
+    @database_sync_to_async
+    def get_active_match_id(self):
+        from apps.matchmaking.models import Match
+
+        return (
+            Match.objects.filter(
+                players__user=self.user,
+                players__is_alive=True,
+                status__in=[Match.Status.SELECTING, Match.Status.IN_PROGRESS],
+            )
+            .order_by('-created_at')
+            .values_list('id', flat=True)
+            .first()
+        )
 
     @database_sync_to_async
     def try_create_match(self):
@@ -201,3 +231,13 @@ class MatchmakingConsumer(AsyncJsonWebsocketConsumer):
             'type': 'queue_status',
             'players_in_queue': event.get('count', 0),
         })
+
+    async def broadcast_queue_count(self):
+        count = await self.get_queue_count()
+        await self.channel_layer.group_send(
+            self.queue_group,
+            {
+                'type': 'queue_update',
+                'count': count,
+            }
+        )

@@ -53,6 +53,9 @@ DEFAULT_UNIT_TYPES = {
     },
 }
 
+MAX_BUILD_QUEUE_PER_REGION = 3
+MAX_UNIT_QUEUE_PER_REGION = 4
+
 
 class GameEngine:
     """Pure game logic — processes ticks, combat, economy, and production."""
@@ -326,6 +329,8 @@ class GameEngine:
         unit_type = action.get("unit_type") or self._get_region_unit_type(source)
         if units <= 0 or self._get_available_units(source, unit_type) < units:
             return []
+        if not self._can_station_unit(target, unit_type):
+            return [self._reject_action(player_id, "Ten region nie moze przyjac tego typu jednostki", action)]
         unit_config = self._get_unit_config(unit_type)
         speed = max(1, int(unit_config.get("speed", 1)))
         move_range = max(speed, int(unit_config.get("attack_range", 1)))
@@ -393,6 +398,13 @@ class GameEngine:
         max_per_region = int(config.get("max_per_region", 1))
         if current_count + queued_count >= max_per_region:
             return [self._reject_action(player_id, "Osiagnieto limit tego budynku w regionie", action)]
+        total_region_build_queue = sum(
+            1
+            for queued in buildings_queue
+            if queued.get("region_id") == region_id
+        )
+        if total_region_build_queue >= MAX_BUILD_QUEUE_PER_REGION:
+            return [self._reject_action(player_id, "Region ma juz maksymalna liczbe budow w kolejce", action)]
 
         currency_cost = int(config.get("currency_cost", config.get("cost", 30)))
         if int(player.get("currency", 0)) < currency_cost:
@@ -449,6 +461,13 @@ class GameEngine:
         base_unit_type = self.settings.get("default_unit_type_slug", "infantry")
         if self._get_available_units(region, base_unit_type) < manpower_cost:
             return [self._reject_action(player_id, "Za malo piechoty w regionie do zalogi tej jednostki", action)]
+        total_region_unit_queue = sum(
+            int(queued.get("quantity", 1))
+            for queued in unit_queue
+            if queued.get("region_id") == region_id
+        )
+        if total_region_unit_queue >= MAX_UNIT_QUEUE_PER_REGION:
+            return [self._reject_action(player_id, "Region ma juz maksymalna liczbe jednostek w produkcji", action)]
 
         player["currency"] = int(player.get("currency", 0)) - production_cost
         production_time = int(unit_config.get("production_time_ticks", 1))
@@ -520,6 +539,19 @@ class GameEngine:
                 "type": "action_rejected",
                 "player_id": player_id,
                 "message": "Cel ruchu nie jest juz dostepny",
+                "action_type": "move",
+                "source_region_id": source_id,
+                "target_region_id": target_id,
+                "unit_type": unit_type,
+            }]
+        if not self._can_station_unit(target, unit_type):
+            source = regions.get(source_id)
+            if source:
+                self._receive_units_in_region(source, unit_type, units)
+            return [{
+                "type": "action_rejected",
+                "player_id": player_id,
+                "message": "Ten region nie moze przyjac tego typu jednostki",
                 "action_type": "move",
                 "source_region_id": source_id,
                 "target_region_id": target_id,
@@ -696,15 +728,9 @@ class GameEngine:
 
     def _can_station_unit(self, region: dict, unit_type: str, buildings: dict | None = None) -> bool:
         unit_config = self._get_unit_config(unit_type)
-        produced_by_slug = unit_config.get("produced_by_slug")
-        if not produced_by_slug:
-            return True
-
         if unit_config.get("movement_type") == "sea" and not region.get("is_coastal"):
             return False
-
-        region_buildings = buildings if buildings is not None else (region.get("buildings") or {})
-        return int(region_buildings.get(produced_by_slug, 0)) > 0
+        return True
 
     def _get_region_defender_power(self, region: dict, defense_bonus: float) -> float:
         total = 0.0
@@ -981,6 +1007,7 @@ class GameEngine:
                 region = regions.get(capital_region_id)
                 if region and region.get("owner_id") != player_id:
                     player["is_alive"] = False
+                    player["eliminated_reason"] = "capital_lost"
                     events.append({
                         "type": "player_eliminated",
                         "player_id": player_id,

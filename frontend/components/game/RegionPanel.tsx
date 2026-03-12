@@ -57,13 +57,17 @@ export default function RegionPanel({
     .filter((unit) => Boolean(unit.produced_by_slug))
     .filter((unit) => (buildingCounts[unit.produced_by_slug ?? ""] ?? 0) > 0)
     .sort((a, b) => a.order - b.order || a.production_cost - b.production_cost || a.name.localeCompare(b.name));
+  const compactBuildOptions = buildOptions.slice(0, 6);
+  const compactProducedUnits = producedUnits.slice(0, 4);
 
   const displayedBuildings = [...buildings]
     .filter((building) => (buildingCounts[building.slug] ?? 0) > 0)
     .sort((a, b) => a.order - b.order);
+  const compactDisplayedBuildings = displayedBuildings.slice(0, 5);
   const unitBreakdown = Object.entries(region.units ?? {})
     .filter(([, count]) => count > 0)
     .sort((a, b) => b[1] - a[1]);
+  const compactUnitBreakdown = unitBreakdown.slice(0, 4);
 
   const getUnitConfig = (slug: string) =>
     units.find((unit) => unit.slug === slug) ?? null;
@@ -82,7 +86,7 @@ export default function RegionPanel({
         : "Jednostki ladowe walcza i poruszaja sie po standardowym grafie regionow.";
 
   return (
-    <div className="absolute right-0 top-0 z-10 h-full w-[360px] overflow-y-auto border-l border-white/10 bg-slate-950/88 p-4 shadow-[-20px_0_60px_rgba(0,0,0,0.3)] backdrop-blur-xl">
+    <div className="absolute inset-x-0 bottom-0 z-20 h-[min(68vh,720px)] overflow-y-auto rounded-t-[28px] border-t border-white/10 bg-slate-950/92 p-4 shadow-[0_-20px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:inset-y-0 sm:left-auto sm:right-0 sm:h-full sm:w-[360px] sm:rounded-t-none sm:border-l sm:border-t-0 sm:shadow-[-20px_0_60px_rgba(0,0,0,0.3)]">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
@@ -151,13 +155,13 @@ export default function RegionPanel({
           </div>
         </div>
 
-        {unitBreakdown.length > 0 && (
+        {compactUnitBreakdown.length > 0 && (
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-3">
             <div className="mb-3 text-xs uppercase tracking-[0.18em] text-zinc-500">
               Typy jednostek
             </div>
             <div className="grid gap-2">
-              {unitBreakdown.map(([type, count]) => (
+              {compactUnitBreakdown.map(([type, count]) => (
                 (() => {
                   const unitConfig = getUnitConfig(type);
                   const manpowerCost = Math.max(1, unitConfig?.manpower_cost ?? 1);
@@ -200,6 +204,11 @@ export default function RegionPanel({
                 })()
               ))}
             </div>
+            {unitBreakdown.length > compactUnitBreakdown.length && (
+              <div className="mt-2 text-[11px] text-zinc-500">
+                +{unitBreakdown.length - compactUnitBreakdown.length} dodatkowych typow
+              </div>
+            )}
           </div>
         )}
 
@@ -222,13 +231,13 @@ export default function RegionPanel({
           </div>
         )}
 
-        {displayedBuildings.length > 0 && (
+        {compactDisplayedBuildings.length > 0 && (
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-3">
             <div className="mb-3 text-xs uppercase tracking-[0.18em] text-zinc-500">
               Infrastruktura
             </div>
             <div className="grid gap-2">
-              {displayedBuildings.map((building) => (
+              {compactDisplayedBuildings.map((building) => (
                 <div
                   key={building.slug}
                   className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-white/10 bg-slate-900/60 px-3 py-2"
@@ -249,6 +258,11 @@ export default function RegionPanel({
                 </div>
               ))}
             </div>
+            {displayedBuildings.length > compactDisplayedBuildings.length && (
+              <div className="mt-2 text-[11px] text-zinc-500">
+                +{displayedBuildings.length - compactDisplayedBuildings.length} kolejnych budynkow
+              </div>
+            )}
           </div>
         )}
 
@@ -319,7 +333,7 @@ export default function RegionPanel({
           </div>
         )}
 
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-sm text-zinc-400">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-zinc-400">
           {movementHint}
         </div>
       </div>
@@ -337,15 +351,15 @@ export default function RegionPanel({
             />
             Rozbudowa infrastruktury
           </h4>
-          <div className="mt-3 grid grid-cols-1 gap-2 xl:grid-cols-2">
-            {buildOptions.map((building) => (
+          <div className="mt-3 space-y-2">
+            {compactBuildOptions.map((building) => (
               <button
                 key={building.id}
                 onClick={() => onBuild(building.slug)}
                 disabled={myCurrency < building.currency_cost}
-                className="flex min-h-[132px] min-w-0 flex-col items-start justify-between rounded-[22px] border border-amber-400/10 bg-amber-500/10 p-3 text-left text-sm transition-colors hover:bg-amber-500/15 disabled:opacity-40"
+                className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-[22px] border border-amber-400/10 bg-amber-500/10 px-3 py-3 text-left text-sm transition-colors hover:bg-amber-500/15 disabled:opacity-40"
               >
-                <span className="flex min-w-0 items-start gap-3">
+                <span className="flex min-w-0 items-center gap-3">
                   {getBuildingAsset(building.asset_key || building.slug) && (
                     <Image
                       src={getBuildingAsset(building.asset_key || building.slug)!}
@@ -357,13 +371,13 @@ export default function RegionPanel({
                   )}
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium text-zinc-50">{building.name}</span>
-                    <span className="mt-1 block text-xs leading-4 text-zinc-400">
-                      {building.description}
+                    <span className="mt-1 block text-[11px] leading-4 text-zinc-400">
+                      Limit {(buildingCounts[building.slug] ?? 0) + (queuedBuildingCounts[building.slug] ?? 0)}/{building.max_per_region}
                     </span>
                   </span>
                 </span>
-                <div className="w-full space-y-1 text-xs text-zinc-400">
-                  <span className="flex items-center gap-1">
+                <div className="text-right text-[11px] text-zinc-400">
+                  <span className="flex items-center justify-end gap-1">
                     <Image
                       src="/assets/common/coin_w200.webp"
                       alt=""
@@ -373,7 +387,7 @@ export default function RegionPanel({
                     />
                     {building.currency_cost}
                   </span>
-                  <span className="flex items-center gap-1">
+                  <span className="mt-1 flex items-center justify-end gap-1">
                     <Image
                       src="/assets/icons/time_icon.png"
                       alt=""
@@ -383,15 +397,17 @@ export default function RegionPanel({
                     />
                     {building.build_time_ticks} tick
                   </span>
-                  <span className="block">
-                    Limit: {(buildingCounts[building.slug] ?? 0) + (queuedBuildingCounts[building.slug] ?? 0)}/{building.max_per_region}
-                  </span>
                 </div>
               </button>
             ))}
           </div>
+          {buildOptions.length > compactBuildOptions.length && (
+            <div className="mt-2 text-[11px] text-zinc-500">
+              Pokazano {compactBuildOptions.length} z {buildOptions.length} mozliwych budynkow
+            </div>
+          )}
 
-          {producedUnits.length > 0 && (
+          {compactProducedUnits.length > 0 && (
             <>
               <Separator className="my-5 bg-white/10" />
               <h4 className="flex items-center gap-2 text-sm font-medium text-cyan-300">
@@ -405,7 +421,7 @@ export default function RegionPanel({
                 Produkcja jednostek specjalnych
               </h4>
               <div className="mt-3 space-y-2">
-                {producedUnits.map((unit) => (
+                {compactProducedUnits.map((unit) => (
                   <button
                     key={unit.id}
                     onClick={() => onProduceUnit(unit.slug)}
@@ -442,6 +458,11 @@ export default function RegionPanel({
                   </button>
                 ))}
               </div>
+              {producedUnits.length > compactProducedUnits.length && (
+                <div className="mt-2 text-[11px] text-zinc-500">
+                  +{producedUnits.length - compactProducedUnits.length} dodatkowych jednostek specjalnych
+                </div>
+              )}
             </>
           )}
         </>
