@@ -40,6 +40,8 @@ pub struct GameSettings {
     pub min_capital_distance: i64,
     #[serde(default = "default_elo_k_factor")]
     pub elo_k_factor: i64,
+    #[serde(default)]
+    pub match_duration_limit_minutes: u64,
 }
 
 fn default_tick_interval() -> u64 { 1000 }
@@ -200,6 +202,8 @@ pub struct Player {
     pub currency_accum: f64,
     #[serde(default)]
     pub ability_cooldowns: HashMap<String, i64>,
+    #[serde(default)]
+    pub is_bot: bool,
 }
 
 fn default_true() -> bool { true }

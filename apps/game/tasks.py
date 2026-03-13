@@ -117,6 +117,7 @@ def finalize_match_results_sync(
             player_rows.append({
                 "match_player": mp,
                 "pid": pid,
+                "is_bot": mp.user.is_bot,
                 "is_alive": bool(player_info.get("is_alive", False)),
                 "eliminated_reason": str(player_info.get("eliminated_reason") or ""),
                 "eliminated_tick": int(player_info.get("eliminated_tick") or 0),
@@ -144,12 +145,25 @@ def finalize_match_results_sync(
         max_buildings = max((row["buildings_built"] for row in player_rows), default=0)
         max_survival_ticks = max(total_ticks, 1)
 
+        # Determine if match is ranked (need at least 2 human players)
+        human_rows = [r for r in player_rows if not r["is_bot"]]
+        is_ranked = len(human_rows) >= 2
+
         raw_changes: list[float] = []
         for row in player_rows:
+            if row["is_bot"] or not is_ranked:
+                row["raw_elo_change"] = 0.0
+                row["performance_score"] = 0.0
+                row["base_elo_component"] = 0.0
+                raw_changes.append(0.0)
+                survived_ticks = row["eliminated_tick"] or total_ticks
+                row["survived_ticks"] = survived_ticks
+                continue
+
             placement_total = 0.0
             expected_total = 0.0
             for opponent in player_rows:
-                if opponent["pid"] == row["pid"]:
+                if opponent["pid"] == row["pid"] or opponent["is_bot"]:
                     continue
                 if row["placement"] < opponent["placement"]:
                     actual_score = 1.0
@@ -180,23 +194,31 @@ def finalize_match_results_sync(
             )
             row["performance_score"] = performance_score
             row["base_elo_component"] = k_factor * (placement_total - expected_total)
+            raw_changes.append(0.0)  # placeholder, computed below
 
-        average_performance = (
-            sum(row["performance_score"] for row in player_rows) / len(player_rows)
-            if player_rows else 0.0
-        )
+        if is_ranked:
+            # Recompute raw changes only for humans
+            human_indices = [i for i, r in enumerate(player_rows) if not r["is_bot"]]
+            human_perf = [player_rows[i]["performance_score"] for i in human_indices]
+            average_performance = sum(human_perf) / len(human_perf) if human_perf else 0.0
 
-        for row in player_rows:
-            performance_component = k_factor * 0.35 * (row["performance_score"] - average_performance)
-            row["raw_elo_change"] = row["base_elo_component"] + performance_component
-            raw_changes.append(row["raw_elo_change"])
+            for i in human_indices:
+                row = player_rows[i]
+                performance_component = k_factor * 0.35 * (row["performance_score"] - average_performance)
+                row["raw_elo_change"] = row["base_elo_component"] + performance_component
+                raw_changes[i] = row["raw_elo_change"]
 
         elo_changes = _balanced_round_elo_changes(raw_changes)
 
         for row, elo_change in zip(player_rows, elo_changes, strict=True):
+            # Bots and unranked matches always get 0
+            if row["is_bot"] or not is_ranked:
+                elo_change = 0
+
             user = row["match_player"].user
-            user.elo_rating = int(user.elo_rating) + int(elo_change)
-            user.save(update_fields=["elo_rating"])
+            if elo_change != 0:
+                user.elo_rating = int(user.elo_rating) + int(elo_change)
+                user.save(update_fields=["elo_rating"])
 
             PlayerResult.objects.create(
                 match_result=result,

@@ -6,6 +6,7 @@ members = [
     "crates/maplord-state",
     "crates/maplord-matchmaking",
     "crates/maplord-django",
+    "crates/maplord-ai",
 ]
 
 [workspace.dependencies]

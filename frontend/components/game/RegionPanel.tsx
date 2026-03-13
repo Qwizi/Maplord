@@ -135,9 +135,16 @@ export default memo(function RegionPanel({
         <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
           <span className="min-w-0 text-zinc-400">Właściciel</span>
           {owner ? (
-            <Badge style={{ backgroundColor: owner.color }} className="max-w-[62%] truncate border-0 text-white">
-              {owner.username}
-            </Badge>
+            <span className="flex max-w-[62%] items-center gap-1.5">
+              <Badge style={{ backgroundColor: owner.color }} className="truncate border-0 text-white">
+                {owner.username}
+              </Badge>
+              {owner.is_bot && (
+                <span className="shrink-0 rounded bg-zinc-700 px-1 py-0.5 text-[9px] uppercase tracking-wider text-zinc-400">
+                  bot
+                </span>
+              )}
+            </span>
           ) : (
             <span className="text-zinc-500">Brak</span>
           )}

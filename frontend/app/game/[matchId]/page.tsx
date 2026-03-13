@@ -513,6 +513,7 @@ export default function GamePage({
           regionCount: stats?.regionCount ?? 0,
           unitCount: stats?.unitCount ?? 0,
           isAlive: player.is_alive,
+          isBot: player.is_bot ?? false,
         };
       })
       .sort((left, right) =>
@@ -522,6 +523,41 @@ export default function GamePage({
         left.username.localeCompare(right.username)
       );
   }, [players, regions]);
+
+  const finalRanking = useMemo(() => {
+    if (status !== "finished") return [];
+    const statsMap = new Map<string, { regionCount: number; unitCount: number }>();
+    for (const region of Object.values(regions)) {
+      if (!region.owner_id) continue;
+      let stats = statsMap.get(region.owner_id);
+      if (!stats) {
+        stats = { regionCount: 0, unitCount: 0 };
+        statsMap.set(region.owner_id, stats);
+      }
+      stats.regionCount++;
+      stats.unitCount += intOrZero(region.unit_count);
+    }
+    return Object.values(players)
+      .map((player) => {
+        const stats = statsMap.get(player.user_id);
+        return {
+          user_id: player.user_id,
+          username: player.username,
+          color: player.color,
+          regionCount: stats?.regionCount ?? 0,
+          unitCount: stats?.unitCount ?? 0,
+          isAlive: player.is_alive,
+          isBot: player.is_bot ?? false,
+          eliminatedTick: player.eliminated_tick ?? null,
+        };
+      })
+      .sort((a, b) =>
+        Number(b.isAlive) - Number(a.isAlive) ||
+        (b.eliminatedTick ?? 0) - (a.eliminatedTick ?? 0) ||
+        b.regionCount - a.regionCount ||
+        b.unitCount - a.unitCount
+      );
+  }, [status, players, regions]);
 
   // ── Event-driven animations (visible to ALL clients) ───────
   //
@@ -1178,9 +1214,47 @@ export default function GamePage({
                 />
               </div>
             </div>
-            <div className="px-10 py-6">
+            <div className="px-8 py-6">
               <h2 className="mb-1 font-display text-4xl text-zinc-50">Koniec gry</h2>
-              <p className="mb-6 text-sm text-slate-400">Rozgrywka zakończona</p>
+              <p className="mb-4 text-sm text-slate-400">Rozgrywka zakończona</p>
+              {finalRanking.length > 0 && (
+                <div className="mb-5 w-full min-w-[320px] space-y-1.5 text-left">
+                  {finalRanking.map((p, i) => {
+                    const isMe = p.user_id === myUserId;
+                    return (
+                      <div
+                        key={p.user_id}
+                        className={`flex items-center gap-3 rounded-xl px-3 py-2 ${
+                          isMe ? "bg-cyan-500/15 border border-cyan-400/30" : "bg-white/[0.04] border border-white/5"
+                        }`}
+                      >
+                        <span className="w-6 text-center font-display text-lg text-zinc-400">
+                          {i + 1}
+                        </span>
+                        <span
+                          className="h-3 w-3 shrink-0 rounded-full"
+                          style={{ backgroundColor: p.color }}
+                        />
+                        <span className={`flex-1 truncate text-sm ${isMe ? "font-medium text-zinc-50" : "text-zinc-300"}`}>
+                          {p.username}
+                          {p.isBot && <span className="ml-1.5 text-[10px] text-zinc-500">BOT</span>}
+                        </span>
+                        <span className="text-xs text-slate-500">
+                          {p.regionCount} reg
+                        </span>
+                        <span className="text-xs text-slate-500">
+                          {p.unitCount} jedn.
+                        </span>
+                        {p.isAlive && (
+                          <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
+                            WINNER
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
               <button
                 onClick={() => router.push("/dashboard")}
                 className="rounded-full bg-cyan-500 px-8 py-2.5 font-medium text-slate-950 transition-colors hover:bg-cyan-400"

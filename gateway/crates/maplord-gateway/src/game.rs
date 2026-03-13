@@ -4,6 +4,7 @@ use axum::extract::ws::{Message, WebSocket};
 use axum::extract::{Path, State, WebSocketUpgrade};
 use axum::response::Response;
 use dashmap::DashMap;
+use maplord_ai::BotBrain;
 use maplord_engine::{Action, Event, GameEngine, GameSettings, Player, Region};
 use maplord_state::GameStateManager;
 use serde_json::json;
@@ -481,9 +482,17 @@ async fn game_loop(
     let neighbor_map = state.django.get_neighbor_map().await
         .map_err(|e| format!("Failed to get neighbor map: {e}"))?;
 
-    let engine = GameEngine::new(settings, neighbor_map);
+    let engine = GameEngine::new(settings.clone(), neighbor_map.clone());
     let snapshot_interval = 30u64;
     let mut next_tick_at = tokio::time::Instant::now() + tick_interval;
+
+    // Initialize BotBrains for bot players
+    let initial_players = state_mgr.get_all_players().await?;
+    let bot_brains: HashMap<String, BotBrain> = initial_players
+        .iter()
+        .filter(|(_, p)| p.is_bot && p.is_alive)
+        .map(|(id, _)| (id.clone(), BotBrain::new(id.clone())))
+        .collect();
 
     loop {
         tokio::time::sleep_until(next_tick_at).await;
@@ -491,6 +500,25 @@ async fn game_loop(
 
         let mut tick_data = state_mgr.get_tick_data().await?;
         let tick = tick_data.tick;
+
+        // Generate bot actions
+        for (bot_id, brain) in &bot_brains {
+            if tick_data
+                .players
+                .get(bot_id)
+                .map(|p| p.is_alive)
+                .unwrap_or(false)
+            {
+                let bot_actions = brain.decide(
+                    &tick_data.players,
+                    &tick_data.regions,
+                    &neighbor_map,
+                    &settings,
+                    tick,
+                );
+                tick_data.actions.extend(bot_actions);
+            }
+        }
 
         // Resolve disconnect timeouts
         let timeout_events = resolve_disconnect_timeout_events(&mut tick_data.players);
@@ -581,6 +609,40 @@ async fn game_loop(
             }
         }
 
+        // Check for time limit expiry
+        if settings.match_duration_limit_minutes > 0 {
+            let max_ticks = (settings.match_duration_limit_minutes * 60 * 1000) / settings.tick_interval_ms;
+            if tick as u64 >= max_ticks && !events.iter().any(|e| matches!(e, Event::GameOver { .. })) {
+                info!("Match {match_id} reached time limit ({} min), ending", settings.match_duration_limit_minutes);
+                // Determine winner by most regions, then most units
+                let alive: Vec<(&String, &Player)> = tick_data.players.iter()
+                    .filter(|(_, p)| p.is_alive)
+                    .collect();
+                let winner_id = if alive.len() == 1 {
+                    Some(alive[0].0.clone())
+                } else if alive.is_empty() {
+                    None
+                } else {
+                    // Count regions per player
+                    let mut region_counts: HashMap<&str, (i64, i64)> = HashMap::new();
+                    for region in tick_data.regions.values() {
+                        if let Some(ref oid) = region.owner_id {
+                            let entry = region_counts.entry(oid.as_str()).or_insert((0, 0));
+                            entry.0 += 1;
+                            entry.1 += region.unit_count;
+                        }
+                    }
+                    alive.iter()
+                        .max_by_key(|(id, _)| {
+                            let (r, u) = region_counts.get(id.as_str()).copied().unwrap_or((0, 0));
+                            (r, u)
+                        })
+                        .map(|(id, _)| id.to_string())
+                };
+                events.push(Event::GameOver { winner_id: winner_id.clone() });
+            }
+        }
+
         // Check for game over
         let is_game_over = events.iter().any(|e| matches!(e, Event::GameOver { .. }));
         if is_game_over {
@@ -653,7 +715,7 @@ fn resolve_disconnect_timeout_events(players: &mut HashMap<String, Player>) -> V
     let mut events = Vec::new();
 
     for (player_id, player) in players.iter_mut() {
-        if !player.is_alive {
+        if !player.is_alive || player.is_bot {
             continue;
         }
         let deadline = player.disconnect_deadline.unwrap_or(0);
@@ -926,7 +988,7 @@ async fn initialize_game(
             username: p.username.clone(),
             color: p.color.clone(),
             is_alive: true,
-            connected: false,
+            connected: p.is_bot, // Bots are always "connected"
             disconnect_deadline: None,
             left_match_at: None,
             eliminated_reason: None,
@@ -935,6 +997,7 @@ async fn initialize_game(
             currency: settings.starting_currency,
             currency_accum: 0.0,
             ability_cooldowns: HashMap::new(),
+            is_bot: p.is_bot,
         };
         players.insert(p.user_id.clone(), player);
     }
@@ -998,6 +1061,67 @@ async fn initialize_game(
     }
     state_mgr.set_regions_bulk(&regions).await?;
 
+    // Auto-select capitals for bot players
+    auto_select_bot_capitals(state_mgr, state).await?;
+
+    Ok(())
+}
+
+async fn auto_select_bot_capitals(
+    state_mgr: &GameStateManager,
+    state: &AppState,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let mut players = state_mgr.get_all_players().await?;
+    let mut regions = state_mgr.get_all_regions().await?;
+    let meta = state_mgr.get_meta().await?;
+
+    let bot_ids: Vec<String> = players
+        .iter()
+        .filter(|(_, p)| p.is_bot && p.is_alive && p.capital_region_id.is_none())
+        .map(|(id, _)| id.clone())
+        .collect();
+
+    if bot_ids.is_empty() {
+        return Ok(());
+    }
+
+    let min_dist: usize = meta
+        .get("min_capital_distance")
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(3);
+    let starting_units: i64 = meta
+        .get("starting_units")
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(10);
+
+    let neighbor_map = state.django.get_neighbor_map().await.unwrap_or_default();
+
+    for bot_id in &bot_ids {
+        let brain = BotBrain::new(bot_id.clone());
+        let region_id = match brain.pick_capital(&regions, &neighbor_map, min_dist) {
+            Some(id) => id,
+            None => continue,
+        };
+
+        if let Some(player) = players.get_mut(bot_id) {
+            player.capital_region_id = Some(region_id.clone());
+            state_mgr.set_player(bot_id, player).await?;
+        }
+
+        if let Some(region) = regions.get_mut(&region_id) {
+            region.owner_id = Some(bot_id.clone());
+            region.is_capital = true;
+            region.unit_count = starting_units;
+            let ut = region
+                .unit_type
+                .clone()
+                .unwrap_or_else(|| "infantry".into());
+            region.units.insert(ut.clone(), starting_units);
+            region.unit_type = Some(ut);
+            state_mgr.set_region(&region_id, region).await?;
+        }
+    }
+
     Ok(())
 }
 
@@ -1054,7 +1178,7 @@ async fn mark_player_disconnected(
         _ => return,
     };
 
-    if !player.is_alive {
+    if !player.is_alive || player.is_bot {
         return;
     }
 
@@ -1078,6 +1202,26 @@ async fn mark_player_disconnected(
         .unwrap_or(0);
 
     let players = state_mgr.get_all_players().await.unwrap_or_default();
+
+    // Check if all human players have disconnected — if so, end the match immediately
+    let any_human_connected = players
+        .values()
+        .any(|p| !p.is_bot && p.is_alive && p.connected);
+
+    if !any_human_connected {
+        info!("All human players disconnected from match {match_id}, ending match");
+        // Eliminate all remaining alive players (bots + disconnected humans)
+        let alive_ids: Vec<String> = players
+            .iter()
+            .filter(|(_, p)| p.is_alive)
+            .map(|(id, _)| id.clone())
+            .collect();
+        for pid in &alive_ids {
+            eliminate_player(state_mgr, pid, "all_humans_disconnected", match_id, state).await;
+        }
+        return;
+    }
+
     let tick_msg = json!({
         "type": "game_tick",
         "tick": current_tick,

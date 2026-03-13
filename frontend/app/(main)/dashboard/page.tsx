@@ -37,12 +37,13 @@ const MODE_ICONS: Record<string, typeof Users> = {
 
 export default function DashboardPage() {
   const { user, loading: authLoading, refreshUser, token } = useAuth();
-  const { inQueue, playersInQueue, matchId, activeMatchId, joinQueue, leaveQueue } =
+  const { inQueue, playersInQueue, matchId, activeMatchId, fillBots, setFillBots, joinQueue, leaveQueue } =
     useMatchmaking();
   const router = useRouter();
   const [recentMatches, setRecentMatches] = useState<Match[]>([]);
   const [gameModes, setGameModes] = useState<GameModeListItem[]>([]);
   const [selectedMode, setSelectedMode] = useState<string | null>(null);
+  const [queueSeconds, setQueueSeconds] = useState(0);
   const activeMatch = recentMatches.find(
     (match) =>
       (match.status === "selecting" || match.status === "in_progress") &&
@@ -83,6 +84,17 @@ export default function DashboardPage() {
       })
       .catch(() => {});
   }, []);
+
+  // Queue timer
+  useEffect(() => {
+    if (!inQueue) {
+      setQueueSeconds(0);
+      return;
+    }
+    setQueueSeconds(0);
+    const interval = window.setInterval(() => setQueueSeconds((s) => s + 1), 1000);
+    return () => window.clearInterval(interval);
+  }, [inQueue]);
 
   // Redirect to game when match found
   useEffect(() => {
@@ -139,10 +151,10 @@ export default function DashboardPage() {
               <div className="mt-6 grid gap-3 sm:grid-cols-3">
                 <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
                   <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">
-                    Kolejka
+                    {inQueue ? "Czas w kolejce" : "Kolejka"}
                   </div>
                   <div className="mt-2 font-display text-2xl text-amber-200">
-                    {activeMatch ? "Match" : inQueue ? "Live" : "Idle"}
+                    {activeMatch ? "Match" : inQueue ? `${Math.floor(queueSeconds / 60)}:${String(queueSeconds % 60).padStart(2, "0")}` : "Idle"}
                   </div>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
@@ -308,11 +320,16 @@ export default function DashboardPage() {
                     height={42}
                     className="h-10 w-10 animate-spin object-contain"
                   />
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span>Szukam przeciwnika...</span>
                     <Badge className="border-0 bg-white/10 text-slate-200 hover:bg-white/10">
                       {playersInQueue} w kolejce
                     </Badge>
+                    {fillBots && (
+                      <span className="text-xs text-zinc-500">
+                        Boty dolacza automatycznie
+                      </span>
+                    )}
                     {currentMode && (
                       <Badge className="border-0 bg-purple-500/20 text-purple-200 hover:bg-purple-500/20">
                         {currentMode.name}
@@ -330,21 +347,32 @@ export default function DashboardPage() {
                 </Button>
               </div>
             ) : (
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-4">
                 <div className="text-sm leading-6 text-slate-400">
                   {currentMode
                     ? `Tryb: ${currentMode.name} (${currentMode.min_players === currentMode.max_players ? currentMode.max_players : `${currentMode.min_players}-${currentMode.max_players}`} graczy)`
                     : "Wybierz tryb gry powyzej"}
                 </div>
-                <Button
-                  size="lg"
-                  className="h-11 gap-2 rounded-full border border-cyan-300/30 bg-[linear-gradient(135deg,#38bdf8,#0f766e)] px-6 font-display uppercase tracking-[0.2em] text-slate-950"
-                  onClick={() => joinQueue(selectedMode ?? undefined)}
-                  disabled={!selectedMode}
-                >
-                  <Search className="h-5 w-5" />
-                  Szukaj gry
-                </Button>
+                <div className="flex items-center justify-between gap-4">
+                  <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={fillBots}
+                      onChange={(e) => setFillBots(e.target.checked)}
+                      className="h-4 w-4 rounded border-white/20 bg-white/10 accent-cyan-400"
+                    />
+                    Wypelnij botami jezeli brak graczy
+                  </label>
+                  <Button
+                    size="lg"
+                    className="h-11 gap-2 rounded-full border border-cyan-300/30 bg-[linear-gradient(135deg,#38bdf8,#0f766e)] px-6 font-display uppercase tracking-[0.2em] text-slate-950"
+                    onClick={() => joinQueue(selectedMode ?? undefined)}
+                    disabled={!selectedMode}
+                  >
+                    <Search className="h-5 w-5" />
+                    Szukaj gry
+                  </Button>
+                </div>
               </div>
             )}
           </CardContent>

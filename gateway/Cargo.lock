@@ -831,6 +831,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
 
 [[package]]
+name = "maplord-ai"
+version = "0.1.0"
+dependencies = [
+ "maplord-engine",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "maplord-django"
 version = "0.1.0"
 dependencies = [
@@ -861,6 +871,7 @@ dependencies = [
  "dotenvy",
  "futures",
  "jsonwebtoken",
+ "maplord-ai",
  "maplord-django",
  "maplord-engine",
  "maplord-matchmaking",
