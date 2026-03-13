@@ -123,6 +123,7 @@ class GameInternalController(ControllerBase):
                         'user_id': str(p.user.id),
                         'username': p.user.username,
                         'color': p.color,
+                        'is_bot': p.user.is_bot,
                     }
                     for p in match.players.all()
                 ],

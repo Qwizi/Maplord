@@ -9,6 +9,8 @@ interface UseMatchmakingReturn {
   playersInQueue: number;
   matchId: string | null;
   activeMatchId: string | null;
+  fillBots: boolean;
+  setFillBots: (value: boolean) => void;
   joinQueue: (gameModeSlug?: string) => void;
   leaveQueue: () => void;
 }
@@ -18,7 +20,10 @@ export function useMatchmaking(): UseMatchmakingReturn {
   const [playersInQueue, setPlayersInQueue] = useState(0);
   const [matchId, setMatchId] = useState<string | null>(null);
   const [activeMatchId, setActiveMatchId] = useState<string | null>(null);
+  const [fillBots, setFillBots] = useState(true);
   const wsRef = useRef<WebSocket | null>(null);
+  const fillBotsRef = useRef(fillBots);
+  fillBotsRef.current = fillBots;
 
   const handleMessage = useCallback((msg: WSMessage) => {
     switch (msg.type) {
@@ -58,6 +63,9 @@ export function useMatchmaking(): UseMatchmakingReturn {
     ws.onopen = () => {
       setInQueue(true);
       ws.send(JSON.stringify({ action: "status" }));
+      if (fillBotsRef.current) {
+        ws.send(JSON.stringify({ action: "fill_bots" }));
+      }
     };
     wsRef.current = ws;
   }, [handleMessage]);
@@ -77,5 +85,5 @@ export function useMatchmaking(): UseMatchmakingReturn {
     };
   }, []);
 
-  return { inQueue, playersInQueue, matchId, activeMatchId, joinQueue, leaveQueue };
+  return { inQueue, playersInQueue, matchId, activeMatchId, fillBots, setFillBots, joinQueue, leaveQueue };
 }

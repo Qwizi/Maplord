@@ -13,6 +13,7 @@ class User(AbstractUser):
     role = models.CharField(max_length=10, choices=Role.choices, default=Role.USER)
     elo_rating = models.IntegerField(default=1000)
     avatar = models.ImageField(upload_to='avatars/', blank=True, null=True)
+    is_bot = models.BooleanField(default=False)
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username']

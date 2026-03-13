@@ -17,6 +17,7 @@ interface GameHUDProps {
     regionCount: number;
     unitCount: number;
     isAlive: boolean;
+    isBot: boolean;
   }>;
   myUserId: string;
   myRegionCount: number;
@@ -111,6 +112,9 @@ export default memo(function GameHUD({
                   />
                   {player.username}
                   {player.user_id === myUserId ? " (Ty)" : ""}
+                  {player.isBot && (
+                    <span className="ml-1 text-[9px] text-zinc-500" title="Bot AI">BOT</span>
+                  )}
                 </div>
               </div>
               <div className="text-right text-[11px] text-zinc-500">

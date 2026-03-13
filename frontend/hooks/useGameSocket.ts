@@ -53,7 +53,10 @@ export interface GamePlayer {
   left_match_at?: number | null;
   capital_region_id: string | null;
   currency: number;
+  eliminated_reason?: string | null;
+  eliminated_tick?: number | null;
   ability_cooldowns?: Record<string, number>;
+  is_bot?: boolean;
 }
 
 export interface ActiveEffect {

@@ -24,6 +24,8 @@ pub struct MatchPlayerInfo {
     pub user_id: String,
     pub username: String,
     pub color: String,
+    #[serde(default)]
+    pub is_bot: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -52,6 +54,20 @@ pub struct NeighborMap {
 pub struct TryMatchResult {
     pub match_id: Option<String>,
     pub user_ids: Option<Vec<String>>,
+    #[serde(default)]
+    pub bot_ids: Option<Vec<String>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FillWithBotsRequest {
+    pub game_mode: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FillWithBotsResult {
+    pub match_id: Option<String>,
+    pub user_ids: Option<Vec<String>>,
+    pub bot_ids: Option<Vec<String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -301,6 +317,19 @@ impl DjangoClient {
             )
             .await?;
         Ok(())
+    }
+
+    pub async fn fill_with_bots(
+        &self,
+        game_mode: Option<&str>,
+    ) -> Result<FillWithBotsResult, DjangoError> {
+        self.post(
+            "/api/v1/internal/matchmaking/fill-with-bots/",
+            &FillWithBotsRequest {
+                game_mode: game_mode.map(|s| s.to_string()),
+            },
+        )
+        .await
     }
 
     pub async fn get_queue_count(

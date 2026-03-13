@@ -12,6 +12,7 @@ maplord-engine = { path = "../maplord-engine" }
 maplord-state = { path = "../maplord-state" }
 maplord-matchmaking = { path = "../maplord-matchmaking" }
 maplord-django = { path = "../maplord-django" }
+maplord-ai = { path = "../maplord-ai" }
 
 tokio = { workspace = true }
 serde = { workspace = true }

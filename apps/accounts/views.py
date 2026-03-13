@@ -28,7 +28,7 @@ class AuthController:
     @route.get('/leaderboard', response=list[LeaderboardEntrySchema], auth=JWTAuth(), permissions=[IsAuthenticated])
     def leaderboard(self, request):
         rows = list(
-            User.objects.filter(game_results__isnull=False)
+            User.objects.filter(game_results__isnull=False, is_bot=False)
             .annotate(
                 matches_played=Count('game_results', distinct=True),
                 wins=Count('game_results', filter=Q(game_results__placement=1), distinct=True),

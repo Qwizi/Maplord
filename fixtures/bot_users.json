@@ -1,0 +1,106 @@
+[
+  {
+    "model": "accounts.user",
+    "pk": "00000000-0000-4000-b000-000000000001",
+    "fields": {
+      "username": "Bot Alpha",
+      "email": "bot-alpha@maplord.local",
+      "password": "!",
+      "is_active": false,
+      "is_bot": true,
+      "elo_rating": 1000,
+      "role": "user"
+    }
+  },
+  {
+    "model": "accounts.user",
+    "pk": "00000000-0000-4000-b000-000000000002",
+    "fields": {
+      "username": "Bot Bravo",
+      "email": "bot-bravo@maplord.local",
+      "password": "!",
+      "is_active": false,
+      "is_bot": true,
+      "elo_rating": 1000,
+      "role": "user"
+    }
+  },
+  {
+    "model": "accounts.user",
+    "pk": "00000000-0000-4000-b000-000000000003",
+    "fields": {
+      "username": "Bot Charlie",
+      "email": "bot-charlie@maplord.local",
+      "password": "!",
+      "is_active": false,
+      "is_bot": true,
+      "elo_rating": 1000,
+      "role": "user"
+    }
+  },
+  {
+    "model": "accounts.user",
+    "pk": "00000000-0000-4000-b000-000000000004",
+    "fields": {
+      "username": "Bot Delta",
+      "email": "bot-delta@maplord.local",
+      "password": "!",
+      "is_active": false,
+      "is_bot": true,
+      "elo_rating": 1000,
+      "role": "user"
+    }
+  },
+  {
+    "model": "accounts.user",
+    "pk": "00000000-0000-4000-b000-000000000005",
+    "fields": {
+      "username": "Bot Echo",
+      "email": "bot-echo@maplord.local",
+      "password": "!",
+      "is_active": false,
+      "is_bot": true,
+      "elo_rating": 1000,
+      "role": "user"
+    }
+  },
+  {
+    "model": "accounts.user",
+    "pk": "00000000-0000-4000-b000-000000000006",
+    "fields": {
+      "username": "Bot Foxtrot",
+      "email": "bot-foxtrot@maplord.local",
+      "password": "!",
+      "is_active": false,
+      "is_bot": true,
+      "elo_rating": 1000,
+      "role": "user"
+    }
+  },
+  {
+    "model": "accounts.user",
+    "pk": "00000000-0000-4000-b000-000000000007",
+    "fields": {
+      "username": "Bot Golf",
+      "email": "bot-golf@maplord.local",
+      "password": "!",
+      "is_active": false,
+      "is_bot": true,
+      "elo_rating": 1000,
+      "role": "user"
+    }
+  },
+  {
+    "model": "accounts.user",
+    "pk": "00000000-0000-4000-b000-000000000008",
+    "fields": {
+      "username": "Bot Hotel",
+      "email": "bot-hotel@maplord.local",
+      "password": "!",
+      "is_active": false,
+      "is_bot": true,
+      "elo_rating": 1000,
+      "role": "user"
+    }
+  }
+]

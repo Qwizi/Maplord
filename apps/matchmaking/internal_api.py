@@ -30,6 +30,10 @@ class TryMatchRequest(Schema):
     game_mode: str | None = None
 
 
+class FillWithBotsRequest(Schema):
+    game_mode: str | None = None
+
+
 # --- Controller ---
 
 
@@ -113,20 +117,85 @@ class MatchmakingInternalController(ControllerBase):
 
         return {'match_id': str(match_id) if match_id else None}
 
-    @route.post('/try-match/')
-    def try_match(self, request, body: TryMatchRequest):
+    @route.post('/fill-with-bots/')
+    def fill_with_bots(self, request, body: FillWithBotsRequest):
         if not check_internal_secret(request):
             return self.create_response(request, {'error': 'Unauthorized'}, status_code=403)
 
-        from django.utils import timezone
-        from apps.game_config.models import AbilityType, BuildingType, GameMode, GameSettings, MapConfig, UnitType
-        from apps.matchmaking.models import Match, MatchPlayer, MatchQueue
+        import logging
+        import random
+
+        from apps.accounts.models import User
+        from apps.game_config.models import GameMode, GameSettings
+        from apps.matchmaking.models import Match, MatchQueue
+
+        logger = logging.getLogger(__name__)
 
         # Resolve game mode
         if body.game_mode:
             game_mode = GameMode.objects.filter(slug=body.game_mode, is_active=True).first()
         else:
             game_mode = GameMode.objects.filter(is_default=True, is_active=True).first()
+
+        logger.info(f"fill_with_bots: game_mode={body.game_mode} resolved={game_mode}")
+
+        if not game_mode:
+            settings_obj = GameSettings.get()
+            min_players = settings_obj.min_players
+        else:
+            min_players = game_mode.min_players
+
+        queue_qs = MatchQueue.objects.select_related('user').order_by('joined_at')
+        if game_mode:
+            queue_qs = queue_qs.filter(game_mode=game_mode)
+
+        human_count = queue_qs.count()
+        logger.info(f"fill_with_bots: human_count={human_count}, min_players={min_players}")
+        if human_count == 0:
+            return {'match_id': None, 'user_ids': None, 'bot_ids': None}
+
+        needed = min_players - human_count
+        if needed <= 0:
+            return {'match_id': None, 'user_ids': None, 'bot_ids': None}
+
+        available_bots = list(
+            User.objects.filter(is_bot=True)
+            .values_list('id', flat=True)
+        )
+        random.shuffle(available_bots)
+        chosen_bots = available_bots[:needed]
+
+        if len(chosen_bots) < needed:
+            return {'match_id': None, 'user_ids': None, 'bot_ids': None}
+
+        # Add bots to queue
+        for bot_id in chosen_bots:
+            MatchQueue.objects.update_or_create(
+                user_id=bot_id,
+                defaults={'game_mode': game_mode},
+            )
+
+        # Now call try_match logic inline
+        return self._do_try_match(request, game_mode)
+
+    @route.post('/try-match/')
+    def try_match(self, request, body: TryMatchRequest):
+        if not check_internal_secret(request):
+            return self.create_response(request, {'error': 'Unauthorized'}, status_code=403)
+
+        from apps.game_config.models import GameMode
+
+        if body.game_mode:
+            game_mode = GameMode.objects.filter(slug=body.game_mode, is_active=True).first()
+        else:
+            game_mode = GameMode.objects.filter(is_default=True, is_active=True).first()
+
+        return self._do_try_match(request, game_mode)
+
+    def _do_try_match(self, request, game_mode):
+        from django.utils import timezone
+        from apps.game_config.models import AbilityType, BuildingType, GameSettings, MapConfig, UnitType
+        from apps.matchmaking.models import Match, MatchPlayer, MatchQueue
 
         if not game_mode:
             settings_obj = GameSettings.get()
@@ -246,12 +315,14 @@ class MatchmakingInternalController(ControllerBase):
                 'default_unit_type_slug': default_unit_type_slug,
                 'min_capital_distance': map_config.min_capital_distance if map_config else 3,
                 'elo_k_factor': src.elo_k_factor,
+                'match_duration_limit_minutes': src.match_duration_limit_minutes,
             },
         )
 
         colors = ['#FF4444', '#4444FF', '#44FF44', '#FFFF44', '#FF44FF', '#44FFFF', '#FF8844', '#8844FF']
 
         users = []
+        bot_ids = []
         for i, entry in enumerate(queue_entries):
             MatchPlayer.objects.create(
                 match=match,
@@ -259,9 +330,12 @@ class MatchmakingInternalController(ControllerBase):
                 color=colors[i % len(colors)],
             )
             users.append(str(entry.user.id))
+            if entry.user.is_bot:
+                bot_ids.append(str(entry.user.id))
             entry.delete()
 
         return {
             'match_id': str(match.id),
             'user_ids': users,
+            'bot_ids': bot_ids,
         }

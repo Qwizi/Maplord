@@ -90,6 +90,9 @@ class Command(BaseCommand):
             self.stdout.write("\nRunning import_provinces --clear ...")
             call_command("import_provinces", clear=True, stdout=self.stdout, stderr=self.stderr)
 
+        self.stdout.write("\nCreating bot users...")
+        call_command("create_bots", stdout=self.stdout, stderr=self.stderr)
+
     def _load_settings(self, entry: dict):
         fields = dict(entry.get("fields") or {})
         GameSettings.objects.create(**fields)

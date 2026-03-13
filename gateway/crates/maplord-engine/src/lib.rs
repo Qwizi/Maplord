@@ -1369,22 +1369,9 @@ impl GameEngine {
             }];
         }
 
-        if !can_station_unit(target, &item.unit_type, self) {
-            if let Some(source) = regions.get_mut(&item.source_region_id) {
-                receive_units_in_region(source, &item.unit_type, item.units, self);
-            }
-            return vec![Event::ActionRejected {
-                player_id: item.player_id.clone(),
-                message: "Ten region nie moze przyjac tego typu jednostki".into(),
-                action_type: Some("move".into()),
-                source_region_id: Some(item.source_region_id.clone()),
-                target_region_id: Some(item.target_region_id.clone()),
-                region_id: None,
-                building_type: None,
-                unit_type: Some(item.unit_type.clone()),
-            }];
-        }
-
+        // Units are received and normalize_stationed_units handles conversion:
+        // if the region lacks the required building, the special unit is dropped
+        // but the infantry (manpower) it carried stays.
         let target = regions.get_mut(&item.target_region_id).unwrap();
         receive_units_in_region(target, &item.unit_type, item.units, self);
 
@@ -1901,9 +1888,20 @@ fn normalize_stationed_units(region: &mut Region, engine: &GameEngine) {
 }
 
 fn can_station_unit(region: &Region, unit_type: &str, engine: &GameEngine) -> bool {
+    let base = engine.default_unit_type_slug();
+    if unit_type == base {
+        return true;
+    }
     let config = engine.get_unit_config(unit_type);
     if config.movement_type == "sea" && !region.is_coastal {
         return false;
+    }
+    // Special units require their production building to station
+    if let Some(ref produced_by) = config.produced_by_slug {
+        let building_count = region.buildings.get(produced_by).copied().unwrap_or(0);
+        if building_count <= 0 {
+            return false;
+        }
     }
     true
 }
