@@ -331,6 +331,7 @@ export default memo(function GameMap({
       zoom: 4,
       maxZoom: 7,
       minZoom: 1.5,
+      maxPitch: 0,
     });
     map.addControl(new maplibregl.NavigationControl(), "top-right");
     mapRef.current = map;
@@ -370,6 +371,137 @@ export default memo(function GameMap({
         map.addLayer(layer);
       } catch (error) {
         console.error(`GameMap layer failed: ${layer.id}`, error);
+      }
+    };
+
+    // Load map09 chunks as raster texture background.
+    // The image uses a linear lat mapping but MapLibre uses Mercator projection,
+    // so we pre-warp the image from linear-lat to Mercator before adding it.
+    const loadMapTexture = () => {
+      if (map.getSource("map-texture")) return;
+      const COLS = 39;
+      const ROWS = 20;
+      // Polygon area in image pixels: game = 2.5 * pixel + (-2923, 7156)
+      const POLY_W = 10549.6;
+      const POLY_H = 6123.6;
+      const CW = (col: number) => (col < 6 ? 276 : 274);
+      const ROW_H = 308;
+      const colX: number[] = [];
+      let cx = 0;
+      for (let c = 0; c < COLS; c++) { colX.push(cx); cx += CW(c); }
+      const scale = 0.5;
+
+      // Step 1: Stitch chunks into source canvas (linear lat space)
+      const srcCanvas = document.createElement("canvas");
+      const srcW = Math.ceil(POLY_W * scale);
+      const srcH = Math.ceil(POLY_H * scale);
+      srcCanvas.width = srcW;
+      srcCanvas.height = srcH;
+      const srcCtx = srcCanvas.getContext("2d");
+      if (!srcCtx) return;
+      srcCtx.scale(scale, scale);
+
+      let loaded = 0;
+      const total = COLS * ROWS;
+      for (let col = 0; col < COLS; col++) {
+        for (let row = 0; row < ROWS; row++) {
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          img.src = `/assets/map_textures/map09/chunks/${col}x${row}.webp`;
+          img.onload = () => {
+            srcCtx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight,
+              colX[col], row * ROW_H, CW(col), ROW_H);
+            loaded++;
+            if (loaded !== total) return;
+
+            // Step 2: Warp from linear-lat to Mercator
+            const warpCanvas = document.createElement("canvas");
+            warpCanvas.width = srcW;
+            warpCanvas.height = srcH;
+            const warpCtx = warpCanvas.getContext("2d");
+            if (!warpCtx) return;
+
+            const mercY = (latDeg: number) => {
+              const r = latDeg * Math.PI / 180;
+              return Math.log(Math.tan(Math.PI / 4 + r / 2));
+            };
+            const mercTop = mercY(85);
+            const mercBot = mercY(-85);
+            const mercRange = mercTop - mercBot;
+
+            for (let oy = 0; oy < srcH; oy++) {
+              const merc = mercTop - (oy / srcH) * mercRange;
+              const latRad = 2 * Math.atan(Math.exp(merc)) - Math.PI / 2;
+              const latDeg = latRad * 180 / Math.PI;
+              const srcY = ((85 - latDeg) / 170) * srcH;
+              warpCtx.drawImage(srcCanvas, 0, srcY, srcW, 1, 0, oy, srcW, 1);
+            }
+
+            // Step 3: Use warped canvas directly (no scale adjustment for now).
+            const outCanvas = warpCanvas;
+
+            // DEBUG: Draw reference crosshairs at known lon/lat positions
+            // to verify alignment. These should match polygon centroids.
+            const outCtx = outCanvas.getContext("2d");
+            if (outCtx) {
+              const drawCross = (lon: number, lat: number, color: string, label: string) => {
+                // lon → x in output canvas
+                const x = ((lon + 180) / 360) * srcW;
+                // lat → Mercator y in output canvas
+                const mY = Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI / 180) / 2));
+                const mTop = Math.log(Math.tan(Math.PI / 4 + (85 * Math.PI / 180) / 2));
+                const mBot = Math.log(Math.tan(Math.PI / 4 + (-85 * Math.PI / 180) / 2));
+                const y = ((mTop - mY) / (mTop - mBot)) * srcH;
+                outCtx.strokeStyle = color;
+                outCtx.lineWidth = 3;
+                outCtx.beginPath();
+                outCtx.moveTo(x - 15, y); outCtx.lineTo(x + 15, y);
+                outCtx.moveTo(x, y - 15); outCtx.lineTo(x, y + 15);
+                outCtx.stroke();
+                outCtx.fillStyle = color;
+                outCtx.font = "bold 14px sans-serif";
+                outCtx.fillText(label, x + 18, y + 5);
+              };
+              // Equator / Prime Meridian (Gulf of Guinea)
+              drawCross(0, 0, "#ff0000", "0,0");
+              // London area
+              drawCross(0, 51.5, "#00ff00", "London");
+              // Cape Town area
+              drawCross(18.4, -33.9, "#ffff00", "CapeTown");
+              // New York area
+              drawCross(-74, 40.7, "#ff00ff", "NYC");
+              // Tokyo area
+              drawCross(139.7, 35.7, "#00ffff", "Tokyo");
+              // São Paulo area
+              drawCross(-46.6, -23.5, "#ff8800", "SaoPaulo");
+              console.log("Map texture: DEBUG crosshairs drawn at known cities");
+            }
+
+            try {
+              map.addSource("map-texture", {
+                type: "image",
+                url: outCanvas.toDataURL("image/png"),
+                coordinates: [
+                  [-180, 85],
+                  [180, 85],
+                  [180, -85],
+                  [-180, -85],
+                ],
+              });
+              map.addLayer(
+                {
+                  id: "map-texture-layer",
+                  type: "raster",
+                  source: "map-texture",
+                  paint: { "raster-opacity": 1 },
+                },
+                "regions-fill"
+              );
+            } catch (e) {
+              console.error("Failed to add map texture", e);
+            }
+          };
+        }
       }
     };
 
@@ -695,6 +827,7 @@ export default memo(function GameMap({
           !!map.getLayer("regions-fill") &&
           !!map.getLayer("regions-border");
         if (baseLayersReady) {
+          loadMapTexture();
           setLayersReady(true);
           onMapReadyRef.current?.();
         } else {
