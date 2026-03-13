@@ -60,6 +60,7 @@ export interface User {
   role: string;
   elo_rating: number;
   date_joined: string;
+  tutorial_completed: boolean;
 }
 
 export async function login(
@@ -380,4 +381,65 @@ export async function getSnapshot(
   tick: number
 ): Promise<SnapshotDetail> {
   return fetchAPI<SnapshotDetail>(`/game/snapshots/${matchId}/${tick}/`, { token });
+}
+
+// --- Tutorial ---
+
+export async function startTutorial(token: string): Promise<{ match_id: string }> {
+  return fetchAPI<{ match_id: string }>("/matches/tutorial/start/", {
+    method: "POST",
+    token,
+  });
+}
+
+export async function completeTutorial(token: string): Promise<{ ok: boolean }> {
+  return fetchAPI<{ ok: boolean }>("/auth/tutorial/complete/", {
+    method: "POST",
+    token,
+  });
+}
+
+export async function cleanupTutorial(token: string): Promise<{ ok: boolean }> {
+  return fetchAPI<{ ok: boolean }>("/matches/tutorial/cleanup/", {
+    method: "POST",
+    token,
+  });
+}
+
+// --- Share ---
+
+export interface ShareLink {
+  token: string;
+  resource_type: string;
+  resource_id: string;
+}
+
+export interface SharedMatchData {
+  resource_type: "match_result";
+  match: Match;
+  result: MatchResult | null;
+  snapshot_ticks: number[];
+}
+
+export async function createShareLink(
+  token: string,
+  resourceType: string,
+  resourceId: string
+): Promise<ShareLink> {
+  return fetchAPI<ShareLink>("/share/create/", {
+    method: "POST",
+    token,
+    body: JSON.stringify({ resource_type: resourceType, resource_id: resourceId }),
+  });
+}
+
+export async function getSharedResource(shareToken: string): Promise<SharedMatchData> {
+  return fetchAPI<SharedMatchData>(`/share/${shareToken}/`);
+}
+
+export async function getSharedSnapshot(
+  shareToken: string,
+  tick: number
+): Promise<SnapshotDetail> {
+  return fetchAPI<SnapshotDetail>(`/share/${shareToken}/snapshots/${tick}/`);
 }

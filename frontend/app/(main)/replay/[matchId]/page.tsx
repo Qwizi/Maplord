@@ -65,33 +65,6 @@ export default function ReplayPage() {
   // Cache loaded snapshots
   const snapshotCache = useRef<Map<number, GameState>>(new Map());
 
-  // ── Load initial data ───────────────────────────────────
-  useEffect(() => {
-    if (authLoading) return;
-    if (!user || !token) {
-      router.replace("/login");
-      return;
-    }
-
-    Promise.all([
-      getMatch(token, matchId),
-      getMatchSnapshots(token, matchId),
-      getRegionsGraph(matchId),
-      getConfig(),
-    ]).then(([matchData, snapshotList, graph, cfg]) => {
-      setMatch(matchData);
-      setSnapshots(snapshotList);
-      setRegionGraph(graph);
-      setBuildingTypes(cfg.buildings);
-      setLoading(false);
-
-      // Load first snapshot
-      if (snapshotList.length > 0) {
-        loadSnapshot(snapshotList[0].tick, 0);
-      }
-    }).catch(() => setLoading(false));
-  }, [authLoading, user, token, matchId, router]);
-
   // ── Load a snapshot ─────────────────────────────────────
   const loadSnapshot = useCallback(async (tick: number, index: number) => {
     if (!token) return;
@@ -117,6 +90,33 @@ export default function ReplayPage() {
       setSnapshotLoading(false);
     }
   }, [token, matchId]);
+
+  // ── Load initial data ───────────────────────────────────
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user || !token) {
+      router.replace("/login");
+      return;
+    }
+
+    Promise.all([
+      getMatch(token, matchId),
+      getMatchSnapshots(token, matchId),
+      getRegionsGraph(matchId),
+      getConfig(),
+    ]).then(([matchData, snapshotList, graph, cfg]) => {
+      setMatch(matchData);
+      setSnapshots(snapshotList);
+      setRegionGraph(graph);
+      setBuildingTypes(cfg.buildings);
+      setLoading(false);
+
+      // Load first snapshot
+      if (snapshotList.length > 0) {
+        loadSnapshot(snapshotList[0].tick, 0);
+      }
+    }).catch(() => setLoading(false));
+  }, [authLoading, user, token, matchId, router, loadSnapshot]);
 
   // ── Prefetch next snapshots ─────────────────────────────
   useEffect(() => {
@@ -168,8 +168,8 @@ export default function ReplayPage() {
     return m;
   }, [buildingTypes]);
 
-  const regions = gameState?.regions ?? {};
-  const players = gameState?.players ?? {};
+  const regions = useMemo(() => gameState?.regions ?? {}, [gameState?.regions]);
+  const players = useMemo(() => gameState?.players ?? {}, [gameState?.players]);
   const currentTick = snapshots[currentIndex]?.tick ?? 0;
   const totalTicks = snapshots.length > 0 ? snapshots[snapshots.length - 1].tick : 0;
 

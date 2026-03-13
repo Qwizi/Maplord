@@ -1,3 +1,4 @@
+import secrets
 import uuid
 from django.conf import settings
 from django.db import models
@@ -50,3 +51,28 @@ class PlayerResult(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - #{self.placement} in {self.match_result.match_id}"
+
+
+class ShareLink(models.Model):
+    """Generic share link for any shareable resource (e.g. match results)."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    token = models.CharField(max_length=32, unique=True, db_index=True)
+    resource_type = models.CharField(max_length=50)  # e.g. "match_result"
+    resource_id = models.UUIDField()
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='share_links',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('resource_type', 'resource_id')
+
+    def __str__(self):
+        return f"ShareLink {self.token} ({self.resource_type}:{self.resource_id})"
+
+    @classmethod
+    def generate_token(cls):
+        return secrets.token_urlsafe(16)

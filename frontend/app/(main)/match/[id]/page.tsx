@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
-import { getMatch, getMatchResult, type Match, type MatchResult } from "@/lib/api";
+import { getMatch, getMatchResult, createShareLink, type Match, type MatchResult } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -16,13 +16,15 @@ import {
   Shield,
   Skull,
   Swords,
-  Trophy,
   Users,
   Hammer,
   TrendingUp,
   TrendingDown,
   PlayCircle,
+  Share2,
+  Check,
 } from "lucide-react";
+import { toast } from "sonner";
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   finished: { label: "Zakonczony", color: "text-slate-400" },
@@ -57,6 +59,8 @@ export default function MatchDetailPage() {
   const [match, setMatch] = useState<Match | null>(null);
   const [result, setResult] = useState<MatchResult | null>(null);
   const [loading, setLoading] = useState(true);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
 
   useEffect(() => {
     if (authLoading) return;
@@ -89,6 +93,23 @@ export default function MatchDetailPage() {
     );
   }
 
+  const handleShare = async () => {
+    if (!token || !match) return;
+    setShareLoading(true);
+    try {
+      const link = await createShareLink(token, "match_result", match.id);
+      const shareUrl = `${window.location.origin}/share/${link.token}`;
+      await navigator.clipboard.writeText(shareUrl);
+      setShareCopied(true);
+      toast.success("Link skopiowany do schowka!");
+      setTimeout(() => setShareCopied(false), 3000);
+    } catch {
+      toast.error("Nie udalo sie utworzyc linku.");
+    } finally {
+      setShareLoading(false);
+    }
+  };
+
   const status = STATUS_LABELS[match.status] ?? { label: match.status, color: "text-slate-400" };
   const isActive = match.status === "in_progress" || match.status === "selecting";
   const winner = match.players.find((p) => p.user_id === match.winner_id);
@@ -112,13 +133,27 @@ export default function MatchDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           {match.status === "finished" && (
-            <Link
-              href={`/replay/${match.id}`}
-              className="inline-flex items-center gap-2 rounded-full border border-amber-300/25 bg-amber-400/10 px-5 py-2 font-display text-sm uppercase tracking-[0.2em] text-amber-200 transition-colors hover:bg-amber-400/15"
-            >
-              <PlayCircle className="h-4 w-4" />
-              Replay
-            </Link>
+            <>
+              <Link
+                href={`/replay/${match.id}`}
+                className="inline-flex items-center gap-2 rounded-full border border-amber-300/25 bg-amber-400/10 px-5 py-2 font-display text-sm uppercase tracking-[0.2em] text-amber-200 transition-colors hover:bg-amber-400/15"
+              >
+                <PlayCircle className="h-4 w-4" />
+                Replay
+              </Link>
+              <button
+                onClick={handleShare}
+                disabled={shareLoading}
+                className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.05] px-5 py-2 font-display text-sm uppercase tracking-[0.2em] text-slate-300 transition-colors hover:bg-white/[0.09] hover:text-zinc-100 disabled:opacity-50"
+              >
+                {shareCopied ? (
+                  <Check className="h-4 w-4 text-emerald-400" />
+                ) : (
+                  <Share2 className="h-4 w-4" />
+                )}
+                {shareCopied ? "Skopiowano!" : "Udostepnij"}
+              </button>
+            </>
           )}
           {isActive && (
             <Button
