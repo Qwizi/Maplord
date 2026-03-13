@@ -5,6 +5,16 @@ use redis::aio::ConnectionManager;
 use redis::AsyncCommands;
 use std::collections::HashMap;
 
+fn deser<T: serde::de::DeserializeOwned>(data: &[u8]) -> redis::RedisResult<T> {
+    rmp_serde::from_slice(data).map_err(|e| {
+        redis::RedisError::from((
+            redis::ErrorKind::ParseError,
+            "msgpack deserialization failed",
+            e.to_string(),
+        ))
+    })
+}
+
 /// Manages game state in Redis using Hashes and Lists with msgpack serialization.
 /// Mirrors the Python GameStateManager exactly.
 #[derive(Clone)]
@@ -93,7 +103,7 @@ impl GameStateManager {
     pub async fn get_player(&self, player_id: &str) -> redis::RedisResult<Option<Player>> {
         let mut conn = self.redis.clone();
         let raw: Option<Vec<u8>> = conn.hget(self.key("players"), player_id).await?;
-        Ok(raw.map(|data| rmp_serde::from_slice(&data).unwrap()))
+        Ok(raw.map(|data| deser(&data)).transpose()?)
     }
 
     pub async fn get_all_players(&self) -> redis::RedisResult<HashMap<String, Player>> {
@@ -101,8 +111,8 @@ impl GameStateManager {
         let raw: HashMap<String, Vec<u8>> = conn.hgetall(self.key("players")).await?;
         Ok(raw
             .into_iter()
-            .map(|(k, v)| (k, rmp_serde::from_slice(&v).unwrap()))
-            .collect())
+            .map(|(k, v)| Ok((k, deser(&v)?)))
+            .collect::<redis::RedisResult<_>>()?)
     }
 
     pub async fn set_players_bulk(
@@ -130,7 +140,7 @@ impl GameStateManager {
     pub async fn get_region(&self, region_id: &str) -> redis::RedisResult<Option<Region>> {
         let mut conn = self.redis.clone();
         let raw: Option<Vec<u8>> = conn.hget(self.key("regions"), region_id).await?;
-        Ok(raw.map(|data| rmp_serde::from_slice(&data).unwrap()))
+        Ok(raw.map(|data| deser(&data)).transpose()?)
     }
 
     pub async fn get_all_regions(&self) -> redis::RedisResult<HashMap<String, Region>> {
@@ -138,8 +148,8 @@ impl GameStateManager {
         let raw: HashMap<String, Vec<u8>> = conn.hgetall(self.key("regions")).await?;
         Ok(raw
             .into_iter()
-            .map(|(k, v)| (k, rmp_serde::from_slice(&v).unwrap()))
-            .collect())
+            .map(|(k, v)| Ok((k, deser(&v)?)))
+            .collect::<redis::RedisResult<_>>()?)
     }
 
     pub async fn set_regions_bulk(
@@ -206,38 +216,38 @@ impl GameStateManager {
         let players = results
             .1
             .into_iter()
-            .map(|(k, v)| (k, rmp_serde::from_slice(&v).unwrap()))
-            .collect();
+            .map(|(k, v)| Ok((k, deser(&v)?)))
+            .collect::<redis::RedisResult<_>>()?;
         let regions = results
             .2
             .into_iter()
-            .map(|(k, v)| (k, rmp_serde::from_slice(&v).unwrap()))
-            .collect();
+            .map(|(k, v)| Ok((k, deser(&v)?)))
+            .collect::<redis::RedisResult<_>>()?;
         let actions = results
             .3
             .iter()
-            .map(|v| rmp_serde::from_slice(v).unwrap())
-            .collect();
+            .map(|v| deser(v))
+            .collect::<redis::RedisResult<_>>()?;
         let buildings_queue = results
             .5
             .iter()
-            .map(|v| rmp_serde::from_slice(v).unwrap())
-            .collect();
+            .map(|v| deser(v))
+            .collect::<redis::RedisResult<_>>()?;
         let unit_queue = results
             .6
             .iter()
-            .map(|v| rmp_serde::from_slice(v).unwrap())
-            .collect();
+            .map(|v| deser(v))
+            .collect::<redis::RedisResult<_>>()?;
         let transit_queue = results
             .7
             .iter()
-            .map(|v| rmp_serde::from_slice(v).unwrap())
-            .collect();
+            .map(|v| deser(v))
+            .collect::<redis::RedisResult<_>>()?;
         let active_effects = results
             .8
             .iter()
-            .map(|v| rmp_serde::from_slice(v).unwrap())
-            .collect();
+            .map(|v| deser(v))
+            .collect::<redis::RedisResult<_>>()?;
 
         Ok(TickData {
             tick,
@@ -266,8 +276,7 @@ impl GameStateManager {
 
         let regions_key = self.key("regions");
         for (region_id, data) in regions {
-            if dirty_region_ids.is_none()
-                || dirty_region_ids.map_or(false, |ids| ids.contains(region_id))
+            if dirty_region_ids.map_or(true, |ids| ids.contains(region_id))
             {
                 let packed = rmp_serde::to_vec(data).unwrap();
                 pipe.hset(&regions_key, region_id, packed).ignore();
@@ -342,33 +351,33 @@ impl GameStateManager {
             players: results
                 .1
                 .into_iter()
-                .map(|(k, v)| (k, rmp_serde::from_slice(&v).unwrap()))
-                .collect(),
+                .map(|(k, v)| Ok((k, deser(&v)?)))
+                .collect::<redis::RedisResult<_>>()?,
             regions: results
                 .2
                 .into_iter()
-                .map(|(k, v)| (k, rmp_serde::from_slice(&v).unwrap()))
-                .collect(),
+                .map(|(k, v)| Ok((k, deser(&v)?)))
+                .collect::<redis::RedisResult<_>>()?,
             buildings_queue: results
                 .3
                 .iter()
-                .map(|v| rmp_serde::from_slice(v).unwrap())
-                .collect(),
+                .map(|v| deser(v))
+                .collect::<redis::RedisResult<_>>()?,
             unit_queue: results
                 .4
                 .iter()
-                .map(|v| rmp_serde::from_slice(v).unwrap())
-                .collect(),
+                .map(|v| deser(v))
+                .collect::<redis::RedisResult<_>>()?,
             transit_queue: results
                 .5
                 .iter()
-                .map(|v| rmp_serde::from_slice(v).unwrap())
-                .collect(),
+                .map(|v| deser(v))
+                .collect::<redis::RedisResult<_>>()?,
             active_effects: results
                 .6
                 .iter()
-                .map(|v| rmp_serde::from_slice(v).unwrap())
-                .collect(),
+                .map(|v| deser(v))
+                .collect::<redis::RedisResult<_>>()?,
         })
     }
 
@@ -442,8 +451,8 @@ impl GameStateManager {
         let raw: Vec<Vec<u8>> = conn.lrange(self.key("buildings_queue"), 0, -1).await?;
         Ok(raw
             .iter()
-            .map(|v| rmp_serde::from_slice(v).unwrap())
-            .collect())
+            .map(|v| deser(v))
+            .collect::<redis::RedisResult<_>>()?)
     }
 
     pub async fn get_all_unit_queue(&self) -> redis::RedisResult<Vec<UnitQueueItem>> {
@@ -451,8 +460,8 @@ impl GameStateManager {
         let raw: Vec<Vec<u8>> = conn.lrange(self.key("unit_queue"), 0, -1).await?;
         Ok(raw
             .iter()
-            .map(|v| rmp_serde::from_slice(v).unwrap())
-            .collect())
+            .map(|v| deser(v))
+            .collect::<redis::RedisResult<_>>()?)
     }
 
     pub async fn get_all_transit_queue(&self) -> redis::RedisResult<Vec<TransitQueueItem>> {
@@ -460,7 +469,7 @@ impl GameStateManager {
         let raw: Vec<Vec<u8>> = conn.lrange(self.key("transit_queue"), 0, -1).await?;
         Ok(raw
             .iter()
-            .map(|v| rmp_serde::from_slice(v).unwrap())
-            .collect())
+            .map(|v| deser(v))
+            .collect::<redis::RedisResult<_>>()?)
     }
 }

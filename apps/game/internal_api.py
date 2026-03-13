@@ -1,18 +1,12 @@
 import logging
 
-from django.conf import settings
 from ninja_extra import ControllerBase, api_controller, route
 from ninja import Schema
 from pydantic import Field
 
+from apps.internal_auth import check_internal_secret
+
 logger = logging.getLogger(__name__)
-
-
-def check_internal_secret(request):
-    """Verify X-Internal-Secret header matches configured secret."""
-    expected = getattr(settings, 'INTERNAL_SECRET', 'dev-internal-secret')
-    actual = request.META.get('HTTP_X_INTERNAL_SECRET', '')
-    return actual == expected
 
 
 # --- Schemas ---

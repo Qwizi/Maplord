@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django.contrib.gis.admin import GISModelAdmin
+from django.db.models import Count
 from apps.geo.models import Country, Region
 
 
@@ -16,8 +17,11 @@ class CountryAdmin(GISModelAdmin):
     search_fields = ('name', 'code')
     inlines = [RegionInline]
 
+    def get_queryset(self, request):
+        return super().get_queryset(request).annotate(region_count=Count('regions'))
+
     def region_count(self, obj):
-        return obj.regions.count()
+        return obj.region_count
     region_count.short_description = 'Regions'
 
 

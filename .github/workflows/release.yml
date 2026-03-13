@@ -178,6 +178,8 @@ jobs:
           platforms: linux/amd64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   # ── Frontend image ───────────────────────────────────────────────
   build-frontend:
@@ -224,6 +226,8 @@ jobs:
           build-args: |
             NEXT_PUBLIC_API_URL=
             NEXT_PUBLIC_WS_URL=
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   # ── Gateway image ───────────────────────────────────────────────
   build-gateway:

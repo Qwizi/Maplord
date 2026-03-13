@@ -127,6 +127,7 @@ export default memo(function MobileBuildSheet({
           </h4>
           <button
             onClick={() => setMode(null)}
+            aria-label="Zamknij"
             className="rounded-full p-1.5 text-zinc-400 active:bg-zinc-800"
           >
             <Image

@@ -35,33 +35,12 @@ export default function LoginPage() {
     <AuthScreen
       eyebrow="Access Portal"
       title="Logowanie"
-      description="Wejdz do panelu dowodzenia i wracaj do swoich meczow bez przechodzenia przez kolejny placeholderowy ekran."
+      description="Wejdz do panelu dowodzenia i wracaj do swoich meczow rankingowych na mapie swiata."
       altPrompt="Nie masz konta?"
       altHref="/register"
       altLabel="Zarejestruj się"
     >
       <div className="space-y-5">
-        <div className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-300 sm:grid-cols-3">
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">
-              Region
-            </p>
-            <p className="mt-1 font-display text-lg text-cyan-200">EU-Central</p>
-          </div>
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">
-              Status
-            </p>
-            <p className="mt-1 font-display text-lg text-emerald-300">Online</p>
-          </div>
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">
-              Queue
-            </p>
-            <p className="mt-1 font-display text-lg text-amber-200">Ready</p>
-          </div>
-        </div>
-
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="email" className="text-slate-300">
@@ -102,10 +81,6 @@ export default function LoginPage() {
           </Button>
         </form>
 
-        <div className="rounded-2xl border border-amber-300/12 bg-amber-300/5 px-4 py-3 text-xs leading-6 text-slate-400">
-          Dostep przez Google, Discord i Apple jest juz przygotowany wizualnie,
-          ale nie jest jeszcze podlaczony po stronie backendu.
-        </div>
       </div>
     </AuthScreen>
   );

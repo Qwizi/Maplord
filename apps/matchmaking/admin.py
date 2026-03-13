@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.db.models import Count
 from apps.matchmaking.models import Match, MatchPlayer, MatchQueue
 
 
@@ -16,8 +17,11 @@ class MatchAdmin(admin.ModelAdmin):
     readonly_fields = ('id', 'settings_snapshot', 'created_at')
     inlines = [MatchPlayerInline]
 
+    def get_queryset(self, request):
+        return super().get_queryset(request).annotate(player_count=Count('players'))
+
     def player_count(self, obj):
-        return obj.players.count()
+        return obj.player_count
     player_count.short_description = 'Players'
 
 

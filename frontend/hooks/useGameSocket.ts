@@ -228,6 +228,13 @@ export function useGameSocket(matchId: string): UseGameSocketReturn {
     if (!token || !matchId) return;
 
     let disposed = false;
+    let isPageUnload = false;
+
+    const handleBeforeUnload = () => {
+      isPageUnload = true;
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
     const ws = createSocket(
       `/game/${matchId}/`,
       token,
@@ -253,10 +260,13 @@ export function useGameSocket(matchId: string): UseGameSocketReturn {
 
     return () => {
       disposed = true;
+      window.removeEventListener("beforeunload", handleBeforeUnload);
       if (wsRef.current === ws) {
         wsRef.current = null;
       }
-      if (ws.readyState === WebSocket.OPEN) {
+      // On page refresh/unload, let the browser drop the connection naturally
+      // so the gateway applies the grace period instead of treating it as intentional leave
+      if (!isPageUnload && ws.readyState === WebSocket.OPEN) {
         ws.close(1000, "component_disposed");
       }
     };

@@ -7,6 +7,7 @@ from django.db import connection
 from django.http import HttpResponse
 from ninja_extra import api_controller, route
 
+from django.shortcuts import get_object_or_404
 from apps.geo.models import Country, Region
 from apps.geo.schemas import CountryOutSchema, RegionOutSchema
 
@@ -173,4 +174,4 @@ class GeoController:
 
     @route.get('/regions/{region_id}/', response=RegionOutSchema, auth=None)
     def get_region(self, region_id: str):
-        return Region.objects.select_related('country').get(id=region_id)
+        return get_object_or_404(Region.objects.select_related('country'), id=region_id)

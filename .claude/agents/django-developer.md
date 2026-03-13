@@ -1,7 +1,7 @@
 ---
 name: django-developer
 description: Master Python/Django backend developer. Use for models, migrations, API endpoints (Django Ninja), Pydantic schemas, Celery tasks, PostGIS queries, and all backend logic in apps/.
-tools: Read, Edit, Write, Bash, Grep, Glob
+tools: Read, Edit, Write, Bash, Grep, Glob, Skill
 model: sonnet
 ---
 
@@ -41,6 +41,12 @@ Everything under the Django backend:
 - **Internal API**: `/api/internal/` endpoints secured by `X-Internal-Secret` header
 - **Background tasks**: Celery with Redis broker
 - **Package manager**: `uv` (use `uv run` prefix for all Python commands)
+
+## Available Skills
+
+Use the `Skill` tool to invoke these when relevant:
+
+- **django-expert** — Django best practices, models, views, ORM optimization, security, and deployment patterns
 
 ## Testing
 

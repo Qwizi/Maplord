@@ -299,6 +299,7 @@ export function getRegionTilesUrl(matchId?: string): string {
 export interface MatchPlayer {
   id: string;
   user_id: string;
+  username: string;
   color: string;
   is_alive: boolean;
   joined_at: string;
@@ -309,10 +310,30 @@ export interface Match {
   status: string;
   max_players: number;
   game_mode_id: string | null;
+  winner_id: string | null;
   players: MatchPlayer[];
   started_at: string | null;
   finished_at: string | null;
   created_at: string;
+}
+
+export interface PlayerResult {
+  user_id: string;
+  username: string;
+  placement: number;
+  regions_conquered: number;
+  units_produced: number;
+  units_lost: number;
+  buildings_built: number;
+  elo_change: number;
+}
+
+export interface MatchResult {
+  id: string;
+  match_id: string;
+  duration_seconds: number;
+  total_ticks: number;
+  player_results: PlayerResult[];
 }
 
 export async function getMyMatches(token: string): Promise<Match[]> {
@@ -324,4 +345,39 @@ export async function getMatch(
   matchId: string
 ): Promise<Match> {
   return fetchAPI<Match>(`/matches/${matchId}/`, { token });
+}
+
+export async function getMatchResult(
+  token: string,
+  matchId: string
+): Promise<MatchResult> {
+  return fetchAPI<MatchResult>(`/game/results/${matchId}/`, { token });
+}
+
+// --- Replay Snapshots ---
+
+export interface SnapshotTick {
+  tick: number;
+  created_at: string;
+}
+
+export interface SnapshotDetail {
+  tick: number;
+  state_data: Record<string, unknown>;
+  created_at: string;
+}
+
+export async function getMatchSnapshots(
+  token: string,
+  matchId: string
+): Promise<SnapshotTick[]> {
+  return fetchAPI<SnapshotTick[]>(`/game/snapshots/${matchId}/`, { token });
+}
+
+export async function getSnapshot(
+  token: string,
+  matchId: string,
+  tick: number
+): Promise<SnapshotDetail> {
+  return fetchAPI<SnapshotDetail>(`/game/snapshots/${matchId}/${tick}/`, { token });
 }

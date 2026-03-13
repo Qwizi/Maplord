@@ -15,7 +15,11 @@
 
 	# WebSocket — routed to Rust gateway
 	handle /ws/* {
-		reverse_proxy gateway:8080
+		reverse_proxy gateway:8080 {
+			transport http {
+				versions 1.1
+			}
+		}
 	}
 
 	# Static files

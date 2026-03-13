@@ -141,7 +141,6 @@ services:
 
 volumes:
   postgres_data:
-  redis_data:
   static_data:
   media_data:
   celerybeat_data:

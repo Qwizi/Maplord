@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { memo, useCallback, useMemo } from "react";
 import Image from "next/image";
 import type { AbilityType } from "@/lib/api";
 
@@ -13,7 +13,7 @@ interface AbilityBarProps {
   onSelectAbility: (slug: string | null) => void;
 }
 
-export default function AbilityBar({
+export default memo(function AbilityBar({
   abilities,
   myCurrency,
   abilityCooldowns,
@@ -70,7 +70,7 @@ export default function AbilityBar({
       </div>
     </>
   );
-}
+});
 
 function AbilityButton({
   ability,
