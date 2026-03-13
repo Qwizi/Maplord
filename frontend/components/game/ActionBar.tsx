@@ -107,6 +107,7 @@ export default memo(function ActionBar({
             </div>
             <button
               onClick={onCancel}
+              aria-label="Anuluj"
               className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] p-1.5 text-zinc-400"
             >
               <Image
@@ -346,6 +347,7 @@ export default memo(function ActionBar({
 
               <button
                 onClick={onCancel}
+                aria-label="Anuluj"
                 className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] p-2 text-zinc-400"
               >
                 <Image

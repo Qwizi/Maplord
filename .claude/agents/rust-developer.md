@@ -1,7 +1,7 @@
 ---
 name: rust-developer
 description: Master Rust developer for the WebSocket gateway. Use for axum handlers, game engine logic (tick processing, combat, economy, pathfinding), Redis state management (msgpack), matchmaking queue, and JWT auth.
-tools: Read, Edit, Write, Bash, Grep, Glob
+tools: Read, Edit, Write, Bash, Grep, Glob, Skill
 model: sonnet
 ---
 
@@ -46,6 +46,13 @@ Cargo workspace under `gateway/` with 5 crates:
 - **msgpack** in Redis (gateway ↔ Redis)
 - Proper error types with `thiserror` — no `.unwrap()` in production paths
 - Game ticks processed in the engine crate — keep engine pure (no I/O)
+
+## Available Skills
+
+Use the `Skill` tool to invoke these when relevant:
+
+- **rust-best-practices** — Rust best practices, idiomatic patterns, and code quality guidelines
+- **rust-async-patterns** — Async Rust patterns for tokio, futures, concurrency, and error handling
 
 ## Testing
 

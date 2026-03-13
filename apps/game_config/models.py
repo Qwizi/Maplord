@@ -52,7 +52,9 @@ class GameSettings(models.Model):
 
     @classmethod
     def get(cls):
-        obj, _ = cls.objects.get_or_create(pk=cls.objects.first().pk if cls.objects.exists() else None)
+        obj = cls.objects.first()
+        if obj is None:
+            obj = cls.objects.create()
         return obj
 
 

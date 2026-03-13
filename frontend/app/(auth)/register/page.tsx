@@ -37,18 +37,12 @@ export default function RegisterPage() {
     <AuthScreen
       eyebrow="Recruitment"
       title="Nowe konto"
-      description="Utworz profil dowodcy i od razu przejdz do dashboardu z matchmakingiem, ranga i dalszymi ekranami gry."
+      description="Utworz profil dowodcy i zacznij walke o dominacje na mapie swiata."
       altPrompt="Masz juz konto?"
       altHref="/login"
       altLabel="Zaloguj się"
     >
       <div className="space-y-5">
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm leading-6 text-slate-300">
-          Konto daje dostep do meczow rankingowych, historii gier i dalszych
-          paneli, ktore mozemy potem podpiac pod assety `match_making`,
-          `ranks` i `badges`.
-        </div>
-
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="username" className="text-slate-300">

@@ -17,6 +17,9 @@
 	handle /ws/* {
 		reverse_proxy gateway:8080 {
 			header_up X-Forwarded-Proto {scheme}
+			transport http {
+				versions 1.1
+			}
 		}
 	}
 

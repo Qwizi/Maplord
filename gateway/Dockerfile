@@ -17,7 +17,7 @@ RUN mkdir -p crates/maplord-gateway/src && echo "fn main() {}" > crates/maplord-
     mkdir -p crates/maplord-matchmaking/src && echo "" > crates/maplord-matchmaking/src/lib.rs && \
     mkdir -p crates/maplord-django/src && echo "" > crates/maplord-django/src/lib.rs
 
-RUN cargo build --release 2>/dev/null || true
+RUN cargo build --release || true
 
 # Copy real source and build
 COPY . .
@@ -32,6 +32,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/target/release/maplord-gateway /usr/local/bin/maplord-gateway
+
+RUN addgroup --system --gid 1001 gateway && \
+    adduser --system --uid 1001 --ingroup gateway gateway
+USER gateway
 
 EXPOSE 8080
 ENV GATEWAY_PORT=8080

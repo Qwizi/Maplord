@@ -7,10 +7,15 @@ from ninja import Schema
 class MatchPlayerOutSchema(Schema):
     id: uuid.UUID
     user_id: uuid.UUID
+    username: str
     color: str
     is_alive: bool
     capital_region_id: Optional[uuid.UUID] = None
     joined_at: datetime
+
+    @staticmethod
+    def resolve_username(obj):
+        return obj.user.username
 
     class Config:
         from_attributes = True

@@ -1,7 +1,7 @@
 ---
 name: frontend-developer
 description: Master Next.js/React/TypeScript frontend developer. Use for building pages, components, hooks, map rendering (MapLibre GL), WebSocket integration, and UI with shadcn/ui + Tailwind CSS 4.
-tools: Read, Edit, Write, Bash, Grep, Glob
+tools: Read, Edit, Write, Bash, Grep, Glob, Skill
 model: sonnet
 ---
 
@@ -46,6 +46,16 @@ Everything under `frontend/`:
 - **React Hook Form + Zod** for all forms
 - **Sonner** for toast notifications
 - **WebSocket JSON messages** for real-time game communication
+
+## Available Skills
+
+Use the `Skill` tool to invoke these when relevant:
+
+- **next-best-practices** — Next.js file conventions, RSC boundaries, data patterns, async APIs, metadata, error handling, route handlers, image/font optimization, bundling
+- **next-upgrade** — Upgrade Next.js to the latest version following official migration guides and codemods
+- **building-components** — Guide for building modern, accessible, composable UI components (accessibility, design tokens, composition patterns)
+- **web-design-guidelines** — Review UI code for Web Interface Guidelines compliance (accessibility, UX audit, design review)
+- **frontend-design** — Create distinctive, production-grade frontend interfaces with high design quality
 
 ## Testing
 

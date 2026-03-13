@@ -117,6 +117,7 @@ export default memo(function RegionPanel({
         </div>
         <button
           onClick={onClose}
+          aria-label="Zamknij"
           className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-white"
         >
           <Image

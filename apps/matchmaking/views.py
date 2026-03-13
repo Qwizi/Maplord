@@ -3,6 +3,7 @@ from ninja_extra import api_controller, route
 from ninja_extra.permissions import IsAuthenticated
 from ninja_jwt.authentication import JWTAuth
 
+from django.shortcuts import get_object_or_404
 from apps.matchmaking.models import Match
 from apps.matchmaking.schemas import MatchOutSchema
 
@@ -15,10 +16,10 @@ class MatchController:
         """List matches for the authenticated user."""
         return list(
             Match.objects.filter(players__user=request.auth)
-            .prefetch_related('players')
+            .prefetch_related('players', 'players__user')
             .distinct()
         )
 
     @route.get('/{match_id}/', response=MatchOutSchema, auth=JWTAuth(), permissions=[IsAuthenticated])
     def get_match(self, request, match_id: str):
-        return Match.objects.prefetch_related('players').get(id=match_id)
+        return get_object_or_404(Match.objects.prefetch_related('players', 'players__user'), id=match_id)

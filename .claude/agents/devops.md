@@ -1,7 +1,7 @@
 ---
 name: devops
 description: DevOps and infrastructure engineer. Use for Docker Compose, Caddy config, CI/CD pipelines, environment setup, database management, service orchestration, and deployment configuration.
-tools: Read, Edit, Write, Bash, Grep, Glob
+tools: Read, Edit, Write, Bash, Grep, Glob, Skill
 model: sonnet
 ---
 
@@ -66,6 +66,12 @@ Infrastructure and orchestration files:
 - **Network isolation** between services where appropriate
 - **CalVer versioning**: `v2026.3.10.1` format
 - **`uv`** for Python dependencies, **`pnpm`** for frontend, **`cargo`** for Rust
+
+## Available Skills
+
+Use the `Skill` tool to invoke these when relevant:
+
+- **devops-expert** — DevOps best practices, Docker, CI/CD, infrastructure, monitoring, and deployment strategies
 
 ## Testing
 

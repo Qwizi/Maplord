@@ -10,6 +10,7 @@ use maplord_state::GameStateManager;
 use serde_json::json;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
+use serde::Deserialize;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
 use tracing::{error, info};
@@ -26,8 +27,6 @@ pub fn new_game_connections() -> GameConnections {
 pub struct TokenQuery {
     pub token: Option<String>,
 }
-
-use serde::Deserialize;
 
 pub async fn ws_game_handler(
     ws: WebSocketUpgrade,
@@ -86,6 +85,13 @@ async fn handle_game_socket(socket: WebSocket, match_id: String, user_id: String
     // Mark player connected
     if let Err(e) = mark_player_connected(&state_mgr, &user_id).await {
         error!("Failed to mark player connected: {e}");
+        use futures::SinkExt;
+        let _ = ws_sender
+            .send(Message::Close(Some(axum::extract::ws::CloseFrame {
+                code: 4001,
+                reason: e.to_string().into(),
+            })))
+            .await;
         return;
     }
 
@@ -1203,21 +1209,24 @@ async fn mark_player_disconnected(
 
     let players = state_mgr.get_all_players().await.unwrap_or_default();
 
-    // Check if all human players have disconnected — if so, end the match immediately
+    // Check if all human players have disconnected — if so, shorten the grace period
+    // to a 10-second reconnect window instead of eliminating immediately. This allows
+    // page refreshes to reconnect without losing the match, while still cleaning up
+    // quickly if all humans are truly gone.
     let any_human_connected = players
         .values()
         .any(|p| !p.is_bot && p.is_alive && p.connected);
 
     if !any_human_connected {
-        info!("All human players disconnected from match {match_id}, ending match");
-        // Eliminate all remaining alive players (bots + disconnected humans)
-        let alive_ids: Vec<String> = players
-            .iter()
-            .filter(|(_, p)| p.is_alive)
-            .map(|(id, _)| id.clone())
-            .collect();
-        for pid in &alive_ids {
-            eliminate_player(state_mgr, pid, "all_humans_disconnected", match_id, state).await;
+        info!("All human players disconnected from match {match_id}, using short reconnect window");
+        let short_grace = 10i64;
+        for (pid, p) in &players {
+            if !p.is_bot && p.is_alive && !p.connected {
+                if let Ok(Some(mut player_data)) = state_mgr.get_player(pid).await {
+                    player_data.disconnect_deadline = Some(now + short_grace);
+                    let _ = state_mgr.set_player(pid, &player_data).await;
+                }
+            }
         }
         return;
     }

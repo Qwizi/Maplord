@@ -6,16 +6,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { getMyMatches, getConfig, type Match, type GameModeListItem } from "@/lib/api";
+import Link from "next/link";
 import {
   Swords,
   User,
@@ -25,6 +18,10 @@ import {
   Zap,
   Clock,
   Settings2,
+  Shield,
+  Target,
+  Crown,
+  ChevronRight,
 } from "lucide-react";
 
 const MODE_ICONS: Record<string, typeof Users> = {
@@ -33,6 +30,13 @@ const MODE_ICONS: Record<string, typeof Users> = {
   "standard-4p": Users,
   "blitz-1v1": Zap,
   "custom": Settings2,
+};
+
+const STATUS_LABELS: Record<string, { label: string; color: string }> = {
+  finished: { label: "Zakonczony", color: "text-slate-400" },
+  in_progress: { label: "W trakcie", color: "text-emerald-300" },
+  selecting: { label: "Wybor stolic", color: "text-amber-200" },
+  cancelled: { label: "Anulowany", color: "text-red-400" },
 };
 
 export default function DashboardPage() {
@@ -72,7 +76,6 @@ export default function DashboardPage() {
     }
   }, [token, refreshUser]);
 
-  // Fetch game modes
   useEffect(() => {
     getConfig()
       .then((cfg) => {
@@ -85,7 +88,6 @@ export default function DashboardPage() {
       .catch(() => {});
   }, []);
 
-  // Queue timer
   useEffect(() => {
     if (!inQueue) {
       setQueueSeconds(0);
@@ -96,7 +98,6 @@ export default function DashboardPage() {
     return () => window.clearInterval(interval);
   }, [inQueue]);
 
-  // Redirect to game when match found
   useEffect(() => {
     if (matchId) {
       router.push(`/game/${matchId}`);
@@ -124,341 +125,336 @@ export default function DashboardPage() {
   }
 
   const currentMode = gameModes.find((m) => m.slug === selectedMode);
+  const wins = recentMatches.filter((m) => m.status === "finished" && m.winner_id === user.id).length;
 
   return (
     <div className="space-y-6">
-        <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-          <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/55 p-6 shadow-[0_30px_90px_rgba(0,0,0,0.4)] backdrop-blur-xl">
-            <div className="pointer-events-none absolute inset-y-0 right-0 w-1/2 opacity-80">
-              <Image
-                src="/assets/match_making/path17.webp"
-                alt=""
-                fill
-                className="object-contain object-right"
-              />
+      {/* ── Player overview ──────────────────────────────────── */}
+      <section className="grid gap-5 lg:grid-cols-[1fr_1fr]">
+        <div className="relative overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/55 p-6 backdrop-blur-xl">
+          <div className="pointer-events-none absolute -right-4 -top-4 h-32 w-32 opacity-15">
+            <Image src="/assets/match_making/g707.webp" alt="" fill className="object-contain" />
+          </div>
+          <div className="relative flex items-start gap-4">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-[linear-gradient(135deg,rgba(34,211,238,0.12),rgba(251,191,36,0.06))]">
+              <User className="h-7 w-7 text-cyan-200" />
             </div>
-            <div className="relative max-w-xl">
-              <p className="font-display text-xs uppercase tracking-[0.34em] text-cyan-200/70">
-                Matchmaking
+            <div className="min-w-0 flex-1">
+              <p className="font-display text-xs uppercase tracking-[0.3em] text-cyan-200/70">
+                Dowodca
               </p>
-              <h2 className="mt-3 font-display text-4xl leading-none text-zinc-50">
-                Szybki powrot do bitwy o mape.
+              <h2 className="mt-1 truncate font-display text-3xl text-zinc-50">
+                {user.username}
               </h2>
-              <p className="mt-4 text-sm leading-7 text-slate-300/85">
-                Wybierz tryb gry i dolacz do kolejki. Kazdy tryb ma inne zasady,
-                liczbe graczy i tempo rozgrywki.
-              </p>
-              <div className="mt-6 grid gap-3 sm:grid-cols-3">
-                <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
-                  <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">
-                    {inQueue ? "Czas w kolejce" : "Kolejka"}
-                  </div>
-                  <div className="mt-2 font-display text-2xl text-amber-200">
-                    {activeMatch ? "Match" : inQueue ? `${Math.floor(queueSeconds / 60)}:${String(queueSeconds % 60).padStart(2, "0")}` : "Idle"}
-                  </div>
+              <p className="mt-1 truncate text-sm text-slate-400">{user.email}</p>
+            </div>
+          </div>
+          <div className="mt-5 grid grid-cols-3 gap-3">
+            <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-center">
+              <div className="font-display text-2xl text-amber-200">{user.elo_rating}</div>
+              <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">ELO</div>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-center">
+              <div className="font-display text-2xl text-cyan-200">{recentMatches.length}</div>
+              <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Mecze</div>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-center">
+              <div className="font-display text-2xl text-emerald-300">{wins}</div>
+              <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Wygrane</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Queue status */}
+        <div className="relative overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/55 p-6 backdrop-blur-xl">
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-1/3 opacity-40">
+            <Image src="/assets/match_making/path17.webp" alt="" fill className="object-contain object-right" />
+          </div>
+          <div className="relative">
+            <p className="font-display text-xs uppercase tracking-[0.3em] text-amber-200/70">
+              Matchmaking
+            </p>
+            <h2 className="mt-1 font-display text-3xl text-zinc-50">
+              {activeMatch ? "Aktywny mecz" : inQueue ? "Szukanie meczu..." : "Gotowy do gry"}
+            </h2>
+            <div className="mt-5 grid grid-cols-3 gap-3">
+              <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5">
+                <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
+                  {inQueue ? "Czas" : "Status"}
                 </div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
-                  <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">
-                    Gracze
-                  </div>
-                  <div className="mt-2 font-display text-2xl text-cyan-200">
-                    {playersInQueue}
-                  </div>
+                <div className="mt-1 font-display text-xl text-amber-200">
+                  {activeMatch ? "Live" : inQueue ? `${Math.floor(queueSeconds / 60)}:${String(queueSeconds % 60).padStart(2, "0")}` : "Idle"}
                 </div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
-                  <div className="text-[11px] uppercase tracking-[0.22em] text-slate-500">
-                    Tryb
-                  </div>
-                  <div className="mt-2 font-display text-lg text-zinc-50 truncate">
-                    {currentMode?.name ?? "—"}
-                  </div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5">
+                <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">W kolejce</div>
+                <div className="mt-1 font-display text-xl text-cyan-200">{playersInQueue}</div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5">
+                <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Tryb</div>
+                <div className="mt-1 truncate font-display text-base text-zinc-50">
+                  {currentMode?.name ?? "—"}
                 </div>
               </div>
             </div>
           </div>
+        </div>
+      </section>
 
-          <div className="rounded-[28px] border border-white/10 bg-slate-950/55 p-5 backdrop-blur-xl">
-            <div className="mb-4 flex items-center gap-3">
-              <Image
-                src="/assets/notifications/friends_match_invitation.webp"
-                alt=""
-                width={42}
-                height={42}
-                className="h-10 w-10 rounded-xl object-cover"
-              />
-              <div>
-                <p className="font-display text-xs uppercase tracking-[0.28em] text-amber-200/70">
-                  Queue Signal
-                </p>
-                <h3 className="font-display text-2xl text-zinc-50">
-                  Status sesji
-                </h3>
-              </div>
+      {/* ── Game mode selector ───────────────────────────────── */}
+      {gameModes.length > 0 && !activeMatch && !inQueue && (
+        <section className="rounded-[24px] border border-white/10 bg-slate-950/55 p-6 backdrop-blur-xl">
+          <div className="mb-5 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04]">
+              <Target className="h-5 w-5 text-cyan-300" />
             </div>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
-                <span className="text-sm text-slate-400">Konto</span>
-                <span className="font-medium text-zinc-100">{user.email}</span>
-              </div>
-              <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
-                <span className="text-sm text-slate-400">Aktywna gra</span>
-                <span className="font-display text-lg text-cyan-200">
-                  {activeMatch ? "Tak" : "Nie"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
-                <span className="text-sm text-slate-400">Mecze zapisane</span>
-                <span className="font-display text-lg text-amber-200">
-                  {recentMatches.length}
-                </span>
-              </div>
+            <div>
+              <h3 className="font-display text-xl text-zinc-50">Wybierz tryb gry</h3>
+              <p className="text-sm text-slate-400">Kazdy tryb ma inne zasady i tempo rozgrywki</p>
             </div>
           </div>
-        </section>
-
-        {/* Game Mode Selector */}
-        {gameModes.length > 0 && !activeMatch && !inQueue && (
-          <Card className="overflow-hidden rounded-[28px] border-white/10 bg-slate-950/55 shadow-[0_25px_80px_rgba(0,0,0,0.35)]">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Settings2 className="h-5 w-5 text-purple-400" />
-                Wybierz tryb gry
-              </CardTitle>
-              <CardDescription>
-                Kazdy tryb ma inne zasady, liczbe graczy i tempo rozgrywki
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {gameModes.map((mode) => {
-                  const isSelected = selectedMode === mode.slug;
-                  const Icon = MODE_ICONS[mode.slug] ?? Swords;
-                  return (
-                    <button
-                      key={mode.id}
-                      onClick={() => setSelectedMode(mode.slug)}
-                      className={`group relative flex flex-col items-start gap-2 rounded-2xl border px-5 py-4 text-left transition-all ${
-                        isSelected
-                          ? "border-cyan-400/50 bg-cyan-500/10 shadow-[0_0_20px_rgba(34,211,238,0.1)]"
-                          : "border-white/10 bg-white/[0.04] hover:border-white/20 hover:bg-white/[0.06]"
-                      }`}
-                    >
-                      <div className="flex w-full items-center justify-between">
-                        <div className="flex items-center gap-2.5">
-                          <Icon className={`h-5 w-5 ${isSelected ? "text-cyan-300" : "text-slate-500"}`} />
-                          <span className={`font-display text-base ${isSelected ? "text-zinc-50" : "text-zinc-300"}`}>
-                            {mode.name}
-                          </span>
-                        </div>
-                        {mode.is_default && (
-                          <Badge className="border-0 bg-amber-500/20 text-amber-200 text-[10px] hover:bg-amber-500/20">
-                            Domyslny
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-xs leading-5 text-slate-500">
-                        {mode.description}
-                      </p>
-                      <div className="flex items-center gap-3 text-[11px] uppercase tracking-wider text-slate-500">
-                        <span className="flex items-center gap-1">
-                          <Users className="h-3 w-3" />
-                          {mode.min_players === mode.max_players
-                            ? `${mode.max_players} graczy`
-                            : `${mode.min_players}-${mode.max_players} graczy`}
-                        </span>
-                      </div>
-                      {isSelected && (
-                        <div className="absolute -top-px -right-px h-3 w-3 rounded-bl-lg rounded-tr-2xl bg-cyan-400" />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Find game */}
-        <Card className="overflow-hidden rounded-[28px] border-white/10 bg-slate-950/55 shadow-[0_25px_80px_rgba(0,0,0,0.35)]">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Swords className="h-5 w-5 text-red-400" />
-              {activeMatch ? "Aktywny mecz" : "Szukaj gry"}
-            </CardTitle>
-            <CardDescription>
-              {activeMatch
-                ? "Najpierw dokoncz aktualna rozgrywke"
-                : inQueue
-                  ? `Szukanie meczu — ${currentMode?.name ?? "domyslny tryb"}`
-                  : "Dolacz do kolejki i walcz o dominacje na mapie"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {activeMatch ? (
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="text-sm leading-6 text-slate-400">
-                  Masz juz aktywny mecz w statusie{" "}
-                  <span className="font-medium text-zinc-100">{activeMatch.status}</span>.
-                  Nie mozesz dolaczyc do nowej gry, dopoki tamta sie nie zakonczy.
-                </div>
-                <Button
-                  size="lg"
-                  className="h-11 gap-2 rounded-full border border-cyan-300/30 bg-[linear-gradient(135deg,#38bdf8,#0f766e)] px-6 font-display uppercase tracking-[0.2em] text-slate-950"
-                  onClick={() => router.push(`/game/${activeMatch.id}`)}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {gameModes.map((mode) => {
+              const isSelected = selectedMode === mode.slug;
+              const Icon = MODE_ICONS[mode.slug] ?? Swords;
+              return (
+                <button
+                  key={mode.id}
+                  onClick={() => setSelectedMode(mode.slug)}
+                  className={`group relative flex flex-col items-start gap-2 rounded-2xl border px-5 py-4 text-left transition-all ${
+                    isSelected
+                      ? "border-cyan-400/40 bg-cyan-500/10 shadow-[0_0_24px_rgba(34,211,238,0.08)]"
+                      : "border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.05]"
+                  }`}
                 >
-                  <Search className="h-5 w-5" />
-                  Wroc do gry
-                </Button>
-              </div>
-            ) : inQueue ? (
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-3">
-                  <Image
-                    src="/assets/match_making/circle291.webp"
-                    alt=""
-                    width={42}
-                    height={42}
-                    className="h-10 w-10 animate-spin object-contain"
-                  />
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span>Szukam przeciwnika...</span>
-                    <Badge className="border-0 bg-white/10 text-slate-200 hover:bg-white/10">
-                      {playersInQueue} w kolejce
-                    </Badge>
-                    {fillBots && (
-                      <span className="text-xs text-zinc-500">
-                        Boty dolacza automatycznie
+                  <div className="flex w-full items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <Icon className={`h-5 w-5 ${isSelected ? "text-cyan-300" : "text-slate-500"}`} />
+                      <span className={`font-display text-base ${isSelected ? "text-zinc-50" : "text-zinc-300"}`}>
+                        {mode.name}
                       </span>
-                    )}
-                    {currentMode && (
-                      <Badge className="border-0 bg-purple-500/20 text-purple-200 hover:bg-purple-500/20">
-                        {currentMode.name}
+                    </div>
+                    {mode.is_default && (
+                      <Badge className="border-0 bg-amber-500/20 text-[10px] text-amber-200 hover:bg-amber-500/20">
+                        Domyslny
                       </Badge>
                     )}
                   </div>
-                </div>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={leaveQueue}
-                  className="rounded-full"
-                >
-                  Anuluj
-                </Button>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-4">
-                <div className="text-sm leading-6 text-slate-400">
-                  {currentMode
-                    ? `Tryb: ${currentMode.name} (${currentMode.min_players === currentMode.max_players ? currentMode.max_players : `${currentMode.min_players}-${currentMode.max_players}`} graczy)`
-                    : "Wybierz tryb gry powyzej"}
-                </div>
-                <div className="flex items-center justify-between gap-4">
-                  <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-300">
-                    <input
-                      type="checkbox"
-                      checked={fillBots}
-                      onChange={(e) => setFillBots(e.target.checked)}
-                      className="h-4 w-4 rounded border-white/20 bg-white/10 accent-cyan-400"
-                    />
-                    Wypelnij botami jezeli brak graczy
-                  </label>
-                  <Button
-                    size="lg"
-                    className="h-11 gap-2 rounded-full border border-cyan-300/30 bg-[linear-gradient(135deg,#38bdf8,#0f766e)] px-6 font-display uppercase tracking-[0.2em] text-slate-950"
-                    onClick={() => joinQueue(selectedMode ?? undefined)}
-                    disabled={!selectedMode}
-                  >
-                    <Search className="h-5 w-5" />
-                    Szukaj gry
-                  </Button>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  <p className="text-xs leading-5 text-slate-500">{mode.description}</p>
+                  <div className="flex items-center gap-1 text-[11px] uppercase tracking-wider text-slate-500">
+                    <Users className="h-3 w-3" />
+                    {mode.min_players === mode.max_players
+                      ? `${mode.max_players} graczy`
+                      : `${mode.min_players}-${mode.max_players} graczy`}
+                  </div>
+                  {isSelected && (
+                    <div className="absolute -right-px -top-px h-3 w-3 rounded-bl-lg rounded-tr-2xl bg-cyan-400" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
-        <div className="grid gap-6 md:grid-cols-2">
-          {/* Profile */}
-          <Card className="rounded-[24px] border-white/10 bg-slate-950/55">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <User className="h-5 w-5 text-blue-400" />
-                Profil
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-zinc-400">Nazwa</span>
-                <span>{user.username}</span>
-              </div>
-              <Separator className="bg-zinc-800" />
-              <div className="flex justify-between">
-                <span className="text-zinc-400">Email</span>
-                <span>{user.email}</span>
-              </div>
-              <Separator className="bg-zinc-800" />
-              <div className="flex justify-between">
-                <span className="text-zinc-400">ELO</span>
-                <span className="font-bold text-yellow-400">
-                  {user.elo_rating}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Recent matches */}
-          <Card className="rounded-[24px] border-white/10 bg-slate-950/55">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Trophy className="h-5 w-5 text-yellow-400" />
-                Ostatnie mecze
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {recentMatches.length === 0 ? (
-                <p className="text-sm text-zinc-500">
-                  Brak rozegranych meczy
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {recentMatches.slice(0, 5).map((match) => (
-                    <div
-                      key={match.id}
-                      className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Badge
-                          variant={
-                            match.status === "finished"
-                              ? "default"
-                              : "secondary"
-                          }
-                        >
-                      {match.status}
-                        </Badge>
-                        <span className="text-sm text-zinc-400">
-                          {match.players.length} graczy
-                        </span>
-                      </div>
-                      {(match.status === "in_progress" || match.status === "selecting") && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            router.push(`/game/${match.id}`)
-                          }
-                        >
-                          Wroc do gry
-                        </Button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+      {/* ── Action bar: find game / active match / queue ──── */}
+      <section className="rounded-[24px] border border-white/10 bg-slate-950/55 p-6 backdrop-blur-xl">
+        <div className="mb-5 flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04]">
+            <Swords className={`h-5 w-5 ${activeMatch ? "text-emerald-300" : inQueue ? "text-amber-200" : "text-red-400"}`} />
+          </div>
+          <div>
+            <h3 className="font-display text-xl text-zinc-50">
+              {activeMatch ? "Aktywny mecz" : inQueue ? "Szukanie meczu" : "Szukaj gry"}
+            </h3>
+            <p className="text-sm text-slate-400">
+              {activeMatch
+                ? "Najpierw dokoncz aktualna rozgrywke"
+                : inQueue
+                  ? `Tryb: ${currentMode?.name ?? "domyslny"}`
+                  : "Dolacz do kolejki i walcz o dominacje na mapie"}
+            </p>
+          </div>
         </div>
+
+        {activeMatch ? (
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-2.5 w-2.5 animate-pulse rounded-full bg-emerald-400" />
+              <span className="text-sm text-slate-300">
+                Mecz w statusie <span className="font-medium text-zinc-100">{STATUS_LABELS[activeMatch.status]?.label ?? activeMatch.status}</span>
+              </span>
+            </div>
+            <Button
+              size="lg"
+              className="h-11 gap-2 rounded-full border border-cyan-300/30 bg-[linear-gradient(135deg,#38bdf8,#0f766e)] px-6 font-display uppercase tracking-[0.2em] text-slate-950 hover:opacity-90"
+              onClick={() => router.push(`/game/${activeMatch.id}`)}
+            >
+              <Shield className="h-4 w-4" />
+              Wroc do gry
+            </Button>
+          </div>
+        ) : inQueue ? (
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <Image
+                src="/assets/match_making/circle291.webp"
+                alt=""
+                width={36}
+                height={36}
+                className="h-9 w-9 animate-spin object-contain"
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm text-slate-200">Szukam przeciwnika...</span>
+                <Badge className="border-0 bg-white/10 text-slate-200 hover:bg-white/10">
+                  {playersInQueue} w kolejce
+                </Badge>
+                {fillBots && (
+                  <span className="text-xs text-slate-500">
+                    Boty dolacza po 30s
+                  </span>
+                )}
+              </div>
+            </div>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={leaveQueue}
+              className="rounded-full px-5"
+            >
+              Anuluj
+            </Button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={fillBots}
+                  onChange={(e) => setFillBots(e.target.checked)}
+                  className="h-4 w-4 rounded border-white/20 bg-white/10 accent-cyan-400"
+                />
+                Wypelnij botami jezeli brak graczy
+              </label>
+              {fillBots && (
+                <p className="ml-6 mt-1 text-xs text-slate-500">
+                  Boty dolacza automatycznie po 30 sekundach w kolejce
+                </p>
+              )}
+            </div>
+            <Button
+              size="lg"
+              className="h-11 gap-2 rounded-full border border-cyan-300/30 bg-[linear-gradient(135deg,#38bdf8,#0f766e)] px-6 font-display uppercase tracking-[0.2em] text-slate-950 hover:opacity-90"
+              onClick={() => joinQueue(selectedMode ?? undefined)}
+              disabled={!selectedMode}
+            >
+              <Search className="h-4 w-4" />
+              Szukaj gry
+            </Button>
+          </div>
+        )}
+      </section>
+
+      {/* ── Recent matches ───────────────────────────────────── */}
+      <section className="rounded-[24px] border border-white/10 bg-slate-950/55 p-6 backdrop-blur-xl">
+        <div className="mb-5 flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04]">
+            <Trophy className="h-5 w-5 text-amber-300" />
+          </div>
+          <div>
+            <h3 className="font-display text-xl text-zinc-50">Ostatnie mecze</h3>
+            <p className="text-sm text-slate-400">
+              {recentMatches.length > 0
+                ? `${recentMatches.length} ${recentMatches.length === 1 ? "mecz" : recentMatches.length < 5 ? "mecze" : "meczy"} w historii`
+                : "Brak rozegranych meczy"}
+            </p>
+          </div>
+        </div>
+
+        {recentMatches.length === 0 ? (
+          <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-5 py-8 text-center">
+            <Swords className="mx-auto h-8 w-8 text-slate-600" />
+            <p className="mt-3 text-sm text-slate-500">
+              Dolacz do kolejki i rozegraj swoj pierwszy mecz
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {recentMatches.slice(0, 5).map((match) => {
+              const status = STATUS_LABELS[match.status] ?? { label: match.status, color: "text-slate-400" };
+              const isActive = match.status === "in_progress" || match.status === "selecting";
+              const winner = match.players.find((p) => p.user_id === match.winner_id);
+              const myPlayer = match.players.find((p) => p.user_id === user.id);
+              const isWinner = match.winner_id === user.id;
+              const dateStr = match.finished_at ?? match.started_at ?? match.created_at;
+              const date = new Date(dateStr);
+
+              return (
+                <Link
+                  key={match.id}
+                  href={isActive ? `/game/${match.id}` : `/match/${match.id}`}
+                  className={`group grid grid-cols-[auto_1fr_auto] items-center gap-4 rounded-2xl border px-4 py-3 transition-colors ${
+                    isActive
+                      ? "border-cyan-300/20 bg-cyan-400/5 hover:bg-cyan-400/8"
+                      : isWinner
+                        ? "border-amber-300/15 bg-amber-400/[0.03] hover:bg-amber-400/[0.06]"
+                        : "border-white/10 bg-white/[0.03] hover:bg-white/[0.05]"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    {isActive ? (
+                      <div className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+                    ) : isWinner ? (
+                      <Crown className="h-4 w-4 text-amber-300" />
+                    ) : (
+                      <Swords className="h-4 w-4 text-slate-500" />
+                    )}
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-sm font-medium ${status.color}`}>
+                          {status.label}
+                        </span>
+                        {isWinner && (
+                          <Badge className="border-0 bg-amber-400/15 text-[10px] text-amber-200 hover:bg-amber-400/15">
+                            Wygrana
+                          </Badge>
+                        )}
+                        {match.status === "finished" && !isWinner && myPlayer && !myPlayer.is_alive && (
+                          <Badge className="border-0 bg-red-400/15 text-[10px] text-red-300 hover:bg-red-400/15">
+                            Przegrana
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="mt-0.5 flex items-center gap-3 text-xs text-slate-500">
+                        <span>{match.players.length} graczy</span>
+                        {winner && <span>Zwyciezca: {winner.username}</span>}
+                        <span>{date.toLocaleDateString("pl-PL", { day: "numeric", month: "short" })}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Player colors */}
+                  <div className="flex justify-end gap-1">
+                    {match.players.map((p) => (
+                      <div
+                        key={p.id}
+                        className={`h-5 w-5 rounded-md border ${
+                          p.user_id === user.id ? "border-white/30" : "border-white/10"
+                        } ${!p.is_alive && match.status === "finished" ? "opacity-40" : ""}`}
+                        style={{ backgroundColor: p.color }}
+                        title={p.username}
+                      />
+                    ))}
+                  </div>
+
+                  <ChevronRight className="h-4 w-4 text-slate-600 transition-colors group-hover:text-slate-300" />
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

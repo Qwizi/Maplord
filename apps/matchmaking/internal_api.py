@@ -1,17 +1,11 @@
 import logging
 
-from django.conf import settings
 from ninja_extra import ControllerBase, api_controller, route
 from ninja import Schema
 
+from apps.internal_auth import check_internal_secret
+
 logger = logging.getLogger(__name__)
-
-
-def check_internal_secret(request):
-    """Verify X-Internal-Secret header matches configured secret."""
-    expected = getattr(settings, 'INTERNAL_SECRET', 'dev-internal-secret')
-    actual = request.META.get('HTTP_X_INTERNAL_SECRET', '')
-    return actual == expected
 
 
 # --- Schemas ---
@@ -128,8 +122,6 @@ class MatchmakingInternalController(ControllerBase):
         from apps.accounts.models import User
         from apps.game_config.models import GameMode, GameSettings
         from apps.matchmaking.models import Match, MatchQueue
-
-        logger = logging.getLogger(__name__)
 
         # Resolve game mode
         if body.game_mode:
@@ -323,6 +315,7 @@ class MatchmakingInternalController(ControllerBase):
 
         users = []
         bot_ids = []
+        entry_ids = []
         for i, entry in enumerate(queue_entries):
             MatchPlayer.objects.create(
                 match=match,
@@ -332,7 +325,9 @@ class MatchmakingInternalController(ControllerBase):
             users.append(str(entry.user.id))
             if entry.user.is_bot:
                 bot_ids.append(str(entry.user.id))
-            entry.delete()
+            entry_ids.append(entry.id)
+
+        MatchQueue.objects.filter(id__in=entry_ids).delete()
 
         return {
             'match_id': str(match.id),

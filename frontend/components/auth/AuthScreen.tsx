@@ -14,23 +14,6 @@ interface AuthScreenProps {
   children: ReactNode;
 }
 
-const providerLogos = [
-  {
-    src: "/assets/auth/google_logo.png",
-    alt: "Google",
-    label: "Google",
-  },
-  {
-    src: "/assets/auth/discord_logo.webp",
-    alt: "Discord",
-    label: "Discord",
-  },
-  {
-    src: "/assets/auth/apple_logo.png",
-    alt: "Apple",
-    label: "Apple",
-  },
-];
 
 export default function AuthScreen({
   eyebrow,
@@ -176,32 +159,6 @@ export default function AuthScreen({
 
               <div className="space-y-6 px-6 py-6 sm:px-8 sm:py-8">
                 {children}
-
-                <div className="space-y-3 border-t border-white/10 pt-5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs uppercase tracking-[0.28em] text-slate-500">
-                      Identity providers
-                    </span>
-                    <span className="text-xs text-slate-500">w przygotowaniu</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    {providerLogos.map((provider) => (
-                      <div
-                        key={provider.label}
-                        className="flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-3 text-sm text-slate-300/80"
-                      >
-                        <Image
-                          src={provider.src}
-                          alt={provider.alt}
-                          width={18}
-                          height={18}
-                          className="h-[18px] w-[18px] object-contain"
-                        />
-                        <span>{provider.label}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
 
                 <p className="text-center text-sm text-slate-400">
                   {altPrompt}{" "}
