@@ -9,7 +9,7 @@ from apps.accounts.views import AuthController
 from apps.geo.views import GeoController
 from apps.game_config.views import ConfigController
 from apps.matchmaking.views import MatchController, TutorialController
-from apps.game.views import GameController
+from apps.game.views import GameController, ShareController
 from apps.shop.views import ShopController
 from apps.game.internal_api import GameInternalController
 from apps.matchmaking.internal_api import MatchmakingInternalController
@@ -23,6 +23,7 @@ api.register_controllers(
     MatchController,
     TutorialController,
     GameController,
+    ShareController,
     ShopController,
     GameInternalController,
     MatchmakingInternalController,

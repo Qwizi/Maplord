@@ -1,5 +1,5 @@
 import uuid
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 from ninja import Schema
 
@@ -48,3 +48,67 @@ class SnapshotDetailSchema(Schema):
 
     class Config:
         from_attributes = True
+
+
+# --- Share link schemas ---
+
+class CreateShareSchema(Schema):
+    resource_type: str
+    resource_id: str  # UUID as string
+
+
+class ShareLinkOutSchema(Schema):
+    token: str
+    resource_type: str
+    resource_id: str
+
+
+class SharedMatchPlayerSchema(Schema):
+    id: str
+    user_id: str
+    username: str
+    color: str
+    is_alive: bool
+    joined_at: datetime
+
+
+class SharedPlayerResultSchema(Schema):
+    user_id: str
+    username: str
+    placement: int
+    regions_conquered: int
+    units_produced: int
+    units_lost: int
+    buildings_built: int
+    elo_change: int
+
+
+class SharedMatchResultSchema(Schema):
+    id: str
+    match_id: str
+    duration_seconds: int
+    total_ticks: int
+    player_results: List[SharedPlayerResultSchema] = []
+
+
+class SharedMatchSchema(Schema):
+    id: str
+    status: str
+    max_players: int
+    winner_id: Optional[str]
+    started_at: Optional[datetime]
+    finished_at: Optional[datetime]
+    created_at: datetime
+    players: List[SharedMatchPlayerSchema] = []
+
+
+class SharedResourceSchema(Schema):
+    resource_type: str
+    match: SharedMatchSchema
+    result: Optional[SharedMatchResultSchema]
+    snapshot_ticks: List[int] = []
+
+
+class SharedSnapshotSchema(Schema):
+    tick: int
+    state_data: dict

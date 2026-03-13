@@ -405,3 +405,41 @@ export async function cleanupTutorial(token: string): Promise<{ ok: boolean }> {
     token,
   });
 }
+
+// --- Share ---
+
+export interface ShareLink {
+  token: string;
+  resource_type: string;
+  resource_id: string;
+}
+
+export interface SharedMatchData {
+  resource_type: "match_result";
+  match: Match;
+  result: MatchResult | null;
+  snapshot_ticks: number[];
+}
+
+export async function createShareLink(
+  token: string,
+  resourceType: string,
+  resourceId: string
+): Promise<ShareLink> {
+  return fetchAPI<ShareLink>("/share/create/", {
+    method: "POST",
+    token,
+    body: JSON.stringify({ resource_type: resourceType, resource_id: resourceId }),
+  });
+}
+
+export async function getSharedResource(shareToken: string): Promise<SharedMatchData> {
+  return fetchAPI<SharedMatchData>(`/share/${shareToken}/`);
+}
+
+export async function getSharedSnapshot(
+  shareToken: string,
+  tick: number
+): Promise<SnapshotDetail> {
+  return fetchAPI<SnapshotDetail>(`/share/${shareToken}/snapshots/${tick}/`);
+}
