@@ -65,6 +65,32 @@ export default function ReplayPage() {
   // Cache loaded snapshots
   const snapshotCache = useRef<Map<number, GameState>>(new Map());
 
+  // ── Load a snapshot ─────────────────────────────────────
+  const loadSnapshot = useCallback(async (tick: number, index: number) => {
+    if (!token) return;
+
+    // Check cache first
+    const cached = snapshotCache.current.get(tick);
+    if (cached) {
+      setGameState(cached);
+      setCurrentIndex(index);
+      return;
+    }
+
+    setSnapshotLoading(true);
+    try {
+      const snap = await getSnapshot(token, matchId, tick);
+      const state = snap.state_data as unknown as GameState;
+      snapshotCache.current.set(tick, state);
+      setGameState(state);
+      setCurrentIndex(index);
+    } catch {
+      // ignore
+    } finally {
+      setSnapshotLoading(false);
+    }
+  }, [token, matchId]);
+
   // ── Load initial data ───────────────────────────────────
   useEffect(() => {
     if (authLoading) return;
@@ -91,32 +117,6 @@ export default function ReplayPage() {
       }
     }).catch(() => setLoading(false));
   }, [authLoading, user, token, matchId, router, loadSnapshot]);
-
-  // ── Load a snapshot ─────────────────────────────────────
-  const loadSnapshot = useCallback(async (tick: number, index: number) => {
-    if (!token) return;
-
-    // Check cache first
-    const cached = snapshotCache.current.get(tick);
-    if (cached) {
-      setGameState(cached);
-      setCurrentIndex(index);
-      return;
-    }
-
-    setSnapshotLoading(true);
-    try {
-      const snap = await getSnapshot(token, matchId, tick);
-      const state = snap.state_data as unknown as GameState;
-      snapshotCache.current.set(tick, state);
-      setGameState(state);
-      setCurrentIndex(index);
-    } catch {
-      // ignore
-    } finally {
-      setSnapshotLoading(false);
-    }
-  }, [token, matchId]);
 
   // ── Prefetch next snapshots ─────────────────────────────
   useEffect(() => {
