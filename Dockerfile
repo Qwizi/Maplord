@@ -18,9 +18,6 @@ COPY . .
 
 RUN SECRET_KEY=build-placeholder uv run python manage.py collectstatic --noinput
 
-RUN addgroup --system --gid 1001 django && \
-    adduser --system --uid 1001 --ingroup django django
-USER django
 
 EXPOSE 8000
 
