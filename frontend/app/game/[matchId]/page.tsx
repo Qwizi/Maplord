@@ -27,7 +27,7 @@ import BuildQueue from "@/components/game/BuildQueue";
 import MobileBuildSheet from "@/components/game/MobileBuildSheet";
 import AbilityBar from "@/components/game/AbilityBar";
 import { Loader2 } from "lucide-react";
-import { toast } from "sonner";
+import { useGameNotifications, GameNotificationOverlay } from "@/components/game/GameNotification";
 
 function getUnitRules(units: UnitType[], unitSlug: string | null | undefined) {
   return (
@@ -630,6 +630,10 @@ export default function GamePage({
     }
   }, [events, myUserId, unitsConfig]);
 
+  // ── Notification system ────────────────────────────────────
+
+  const { notifications, notify, dismiss } = useGameNotifications();
+
   // ── Click handler ──────────────────────────────────────────
 
   const handleRegionClick = useCallback(
@@ -649,8 +653,9 @@ export default function GamePage({
         // Too close to an existing capital
         if (dimmedRegions.includes(regionId)) {
           const minDist = parseInt(gameState?.meta?.min_capital_distance || "3", 10);
-          toast.error(
-            `Stolica musi być co najmniej ${minDist} regiony od stolicy innego gracza`
+          notify(
+            `Stolica musi być co najmniej ${minDist} regiony od stolicy innego gracza`,
+            "error"
           );
           return;
         }
@@ -672,10 +677,11 @@ export default function GamePage({
             (abilityDef.target_type === "enemy" && region.owner_id !== myUserId) ||
             (abilityDef.target_type === "own" && region.owner_id === myUserId);
           if (!isValidTarget) {
-            toast.error(
+            notify(
               abilityDef.target_type === "enemy"
                 ? "Zdolnosc wymaga wrogiego celu"
-                : "Zdolnosc wymaga wlasnego regionu"
+                : "Zdolnosc wymaga wlasnego regionu",
+              "error"
             );
             return;
           }
@@ -701,7 +707,7 @@ export default function GamePage({
           effectiveUnitType &&
           !isTargetReachableForUnitType(regionId, effectiveUnitType)
         ) {
-          toast.error("Ten cel nie jest osiągalny dla wybranego typu jednostki");
+          notify("Ten cel nie jest osiągalny dla wybranego typu jednostki", "error");
           return;
         }
 
@@ -715,7 +721,7 @@ export default function GamePage({
             return prev.filter((id) => id !== regionId);
           }
           if (prev.length >= 3) {
-            toast.error("Mozesz wybrac maksymalnie 3 cele");
+            notify("Mozesz wybrac maksymalnie 3 cele", "error");
             return prev;
           }
           return [...prev, regionId];
@@ -752,6 +758,7 @@ export default function GamePage({
       selectedAbility,
       abilitiesConfig,
       useAbility,
+      notify,
     ]
   );
 
@@ -772,7 +779,7 @@ export default function GamePage({
           ? (reachability?.attackDistanceByTarget.get(regionId) ?? null)
           : (reachability?.moveDistanceByTarget.get(regionId) ?? null);
         if (distance === null) {
-          toast.error("Wybrany typ jednostki nie moze dosiegnac tego celu");
+          notify("Wybrany typ jednostki nie moze dosiegnac tego celu", "error");
           continue;
         }
         const rules = unitConfigBySlug[unitType] ?? getUnitRules(unitsConfig, unitType);
@@ -811,7 +818,7 @@ export default function GamePage({
       setSelectedActionUnitType(null);
       setActionTargets([]);
     },
-    [selectedRegion, gameState, myUserId, attack, move, reachabilityByUnitType, unitConfigBySlug, unitsConfig]
+    [selectedRegion, gameState, myUserId, attack, move, reachabilityByUnitType, unitConfigBySlug, unitsConfig, notify]
   );
 
   const handleBuild = useCallback(
@@ -894,27 +901,27 @@ export default function GamePage({
         const winnerId = e.winner_id as string;
         const winner = gameState?.players[winnerId];
         if (winnerId === myUserId) {
-          toast.success("Wygrales");
+          notify("Wygrales", "success");
           playSound("popup");
         } else {
-          toast.error(`Przegrales. Wygrywa: ${winner?.username || "?"}`);
+          notify(`Przegrales. Wygrywa: ${winner?.username || "?"}`, "error");
           playSound("buzzer");
         }
       }
       if (e.type === "player_eliminated" && e.player_id === myUserId) {
         if (e.reason === "disconnect_timeout") {
-          toast.error("Zostales usuniety z meczu przez brak powrotu na czas");
+          notify("Zostales usuniety z meczu przez brak powrotu na czas", "error");
         } else if (e.reason === "left_match") {
-          toast.error("Opuściłeś mecz");
+          notify("Opuściłeś mecz", "error");
         } else {
-          toast.error("Twoja stolica zostala zdobyta");
+          notify("Twoja stolica zostala zdobyta", "error");
         }
         playSound("buzzer");
       }
       if (e.type === "player_disconnected" && e.player_id !== myUserId) {
         const disconnectedPlayer = gameStateRef.current?.players[String(e.player_id)];
         const graceSeconds = Number(e.grace_seconds || 0);
-        toast.warning(`${disconnectedPlayer?.username || "Gracz"} rozlaczyl sie. Limit powrotu: ${graceSeconds}s`);
+        notify(`${disconnectedPlayer?.username || "Gracz"} rozlaczyl sie. Limit powrotu: ${graceSeconds}s`, "warning");
       }
       if (e.type === "build_started" && e.player_id === myUserId) {
         playSound("build");
@@ -938,9 +945,7 @@ export default function GamePage({
           const attackerName = gameStateRef.current?.players[attackerId ?? ""]?.username ?? "Wróg";
           const regionName = gameStateRef.current?.regions[targetRegionId]?.name ?? targetRegionId;
           playSound("alert");
-          toast.warning(`⚔️ ${attackerName} atakuje ${regionName}!`, {
-            duration: 5000,
-          });
+          notify(`⚔️ ${attackerName} atakuje ${regionName}!`, "warning", 5000);
         }
       }
       if (e.type === "attack_success" && e.player_id !== myUserId) {
@@ -965,10 +970,10 @@ export default function GamePage({
           }
         }
         if (isMyAbility) {
-          toast.success(`Uzyto: ${abilityName}`);
+          notify(`Uzyto: ${abilityName}`, "success");
         } else {
           const attackerName = gameStateRef.current?.players[String(e.player_id)]?.username ?? "Wrog";
-          toast.warning(`${attackerName} uzyl zdolnosci: ${abilityName}`);
+          notify(`${attackerName} uzyl zdolnosci: ${abilityName}`, "warning");
         }
         // Nuke rocket animation — flies from caster's capital to target
         if (isNuke) {
@@ -1006,12 +1011,12 @@ export default function GamePage({
       if (e.type === "shield_blocked") {
         const targetRegionName = gameStateRef.current?.regions[String(e.target_region_id)]?.name ?? "region";
         if (e.attacker_id === myUserId) {
-          toast.error(`Atak na ${targetRegionName} zostal zablokowany przez tarcze!`);
+          notify(`Atak na ${targetRegionName} zostal zablokowany przez tarcze!`, "error");
           playSound("shield");
         } else {
           const targetOwner = gameStateRef.current?.regions[String(e.target_region_id)]?.owner_id;
           if (targetOwner === myUserId) {
-            toast.success(`Tarcza ochronila ${targetRegionName}!`);
+            notify(`Tarcza ochronila ${targetRegionName}!`, "success");
             playSound("shield");
           }
         }
@@ -1022,19 +1027,19 @@ export default function GamePage({
         if (effectType === "ab_shield") {
           const regionOwner = gameStateRef.current?.regions[String(e.target_region_id)]?.owner_id;
           if (regionOwner === myUserId) {
-            toast.info(`Tarcza na ${targetRegionName} wygasla`);
+            notify(`Tarcza na ${targetRegionName} wygasla`, "info");
           }
         }
       }
       if (e.type === "action_rejected" && e.player_id === myUserId) {
-        toast.error(String(e.message ?? "Akcja zostala odrzucona"));
+        notify(String(e.message ?? "Akcja zostala odrzucona"), "error");
         playSound("fail");
       }
       if (e.type === "server_error") {
-        toast.error(e.message as string);
+        notify(e.message as string, "error");
       }
     }
-  }, [events, myUserId, gameState?.players, playSound]);
+  }, [events, myUserId, gameState?.players, playSound, notify]);
 
   // ── Render ─────────────────────────────────────────────────
 
@@ -1085,6 +1090,8 @@ export default function GamePage({
           </div>
         </div>
       )}
+
+      <GameNotificationOverlay notifications={notifications} onDismiss={dismiss} />
 
       <div className="absolute right-2 top-2 z-20 flex items-center gap-2 sm:right-4 sm:top-4">
         <div className="relative">
@@ -1144,7 +1151,7 @@ export default function GamePage({
               if (!window.confirm("Na pewno chcesz opuscic mecz calkowicie?")) return;
               const confirmed = await leaveMatch();
               if (!confirmed) {
-                toast.error("Nie udalo sie potwierdzic opuszczenia meczu");
+                notify("Nie udalo sie potwierdzic opuszczenia meczu", "error");
                 return;
               }
               router.push("/dashboard");
@@ -1239,15 +1246,21 @@ export default function GamePage({
                           {p.username}
                           {p.isBot && <span className="ml-1.5 text-[10px] text-zinc-500">BOT</span>}
                         </span>
-                        <span className="text-xs text-slate-500">
-                          {p.regionCount} reg
-                        </span>
-                        <span className="text-xs text-slate-500">
-                          {p.unitCount} jedn.
-                        </span>
-                        {p.isAlive && (
-                          <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
-                            WINNER
+                        {p.isAlive ? (
+                          <>
+                            <span className="text-xs text-slate-500">
+                              {p.regionCount} reg
+                            </span>
+                            <span className="text-xs text-slate-500">
+                              {p.unitCount} jedn.
+                            </span>
+                            <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
+                              WINNER
+                            </span>
+                          </>
+                        ) : (
+                          <span className="rounded bg-red-500/20 px-1.5 py-0.5 text-[10px] font-medium text-red-300">
+                            WYELIMINOWANY
                           </span>
                         )}
                       </div>
@@ -1255,12 +1268,20 @@ export default function GamePage({
                   })}
                 </div>
               )}
+              <div className="flex items-center justify-center gap-3">
+              <button
+                onClick={() => router.push(`/match/${matchId}`)}
+                className="rounded-full border border-white/15 bg-white/[0.06] px-6 py-2.5 text-sm font-medium text-zinc-200 transition-colors hover:bg-white/[0.1]"
+              >
+                Statystyki meczu
+              </button>
               <button
                 onClick={() => router.push("/dashboard")}
                 className="rounded-full bg-cyan-500 px-8 py-2.5 font-medium text-slate-950 transition-colors hover:bg-cyan-400"
               >
                 Wróć do lobby
               </button>
+              </div>
             </div>
           </div>
         </div>

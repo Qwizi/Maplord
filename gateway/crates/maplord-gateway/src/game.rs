@@ -1004,6 +1004,10 @@ async fn initialize_game(
             currency_accum: 0.0,
             ability_cooldowns: HashMap::new(),
             is_bot: p.is_bot,
+            total_units_produced: 0,
+            total_units_lost: 0,
+            total_regions_conquered: 0,
+            total_buildings_built: 0,
         };
         players.insert(p.user_id.clone(), player);
     }
