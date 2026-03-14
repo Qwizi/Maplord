@@ -130,7 +130,7 @@ function FilledSlot({ entry, isSelected, onClick }: SlotProps) {
         "border-white/[0.08] bg-white/[0.03]",
         RARITY_BORDER[rarity] ?? "border-l-slate-400",
         RARITY_GLOW[rarity] ?? "",
-        "hover:shadow-lg hover:bg-white/[0.07]",
+        "hover:shadow-lg hover:bg-white/[0.10] hover:border-white/25 hover:scale-[1.02]",
         isSelected
           ? "ring-1 ring-white/20 bg-white/[0.07] shadow-lg"
           : "",
@@ -449,7 +449,7 @@ export default function InventoryPage() {
             "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors",
             tab === "inventory"
               ? "bg-white/10 text-zinc-100"
-              : "text-slate-400 hover:text-zinc-200 hover:bg-white/[0.04]",
+              : "text-slate-400 hover:text-zinc-100 hover:bg-white/[0.08]",
           ].join(" ")}
         >
           <Backpack className="h-3.5 w-3.5" />
@@ -464,7 +464,7 @@ export default function InventoryPage() {
             "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors",
             tab === "drops"
               ? "bg-white/10 text-zinc-100"
-              : "text-slate-400 hover:text-zinc-200 hover:bg-white/[0.04]",
+              : "text-slate-400 hover:text-zinc-100 hover:bg-white/[0.08]",
           ].join(" ")}
         >
           <Gift className="h-3.5 w-3.5" />
@@ -495,7 +495,7 @@ export default function InventoryPage() {
                     "flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition-colors",
                     filter === f.value
                       ? "bg-cyan-500/15 border border-cyan-400/25 text-cyan-100"
-                      : "border border-white/[0.08] text-slate-400 hover:bg-white/[0.05] hover:text-slate-200",
+                      : "border border-white/[0.08] text-slate-400 hover:bg-white/[0.10] hover:border-white/20 hover:text-slate-100",
                   ].join(" ")}
                 >
                   {f.label}
@@ -579,7 +579,7 @@ export default function InventoryPage() {
                   return (
                     <div
                       key={drop.id}
-                      className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-white/[0.03] transition-colors"
+                      className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-white/[0.08] hover:border-white/10 transition-colors border border-transparent"
                     >
                       {/* Icon */}
                       <div

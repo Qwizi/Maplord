@@ -193,7 +193,7 @@ export default function ProfilePage() {
           </p>
           <Link
             href="/dashboard"
-            className="text-xs text-slate-500 hover:text-cyan-300 transition-colors"
+            className="rounded-lg px-2 py-1 text-xs text-slate-400 transition-all hover:text-cyan-300 hover:bg-white/[0.08]"
           >
             Panel
             <ChevronRight className="inline h-3 w-3" />
@@ -248,7 +248,7 @@ export default function ProfilePage() {
                     };
 
                   return (
-                    <tr key={match.id} className="group">
+                    <tr key={match.id} className="group cursor-pointer transition-colors hover:bg-white/[0.06]">
                       <td className="py-2.5 pr-4 text-xs text-slate-400">
                         {date.toLocaleDateString("pl-PL", {
                           day: "numeric",
@@ -289,7 +289,7 @@ export default function ProfilePage() {
                               ? `/game/${match.id}`
                               : `/match/${match.id}`
                           }
-                          className="text-slate-600 transition-colors group-hover:text-slate-300"
+                          className="text-slate-500 transition-colors group-hover:text-cyan-300"
                         >
                           <ChevronRight className="h-4 w-4" />
                         </Link>
@@ -330,7 +330,7 @@ export default function ProfilePage() {
               <div
                 key={inv.id}
                 title={`${inv.item.name} ×${inv.quantity}`}
-                className="group relative flex aspect-square flex-col items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] p-2 transition-colors hover:border-white/20 hover:bg-white/[0.07]"
+                className="group relative flex aspect-square flex-col items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] p-2 transition-all hover:border-white/25 hover:bg-white/[0.10] hover:scale-[1.02] cursor-pointer"
               >
                 <span className="text-xs font-medium text-zinc-200 text-center leading-tight line-clamp-2">
                   {inv.item.name}

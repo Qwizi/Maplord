@@ -92,7 +92,7 @@ function ProfilePopover({
         className={cn(
           "flex w-full items-center gap-2.5 rounded-lg transition-colors",
           collapsed ? "justify-center py-2" : "px-2 py-2",
-          open ? "bg-white/[0.08]" : "hover:bg-white/[0.05]"
+          open ? "bg-white/[0.08]" : "hover:bg-white/[0.10]"
         )}
       >
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-500/40 to-amber-700/25 text-xs font-bold uppercase text-amber-100 ring-2 ring-amber-400/30">
@@ -248,7 +248,7 @@ function SidebarItem({
           "border-l-2",
           active
             ? "border-amber-400 bg-white/[0.04] text-zinc-50"
-            : "border-transparent text-slate-400 hover:text-zinc-200 hover:bg-white/[0.03]"
+            : "border-transparent text-slate-400 hover:text-zinc-100 hover:bg-white/[0.08]"
         )}
       >
         <span className="shrink-0">{item.icon}</span>
@@ -265,7 +265,7 @@ function SidebarItem({
         "flex items-center gap-3 px-3 py-2 text-sm font-medium transition-colors rounded-sm",
         active
           ? "border-l-2 border-amber-400 bg-white/[0.04] text-zinc-50 pl-[10px]"
-          : "border-l-2 border-transparent text-slate-400 hover:text-zinc-200 hover:bg-white/[0.03] pl-[10px]"
+          : "border-l-2 border-transparent text-slate-400 hover:text-zinc-100 hover:bg-white/[0.08] pl-[10px]"
       )}
     >
       <span className="shrink-0">{item.icon}</span>
@@ -586,7 +586,7 @@ export default function MainLayout({ children }: { children: ReactNode }) {
             <button
               onClick={toggleCollapsed}
               className={cn(
-                "flex w-full items-center py-2.5 text-slate-500 hover:text-zinc-200 hover:bg-white/[0.03] transition-colors",
+                "flex w-full items-center py-2.5 text-slate-500 hover:text-zinc-100 hover:bg-white/[0.08] transition-colors",
                 collapsed ? "justify-center" : "gap-2 px-3"
               )}
               aria-label={collapsed ? "Rozwiń" : "Zwiń"}

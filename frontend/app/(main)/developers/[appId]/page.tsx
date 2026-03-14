@@ -89,7 +89,7 @@ function CopyButton({ text }: { text: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-slate-400 transition-colors hover:border-white/20 hover:text-zinc-100"
+      className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-slate-400 transition-colors hover:border-white/30 hover:bg-white/[0.10] hover:text-zinc-100"
       title="Kopiuj do schowka"
     >
       {copied ? (
@@ -207,7 +207,7 @@ function CreateKeyDialog({
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
-            className="rounded-full border-white/10 bg-transparent text-slate-300 hover:bg-white/[0.05]"
+            className="rounded-full border-white/10 bg-transparent text-slate-300 hover:bg-white/[0.10] hover:border-white/25 hover:text-zinc-100"
           >
             Anuluj
           </Button>
@@ -263,7 +263,7 @@ function NewKeyAlert({ keyData, onDismiss }: NewKeyAlertProps) {
         </code>
         <button
           onClick={handleCopy}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-slate-400 transition-colors hover:text-zinc-100"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-slate-400 transition-colors hover:border-white/25 hover:bg-white/[0.10] hover:text-zinc-100"
         >
           {copied ? (
             <Check className="h-4 w-4 text-emerald-400" />
@@ -560,7 +560,7 @@ function CreateWebhookDialog({
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
-            className="rounded-full border-white/10 bg-transparent text-slate-300 hover:bg-white/[0.05]"
+            className="rounded-full border-white/10 bg-transparent text-slate-300 hover:bg-white/[0.10] hover:border-white/25 hover:text-zinc-100"
           >
             Anuluj
           </Button>
@@ -707,7 +707,7 @@ function EditWebhookDialog({
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
-            className="rounded-full border-white/10 bg-transparent text-slate-300 hover:bg-white/[0.05]"
+            className="rounded-full border-white/10 bg-transparent text-slate-300 hover:bg-white/[0.10] hover:border-white/25 hover:text-zinc-100"
           >
             Anuluj
           </Button>
@@ -820,7 +820,7 @@ function WebhookRow({
           {/* Expand toggle */}
           <button
             onClick={handleExpand}
-            className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/[0.04] text-slate-400 transition-colors hover:text-zinc-100"
+            className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/[0.04] text-slate-400 transition-colors hover:border-white/25 hover:bg-white/[0.10] hover:text-zinc-100"
           >
             {expanded ? (
               <ChevronDown className="h-3.5 w-3.5" />
@@ -883,7 +883,7 @@ function WebhookRow({
             </button>
             <button
               onClick={() => setEditOpen(true)}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-slate-400 transition-colors hover:border-white/20 hover:text-zinc-100"
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-slate-400 transition-colors hover:border-white/30 hover:bg-white/[0.10] hover:text-zinc-100"
               title="Edytuj webhook"
             >
               <Edit className="h-3.5 w-3.5" />
@@ -1292,7 +1292,7 @@ function EditAppDialog({
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
-            className="rounded-full border-white/10 bg-transparent text-slate-300 hover:bg-white/[0.05]"
+            className="rounded-full border-white/10 bg-transparent text-slate-300 hover:bg-white/[0.10] hover:border-white/25 hover:text-zinc-100"
           >
             Anuluj
           </Button>
@@ -1426,7 +1426,7 @@ export default function DeveloperAppDetailPage() {
           <div className="flex shrink-0 items-center gap-2">
             <button
               onClick={() => setEditOpen(true)}
-              className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-slate-300 hover:bg-white/[0.08] transition-colors"
+              className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-slate-300 hover:border-white/25 hover:bg-white/[0.12] hover:text-zinc-100 transition-colors"
             >
               <Edit className="h-4 w-4" />
               Edytuj

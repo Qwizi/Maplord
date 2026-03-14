@@ -163,7 +163,7 @@ export default function CraftingPage() {
               className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                 filter === t.value
                   ? "border border-cyan-300/25 bg-cyan-400/10 text-cyan-100"
-                  : "border border-white/10 text-slate-400 hover:bg-white/[0.06]"
+                  : "border border-white/10 text-slate-400 hover:bg-white/[0.10] hover:border-white/20 hover:text-slate-100"
               }`}
             >
               {t.label}

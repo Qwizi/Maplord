@@ -61,7 +61,7 @@ function AppCard({ app }: { app: DeveloperApp }) {
   return (
     <Link
       href={`/developers/${app.id}`}
-      className="group relative flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur-xl transition-all hover:border-white/20 hover:bg-white/[0.06]"
+      className="group relative flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur-xl transition-all hover:border-white/25 hover:bg-white/[0.10]"
     >
       {/* Status indicator */}
       <div className="absolute right-4 top-4">
@@ -218,7 +218,7 @@ function SecretDialog({
           <Button
             onClick={handleCopy}
             variant="outline"
-            className="rounded-full border-white/10 bg-white/[0.04] text-zinc-200 hover:bg-white/[0.08]"
+            className="rounded-full border-white/10 bg-white/[0.04] text-zinc-200 hover:bg-white/[0.12] hover:border-white/25 hover:text-zinc-100"
           >
             <Copy className="mr-2 h-4 w-4" />
             Kopiuj sekret
@@ -321,7 +321,7 @@ function CreateAppDialog({
                 <Button
                   type="button"
                   variant="outline"
-                  className="rounded-full border-white/10 bg-white/[0.04] text-zinc-300 hover:bg-white/[0.08]"
+                  className="rounded-full border-white/10 bg-white/[0.04] text-zinc-300 hover:bg-white/[0.12] hover:border-white/25 hover:text-zinc-100"
                 />
               }
             >
@@ -430,7 +430,7 @@ export default function DevelopersPage() {
           <Link href="/developers/docs">
             <Button
               variant="outline"
-              className="h-11 shrink-0 gap-2 self-start rounded-full border-white/10 bg-white/[0.04] px-5 font-display uppercase tracking-[0.2em] text-slate-300 hover:bg-white/[0.08] hover:text-zinc-100"
+              className="h-11 shrink-0 gap-2 self-start rounded-full border-white/10 bg-white/[0.04] px-5 font-display uppercase tracking-[0.2em] text-slate-300 hover:bg-white/[0.12] hover:border-white/25 hover:text-zinc-100"
             >
               <BookOpen className="h-4 w-4" />
               Dokumentacja

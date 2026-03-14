@@ -174,7 +174,7 @@ function BrowseGrid({
               className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                 filterCategory === pill.value
                   ? "border border-cyan-300/25 bg-cyan-400/10 text-cyan-100"
-                  : "border border-white/10 text-slate-400 hover:bg-white/[0.06]"
+                  : "border border-white/10 text-slate-400 hover:bg-white/[0.10] hover:border-white/20 hover:text-slate-100"
               }`}
             >
               {pill.label}
@@ -218,7 +218,7 @@ function ItemCard({
   return (
     <button
       onClick={() => onSelect(agg.item.slug)}
-      className={`group relative flex flex-col rounded-xl border-l-[3px] border-t border-r border-b border-t-white/[0.08] border-r-white/[0.08] border-b-white/[0.08] bg-white/[0.03] p-3 text-left transition-all hover:-translate-y-0.5 hover:bg-white/[0.06] hover:shadow-lg ${RARITY_BORDER_LEFT[agg.item.rarity] ?? "border-l-slate-500"} ${RARITY_GLOW[agg.item.rarity] ?? ""}`}
+      className={`group relative flex flex-col rounded-xl border-l-[3px] border-t border-r border-b border-t-white/[0.08] border-r-white/[0.08] border-b-white/[0.08] bg-white/[0.03] p-3 text-left transition-all hover:-translate-y-0.5 hover:bg-white/[0.10] hover:border-t-white/20 hover:border-r-white/20 hover:border-b-white/20 hover:shadow-xl ${RARITY_BORDER_LEFT[agg.item.rarity] ?? "border-l-slate-500"} ${RARITY_GLOW[agg.item.rarity] ?? ""}`}
     >
       {/* Icon */}
       <div className="mb-2">
@@ -346,7 +346,7 @@ function ItemDetail({
       {/* Back */}
       <button
         onClick={onBack}
-        className="mb-4 flex items-center gap-1.5 text-sm text-slate-400 transition-colors hover:text-slate-200"
+        className="mb-4 flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-slate-400 transition-all hover:text-zinc-100 hover:bg-white/[0.08]"
       >
         <ArrowLeft className="h-4 w-4" />
         Powrót
@@ -405,7 +405,7 @@ function ItemDetail({
                   {sellListings.map((listing, idx) => (
                     <tr
                       key={listing.id}
-                      className={`border-b border-white/[0.04] transition-colors hover:bg-white/[0.04] ${
+                      className={`border-b border-white/[0.04] transition-colors hover:bg-white/[0.08] ${
                         idx % 2 === 0 ? "" : "bg-white/[0.02]"
                       }`}
                     >
@@ -473,7 +473,7 @@ function ItemDetail({
                   {buyListings.map((listing, idx) => (
                     <tr
                       key={listing.id}
-                      className={`border-b border-white/[0.04] transition-colors hover:bg-white/[0.04] ${
+                      className={`border-b border-white/[0.04] transition-colors hover:bg-white/[0.08] ${
                         idx % 2 === 0 ? "" : "bg-white/[0.02]"
                       }`}
                     >
@@ -675,7 +675,7 @@ function MyListingsTab({
           {listings.map((listing, idx) => (
             <tr
               key={listing.id}
-              className={`border-b border-white/[0.04] transition-colors hover:bg-white/[0.04] ${
+              className={`border-b border-white/[0.04] transition-colors hover:bg-white/[0.08] ${
                 idx % 2 === 0 ? "" : "bg-white/[0.02]"
               }`}
             >
@@ -786,7 +786,7 @@ function HistoryTab({ history, currentUsername }: HistoryTabProps) {
             return (
               <tr
                 key={tx.id}
-                className={`border-b border-white/[0.04] transition-colors hover:bg-white/[0.04] ${
+                className={`border-b border-white/[0.04] transition-colors hover:bg-white/[0.08] ${
                   idx % 2 === 0 ? "" : "bg-white/[0.02]"
                 }`}
               >
@@ -973,7 +973,7 @@ export default function MarketplacePage() {
             className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
               tab === t.key
                 ? "bg-white/10 text-zinc-100"
-                : "text-slate-400 hover:text-zinc-200 hover:bg-white/[0.04]"
+                : "text-slate-400 hover:text-zinc-100 hover:bg-white/[0.10]"
             }`}
           >
             {t.label}

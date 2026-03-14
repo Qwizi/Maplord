@@ -348,7 +348,7 @@ export default function DashboardPage() {
                   className={`group relative flex flex-col items-start gap-2 rounded-2xl border px-5 py-4 text-left transition-all ${
                     isSelected
                       ? "border-cyan-400/40 bg-cyan-500/10 shadow-[0_0_24px_rgba(34,211,238,0.08)]"
-                      : "border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.05]"
+                      : "border-white/10 bg-white/[0.03] hover:border-white/25 hover:bg-white/[0.08]"
                   }`}
                 >
                   <div className="flex w-full items-center justify-between">
@@ -467,7 +467,7 @@ export default function DashboardPage() {
                         className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-all ${
                           selectedDeckId === deck.id
                             ? "border-cyan-400/40 bg-cyan-500/15 text-cyan-200"
-                            : "border-white/10 bg-white/[0.04] text-slate-400 hover:border-white/20 hover:text-slate-200"
+                            : "border-white/10 bg-white/[0.04] text-slate-400 hover:border-white/25 hover:bg-white/[0.08] hover:text-slate-100"
                         }`}
                       >
                         <Layers className="h-3 w-3" />
@@ -575,10 +575,10 @@ export default function DashboardPage() {
                   href={isActive ? `/game/${match.id}` : `/match/${match.id}`}
                   className={`group grid grid-cols-[auto_1fr_auto] items-center gap-4 rounded-2xl border px-4 py-3 transition-colors ${
                     isActive
-                      ? "border-cyan-300/20 bg-cyan-400/5 hover:bg-cyan-400/8"
+                      ? "border-cyan-300/20 bg-cyan-400/5 hover:border-cyan-300/35 hover:bg-cyan-400/10"
                       : isWinner
-                        ? "border-amber-300/15 bg-amber-400/[0.03] hover:bg-amber-400/[0.06]"
-                        : "border-white/10 bg-white/[0.03] hover:bg-white/[0.05]"
+                        ? "border-amber-300/15 bg-amber-400/[0.03] hover:border-amber-300/30 hover:bg-amber-400/[0.08]"
+                        : "border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.08]"
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -652,7 +652,7 @@ export default function DashboardPage() {
             {recentDrops.map((drop) => (
               <div
                 key={drop.id}
-                className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3"
+                className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 transition-colors hover:border-white/20 hover:bg-white/[0.06]"
               >
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04]">
                   <Package className="h-4 w-4 text-emerald-300" />
@@ -686,7 +686,7 @@ export default function DashboardPage() {
             {recentTrades.map((trade) => (
               <div
                 key={trade.id}
-                className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3"
+                className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 transition-colors hover:border-white/20 hover:bg-white/[0.06]"
               >
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04]">
                   <Coins className="h-4 w-4 text-amber-300" />

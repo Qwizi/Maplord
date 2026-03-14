@@ -121,7 +121,7 @@ function FilledSlot({ item, onRemove }: FilledSlotProps) {
 
   return (
     <div
-      className={`group relative aspect-square rounded-lg border border-l-2 ${RARITY_LEFT_BORDER[rarity]} ${RARITY_BG[rarity]} border-white/[0.06] bg-white/[0.02] flex flex-col items-center justify-center cursor-pointer transition-all duration-150 hover:border-white/20`}
+      className={`group relative aspect-square rounded-lg border border-l-2 ${RARITY_LEFT_BORDER[rarity]} ${RARITY_BG[rarity]} border-white/[0.06] bg-white/[0.02] flex flex-col items-center justify-center cursor-pointer transition-all duration-150 hover:border-white/30 hover:bg-white/[0.08] hover:scale-[1.03]`}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onClick={onRemove}
@@ -469,7 +469,7 @@ export default function DecksPage() {
               return (
                 <div
                   key={deck.id}
-                  className="group relative rounded-2xl border border-white/10 bg-slate-950/55 p-6 backdrop-blur-xl transition-all hover:border-white/20 hover:bg-slate-950/70"
+                  className="group relative rounded-2xl border border-white/10 bg-slate-950/55 p-6 backdrop-blur-xl transition-all hover:border-white/25 hover:bg-white/[0.06] cursor-pointer"
                 >
                   {/* Default glow stripe */}
                   {deck.is_default && (
@@ -669,7 +669,7 @@ export default function DecksPage() {
               className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                 availableTab === s.type
                   ? `${s.accentBg} ${s.accentBorder} ${s.color}`
-                  : "border-white/[0.06] text-slate-500 hover:border-white/[0.12] hover:text-slate-300"
+                  : "border-white/[0.06] text-slate-500 hover:border-white/25 hover:bg-white/[0.08] hover:text-slate-200"
               }`}
             >
               <span className="text-sm leading-none">{s.icon}</span>
@@ -705,7 +705,7 @@ export default function DecksPage() {
                   className={`group relative flex flex-col items-center gap-1 rounded-lg border p-2 transition-all ${
                     disabled
                       ? "border-white/[0.04] bg-white/[0.01] opacity-35 cursor-not-allowed"
-                      : `border-white/[0.06] bg-white/[0.02] cursor-pointer hover:border-white/[0.18] hover:bg-white/[0.06] ${RARITY_BG[inv.item.rarity]}`
+                      : `border-white/[0.06] bg-white/[0.02] cursor-pointer hover:border-white/30 hover:bg-white/[0.10] hover:scale-[1.02] ${RARITY_BG[inv.item.rarity]}`
                   }`}
                 >
                   {/* Icon */}

@@ -132,6 +132,21 @@
   html {
     @apply font-sans;
   }
+  /* All interactive elements get pointer cursor */
+  button,
+  [role="button"],
+  a,
+  select,
+  summary,
+  [type="button"],
+  [type="submit"],
+  [type="reset"] {
+    cursor: pointer;
+  }
+  /* Any element with onClick gets pointer cursor via data attribute */
+  [data-clickable] {
+    cursor: pointer;
+  }
 }
 
 @layer utilities {

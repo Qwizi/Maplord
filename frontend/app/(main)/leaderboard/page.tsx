@@ -96,10 +96,10 @@ export default function LeaderboardPage() {
             return (
               <div
                 key={entry.id}
-                className={`grid grid-cols-[52px_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border p-4 backdrop-blur-xl ${
+                className={`grid grid-cols-[52px_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border p-4 backdrop-blur-xl transition-colors ${
                   isMe
-                    ? "border-cyan-300/25 bg-cyan-400/10"
-                    : "border-white/10 bg-slate-950/60"
+                    ? "border-cyan-300/25 bg-cyan-400/10 hover:border-cyan-300/40 hover:bg-cyan-400/15"
+                    : "border-white/10 bg-slate-950/60 hover:border-white/20 hover:bg-white/[0.06]"
                 }`}
               >
                 <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] font-display text-lg text-zinc-50">
@@ -150,7 +150,7 @@ export default function LeaderboardPage() {
               size="sm"
               disabled={safePage <= 1}
               onClick={() => setPageOverride(Math.max(1, safePage - 1))}
-              className="rounded-full border-white/10 bg-white/[0.03]"
+              className="rounded-full border-white/10 bg-white/[0.03] hover:border-white/25 hover:bg-white/[0.10] hover:text-zinc-100"
             >
               <ChevronLeft className="mr-1 h-4 w-4" />
               Poprzednia
@@ -160,7 +160,7 @@ export default function LeaderboardPage() {
               size="sm"
               disabled={safePage >= totalPages}
               onClick={() => setPageOverride(Math.min(totalPages, safePage + 1))}
-              className="rounded-full border-white/10 bg-white/[0.03]"
+              className="rounded-full border-white/10 bg-white/[0.03] hover:border-white/25 hover:bg-white/[0.10] hover:text-zinc-100"
             >
               Następna
               <ChevronRight className="ml-1 h-4 w-4" />
