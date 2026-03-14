@@ -119,7 +119,8 @@ interface SlotProps {
 
 function FilledSlot({ entry, isSelected, onClick }: SlotProps) {
   const rarity = entry.item.rarity;
-  const letter = TYPE_LETTER[entry.item.item_type] ?? "?";
+  const displayIcon = entry.item.icon || TYPE_LETTER[entry.item.item_type] || "?";
+  const isEmoji = displayIcon.length > 1 || displayIcon.codePointAt(0)! > 127;
 
   return (
     <button
@@ -139,18 +140,18 @@ function FilledSlot({ entry, isSelected, onClick }: SlotProps) {
       {/* Level badge — top left */}
       {entry.item.level > 1 && (
         <span className="absolute left-1 top-1 z-10 rounded px-1 py-px text-[9px] font-bold leading-tight bg-amber-500/20 text-amber-300 border border-amber-500/30">
-          Lvl {entry.item.level}
+          {entry.item.level}
         </span>
       )}
 
-      {/* Item letter / icon */}
+      {/* Item icon (emoji) or letter fallback */}
       <span
         className={[
-          "absolute inset-0 flex items-center justify-center font-bold text-lg select-none",
-          RARITY_TEXT[rarity] ?? "text-slate-300",
+          "absolute inset-0 flex items-center justify-center select-none",
+          isEmoji ? "text-2xl" : `font-bold text-lg ${RARITY_TEXT[rarity] ?? "text-slate-300"}`,
         ].join(" ")}
       >
-        {letter}
+        {displayIcon}
       </span>
 
       {/* Quantity badge — bottom right */}
@@ -182,20 +183,21 @@ function DetailPanel({ entry, hasMatchingKey, onOpenCrate, onClose }: DetailPane
   const { item } = entry;
   const rarity = item.rarity;
 
+  const displayIcon = item.icon || TYPE_LETTER[item.item_type] || "?";
+
   return (
-    <div className="mt-4 rounded-xl border border-white/[0.08] bg-white/[0.025] p-5">
-      <div className="flex items-start justify-between gap-4">
-        {/* Left: icon placeholder */}
+    <div className="mt-4 rounded-xl border border-white/[0.08] bg-white/[0.025] p-4 sm:p-5">
+      <div className="flex items-start justify-between gap-3 sm:gap-4">
+        {/* Left: icon */}
         <div
           className={[
-            "flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-l-[3px] text-2xl font-bold",
+            "flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-l-[3px] text-3xl",
             "border-white/[0.08]",
             RARITY_BORDER[rarity] ?? "border-l-slate-400",
-            RARITY_TEXT[rarity] ?? "text-slate-300",
             "bg-white/[0.03]",
           ].join(" ")}
         >
-          {TYPE_LETTER[item.item_type] ?? "?"}
+          {displayIcon}
         </div>
 
         {/* Center: info */}
@@ -475,7 +477,7 @@ export default function InventoryPage() {
         <div className="rounded-2xl border border-white/10 bg-slate-950/55 backdrop-blur-xl">
 
           {/* Filter pills */}
-          <div className="flex flex-wrap gap-1.5 border-b border-white/10 px-4 py-3">
+          <div className="flex gap-1.5 overflow-x-auto border-b border-white/10 px-4 py-3 scrollbar-none [-ms-overflow-style:none] [scrollbar-width:none]">
             {FILTERS.map((f) => {
               const count =
                 f.value === "all"
@@ -518,7 +520,7 @@ export default function InventoryPage() {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-5 gap-1.5 sm:grid-cols-7 md:grid-cols-8 lg:grid-cols-10">
+                <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-9 xl:grid-cols-11">
                   {filteredInventory.map((entry) => (
                     <FilledSlot
                       key={entry.id}
@@ -582,13 +584,12 @@ export default function InventoryPage() {
                       {/* Icon */}
                       <div
                         className={[
-                          "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-l-[2px] text-xs font-bold",
+                          "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-l-[2px] text-base",
                           "border-white/[0.07] bg-white/[0.03]",
                           RARITY_BORDER[rarity] ?? "border-l-slate-400",
-                          RARITY_TEXT[rarity] ?? "text-slate-300",
                         ].join(" ")}
                       >
-                        {TYPE_LETTER[drop.item.item_type] ?? "?"}
+                        {drop.item.icon || TYPE_LETTER[drop.item.item_type] || "?"}
                       </div>
 
                       {/* Name + qty */}

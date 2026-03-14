@@ -69,8 +69,8 @@ const TYPE_LABELS: Record<string, string> = {
   material: "Materiał",
   blueprint_building: "Blueprint: Budynek",
   blueprint_unit: "Blueprint: Jednostka",
-  ability_scroll: "Scroll",
-  boost: "Boost",
+  tactical_package: "Pakiet taktyczny",
+  boost: "Bonus",
   crate: "Skrzynka",
   key: "Klucz",
   cosmetic: "Kosmetyk",
@@ -93,28 +93,27 @@ interface AggregatedItem {
 const CATEGORY_PILLS = [
   { value: "all", label: "Wszystko" },
   { value: "blueprint_building", label: "Blueprinty" },
-  { value: "boost", label: "Pakiety" },
-  { value: "ability_scroll", label: "Bonusy" },
+  { value: "tactical_package", label: "Pakiety" },
+  { value: "boost", label: "Bonusy" },
   { value: "material", label: "Materiały" },
   { value: "cosmetic", label: "Kosmetyki" },
 ];
 
 // ─── Sub-components ────────────────────────────────────────────────────────
 
-function RarityIcon({ rarity }: { rarity: string }) {
-  const colors: Record<string, string> = {
-    common: "bg-slate-500",
-    uncommon: "bg-green-500",
-    rare: "bg-blue-500",
-    epic: "bg-purple-500",
-    legendary: "bg-amber-500",
+function ItemIcon({ icon, rarity }: { icon?: string; rarity: string }) {
+  const bgColors: Record<string, string> = {
+    common: "bg-slate-800/60",
+    uncommon: "bg-green-900/30",
+    rare: "bg-blue-900/30",
+    epic: "bg-purple-900/30",
+    legendary: "bg-amber-900/30",
   };
   return (
     <div
-      className={`h-12 w-12 rounded-lg ${colors[rarity] ?? "bg-slate-600"} flex items-center justify-center text-lg font-bold text-white/70 shrink-0`}
+      className={`h-12 w-12 rounded-lg ${bgColors[rarity] ?? "bg-slate-800/60"} flex items-center justify-center text-2xl shrink-0 border border-white/[0.06]`}
     >
-      {/* placeholder icon — replace with actual asset when available */}
-      <Store className="h-6 w-6" />
+      {icon || <Store className="h-6 w-6 text-slate-500" />}
     </div>
   );
 }
@@ -167,7 +166,7 @@ function BrowseGrid({
             className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-2.5 pl-9 pr-4 text-sm text-zinc-100 placeholder:text-slate-500 outline-none focus:border-cyan-400/50 transition-colors"
           />
         </div>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none [-ms-overflow-style:none] [scrollbar-width:none]">
           {CATEGORY_PILLS.map((pill) => (
             <button
               key={pill.value}
@@ -223,7 +222,7 @@ function ItemCard({
     >
       {/* Icon */}
       <div className="mb-2">
-        <RarityIcon rarity={agg.item.rarity} />
+        <ItemIcon icon={agg.item.icon} rarity={agg.item.rarity} />
       </div>
 
       {/* Name */}
@@ -355,7 +354,7 @@ function ItemDetail({
 
       {/* Item header */}
       <div className="mb-6 flex gap-4 rounded-xl border border-white/[0.08] bg-white/[0.03] p-4">
-        <RarityIcon rarity={agg.item.rarity} />
+        <ItemIcon icon={agg.item.icon} rarity={agg.item.rarity} />
         <div className="min-w-0">
           <h2 className="font-display text-xl text-zinc-50">{agg.item.name}</h2>
           <p className="text-sm text-slate-400">
@@ -374,7 +373,7 @@ function ItemDetail({
         </div>
       </div>
 
-      {/* Order books */}
+      {/* Order books — side-by-side on md+, tabbed on mobile */}
       <div className="mb-6 grid gap-4 md:grid-cols-2">
         {/* Sell listings */}
         <div>
@@ -504,12 +503,12 @@ function ItemDetail({
       </div>
 
       {/* Actions */}
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2">
         {/* Quick buy */}
         {cheapestAvailable && (
           <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-4">
             <h3 className="mb-3 text-sm font-medium text-slate-300">Kup</h3>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <input
                 type="number"
                 min={1}
@@ -526,12 +525,12 @@ function ItemDetail({
                     )
                   )
                 }
-                className="w-20 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-center text-sm text-zinc-100 outline-none focus:border-cyan-400/50"
+                className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-center text-sm text-zinc-100 outline-none focus:border-cyan-400/50 sm:w-20"
               />
               <Button
                 onClick={handleBuyCheapest}
                 disabled={buying}
-                className="flex-1 rounded-lg"
+                className="w-full rounded-lg sm:flex-1"
               >
                 <Coins className="mr-1.5 h-4 w-4 text-amber-300" />
                 Kup za{" "}
@@ -557,8 +556,8 @@ function ItemDetail({
               </span>
             </div>
             <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <div className="flex-1">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
                   <label className="mb-1 block text-[11px] text-slate-500">
                     Ilość
                   </label>
@@ -573,7 +572,7 @@ function ItemDetail({
                     className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-zinc-100 outline-none focus:border-cyan-400/50"
                   />
                 </div>
-                <div className="flex-1">
+                <div>
                   <label className="mb-1 block text-[11px] text-slate-500">
                     Cena/szt.
                   </label>
@@ -960,7 +959,7 @@ export default function MarketplacePage() {
       </div>
 
       {/* Tab bar */}
-      <div className="flex gap-1">
+      <div className="flex gap-1 overflow-x-auto scrollbar-none [-ms-overflow-style:none] [scrollbar-width:none]">
         {(
           [
             { key: "browse" as const, label: "Przeglądaj" },

@@ -566,7 +566,7 @@ export default function DecksPage() {
   return (
     <div className="space-y-5">
       {/* Editor top bar */}
-      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/55 px-4 py-3 backdrop-blur-xl">
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/55 px-4 py-3 backdrop-blur-xl sm:gap-3">
         <span className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
           Talia:
         </span>
@@ -636,7 +636,7 @@ export default function DecksPage() {
               </div>
 
               {/* Slot grid */}
-              <div className="grid grid-cols-6 gap-2 sm:grid-cols-8 lg:grid-cols-10 xl:grid-cols-12">
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-9">
                 {slots.map((slot, i) => (
                   <FilledSlot
                     key={`${slot.item_slug}-${i}`}
@@ -661,7 +661,7 @@ export default function DecksPage() {
         </p>
 
         {/* Tab pills */}
-        <div className="mb-4 flex flex-wrap gap-1.5">
+        <div className="mb-4 flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none [-ms-overflow-style:none] [scrollbar-width:none]">
           {SECTION_CONFIG.map((s) => (
             <button
               key={s.type}
@@ -687,7 +687,7 @@ export default function DecksPage() {
             Brak przedmiotów tego typu w ekwipunku
           </p>
         ) : (
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8">
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7">
             {availableItems.map((inv) => {
               const currentSection = sectionForType(availableTab);
               const inDraftCount = countInDraft(inv.item.slug, availableTab);

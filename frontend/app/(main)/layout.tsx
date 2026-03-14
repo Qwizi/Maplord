@@ -181,7 +181,7 @@ function BottomBarItem({ item, pathname }: { item: NavItem; pathname: string }) 
       href={item.href}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex flex-col items-center gap-0.5 px-3 py-2 text-[10px] font-medium transition-colors",
+        "flex flex-1 flex-col items-center gap-0.5 px-2 py-2 text-[10px] font-medium transition-colors",
         active ? "text-amber-300" : "text-slate-500 hover:text-slate-300"
       )}
     >
@@ -305,8 +305,8 @@ export default function MainLayout({ children }: { children: ReactNode }) {
         {/* ---------------------------------------------------------------- */}
         {/* Main content                                                      */}
         {/* ---------------------------------------------------------------- */}
-        <main className="flex-1 md:ml-56">
-          <div className="mx-auto max-w-[1400px] px-8 py-6 pb-24 md:pb-6">
+        <main className="flex-1 min-w-0 md:pl-56">
+          <div className="px-4 py-6 pb-20 sm:px-6 lg:px-8 md:pb-6">
             {children}
           </div>
         </main>
