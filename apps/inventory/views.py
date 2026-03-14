@@ -6,15 +6,18 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404
 from apps.pagination import paginate_qs
 
-from apps.inventory.models import Deck, DeckItem, Item, ItemCategory, ItemDrop, UserInventory, Wallet
+from apps.inventory.models import Deck, DeckItem, EquippedCosmetic, Item, ItemCategory, ItemDrop, UserInventory, Wallet
 from apps.inventory.schemas import (
     DeckCreateSchema,
     DeckOutSchema,
     DeckUpdateSchema,
+    EquipCosmeticInSchema,
+    EquippedCosmeticOutSchema,
     InventoryItemOutSchema,
     ItemCategoryOutSchema,
     ItemDropOutSchema,
     OpenCrateInSchema,
+    UnequipCosmeticInSchema,
     WalletOutSchema,
 )
 
@@ -130,6 +133,40 @@ class InventoryController:
                 })
 
         return {'drops': result_drops}
+
+    @route.get('/cosmetics/equipped/', response=list[EquippedCosmeticOutSchema], auth=JWTAuth())
+    def equipped_cosmetics(self, request):
+        """List currently equipped cosmetics."""
+        return EquippedCosmetic.objects.filter(user=request.user).select_related('item', 'item__cosmetic_asset')
+
+    @route.post('/cosmetics/equip/', response={200: EquippedCosmeticOutSchema, 400: dict, 404: dict}, auth=JWTAuth())
+    def equip_cosmetic(self, request, payload: EquipCosmeticInSchema):
+        """Equip a cosmetic item."""
+        inv = UserInventory.objects.filter(user=request.user, item__slug=payload.item_slug).select_related('item', 'item__cosmetic_asset').first()
+        if not inv:
+            return 404, {'detail': 'Item not found in inventory.'}
+
+        item = inv.item
+        if item.item_type != Item.ItemType.COSMETIC:
+            return 400, {'detail': 'Item is not a cosmetic.'}
+
+        if not item.asset_key:
+            return 400, {'detail': 'Item has no asset_key configured.'}
+
+        equipped, _ = EquippedCosmetic.objects.update_or_create(
+            user=request.user,
+            slot=item.asset_key,
+            defaults={'item': item},
+        )
+        return 200, equipped
+
+    @route.post('/cosmetics/unequip/', response={200: dict, 404: dict}, auth=JWTAuth())
+    def unequip_cosmetic(self, request, payload: UnequipCosmeticInSchema):
+        """Unequip a cosmetic from a slot."""
+        deleted, _ = EquippedCosmetic.objects.filter(user=request.user, slot=payload.slot).delete()
+        if not deleted:
+            return 404, {'detail': 'No cosmetic equipped in this slot.'}
+        return 200, {'detail': 'Unequipped.'}
 
 
 def _roll_crate_loot(loot_table, num_rolls=3):

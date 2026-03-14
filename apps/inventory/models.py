@@ -50,6 +50,17 @@ class Item(models.Model):
     level = models.PositiveIntegerField(default=1, help_text='Item level (1-3)')
     icon = models.CharField(max_length=100, blank=True)
     asset_key = models.CharField(max_length=100, blank=True, help_text='Frontend asset key for rendering')
+    cosmetic_asset = models.ForeignKey(
+        'assets.GameAsset',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='cosmetic_items',
+        help_text='Asset file delivered by this cosmetic item',
+    )
+    cosmetic_params = models.JSONField(
+        blank=True, null=True,
+        help_text='For cosmetics: visual parameters JSON (trail, impact, icon, pulse config)',
+    )
     is_stackable = models.BooleanField(default=True)
     is_tradeable = models.BooleanField(default=True)
     is_consumable = models.BooleanField(default=False, help_text='Destroyed on use (boosts, scrolls)')
@@ -176,3 +187,33 @@ class DeckItem(models.Model):
 
     def __str__(self):
         return f'{self.deck.name}: {self.item.name} x{self.quantity}'
+
+
+class EquippedCosmetic(models.Model):
+    """Tracks which cosmetic item a user has equipped in a given slot."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='equipped_cosmetics',
+    )
+    item = models.ForeignKey(
+        Item,
+        on_delete=models.CASCADE,
+        limit_choices_to={'item_type': 'cosmetic'},
+        related_name='equipped_by',
+    )
+    slot = models.CharField(max_length=100, help_text='Asset key slot, e.g. infantry, barracks')
+    equipped_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'slot')
+        ordering = ['slot']
+
+    def save(self, *args, **kwargs):
+        if not self.slot:
+            self.slot = self.item.asset_key
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.user} - {self.slot}: {self.item}"

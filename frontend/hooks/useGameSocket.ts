@@ -68,6 +68,7 @@ export interface GamePlayer {
   total_units_lost?: number;
   total_buildings_built?: number;
   building_levels?: Record<string, number>;
+  cosmetics?: Record<string, unknown>;
 }
 
 export interface ActiveEffect {

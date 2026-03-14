@@ -18,6 +18,7 @@ import {
   type RegionGraphEntry,
   type BuildingType,
 } from "@/lib/api";
+import { loadAssetOverrides } from "@/lib/assetOverrides";
 import type { GameState, GameRegion, GamePlayer } from "@/hooks/useGameSocket";
 import { Button } from "@/components/ui/button";
 import {
@@ -104,6 +105,7 @@ export default function ReplayPage() {
       getMatchSnapshots(token, matchId),
       getRegionsGraph(matchId),
       getConfig(),
+      loadAssetOverrides(),
     ]).then(([matchData, snapshotList, graph, cfg]) => {
       setMatch(matchData);
       setSnapshots(snapshotList);
@@ -188,9 +190,10 @@ export default function ReplayPage() {
   }, [players, regions]);
 
   const playersForMap = useMemo(() => {
-    const m: Record<string, { color: string; username: string }> = {};
+    const m: Record<string, { color: string; username: string; cosmetics?: Record<string, unknown> }> = {};
     for (const [id, p] of Object.entries(players)) {
-      m[id] = { color: (p as GamePlayer).color, username: (p as GamePlayer).username };
+      const gp = p as GamePlayer;
+      m[id] = { color: gp.color, username: gp.username, cosmetics: gp.cosmetics };
     }
     return m;
   }, [players]);

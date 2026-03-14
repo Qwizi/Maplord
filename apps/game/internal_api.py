@@ -148,6 +148,7 @@ class GameInternalController(ControllerBase):
                         'active_boosts': (p.deck_snapshot or {}).get('active_boosts', []),
                         'ability_levels': (p.deck_snapshot or {}).get('ability_levels', {}),
                         'building_levels': (p.deck_snapshot or {}).get('building_levels', {}),
+                        'cosmetics': p.cosmetic_snapshot,
                     }
                     for p in match.players.all()
                 ],

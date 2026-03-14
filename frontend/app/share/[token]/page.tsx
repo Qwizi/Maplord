@@ -16,6 +16,7 @@ import {
   type BuildingType,
   type SnapshotTick,
 } from "@/lib/api";
+import { loadAssetOverrides } from "@/lib/assetOverrides";
 import type { GameState, GameRegion, GamePlayer } from "@/hooks/useGameSocket";
 import { Button } from "@/components/ui/button";
 import {
@@ -122,6 +123,7 @@ export default function SharePage() {
     Promise.all([
       getSharedResource(token),
       getConfig(),
+      loadAssetOverrides(),
     ]).then(async ([data, cfg]) => {
       setSharedData(data);
       setBuildingTypes(cfg.buildings);
@@ -216,9 +218,10 @@ export default function SharePage() {
   }, [players, regions]);
 
   const playersForMap = useMemo(() => {
-    const m: Record<string, { color: string; username: string }> = {};
+    const m: Record<string, { color: string; username: string; cosmetics?: Record<string, unknown> }> = {};
     for (const [id, p] of Object.entries(players)) {
-      m[id] = { color: (p as GamePlayer).color, username: (p as GamePlayer).username };
+      const gp = p as GamePlayer;
+      m[id] = { color: gp.color, username: gp.username, cosmetics: gp.cosmetics };
     }
     return m;
   }, [players]);

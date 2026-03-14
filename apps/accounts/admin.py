@@ -5,6 +5,7 @@ from unfold.decorators import display
 from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationForm
 from unfold.contrib.filters.admin import RangeNumericFilter
 from apps.accounts.models import User
+from apps.inventory.admin import UserInventoryInline, EquippedCosmeticInline, DeckInline
 
 
 @admin.register(User)
@@ -24,6 +25,7 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
     search_fields = ('email', 'username')
     ordering = ('email',)
     warn_unsaved_form = True
+    inlines = [UserInventoryInline, EquippedCosmeticInline, DeckInline]
     fieldsets = BaseUserAdmin.fieldsets + (
         ('Game', {'fields': ('role', 'elo_rating', 'avatar', 'tutorial_completed')}),
     )

@@ -15,6 +15,7 @@ import {
   type UnitType,
   type AbilityType,
 } from "@/lib/api";
+import { loadAssetOverrides } from "@/lib/assetOverrides";
 import { getSeaTravelRange, getTravelDistance } from "@/lib/gameTravel.js";
 import GameMap, {
   type TroopAnimation,
@@ -163,8 +164,8 @@ export default function GamePage({
   // Load geo graph filtered to this match's map config, plus global config
   useEffect(() => {
     getRegionsGraph(matchId).then(setRegionGraph).catch(console.error);
-    getConfig()
-      .then((cfg) => {
+    Promise.all([getConfig(), loadAssetOverrides()])
+      .then(([cfg]) => {
         setBuildings(cfg.buildings);
         setUnitsConfig(cfg.units);
         setAbilitiesConfig(cfg.abilities || []);
@@ -652,6 +653,7 @@ export default function GamePage({
           type: ((e.action_type as string) === "attack" ? "attack" : "move"),
           startTime: Date.now(),
           durationMs: travelTicks * tickMs,
+          playerId,
         });
       } else if (e.type === "attack_success" || e.type === "attack_failed") {
         // Arrival/combat resolution only; travel animation is driven by troops_sent.
@@ -840,6 +842,7 @@ export default function GamePage({
           type: actionType,
           startTime: Date.now(),
           durationMs: travelTicks * tickMs,
+          playerId: myUserId,
         });
         if (target.owner_id !== myUserId) {
           attack(selectedRegion, regionId, units, unitType);
@@ -1386,6 +1389,7 @@ export default function GamePage({
           nukeBlackout={nukeBlackout}
           tutorialHighlightRegions={tutorialHighlightRegions}
           speakingPlayerIds={speakingPlayerIds}
+          unitsConfig={unitsConfig}
           onMapReady={handleMapReady}
         />
 
@@ -1409,6 +1413,7 @@ export default function GamePage({
         buildings={effectiveBuildings}
         units={unitsConfig}
         myUserId={myUserId}
+        myCosmetics={gameState?.players[myUserId]?.cosmetics}
       />
 
       {/* Action Bar (multi-target) */}
@@ -1422,6 +1427,8 @@ export default function GamePage({
           selectedUnitScale={
             unitsConfig.find((unit) => unit.slug === (selectedUnitTypeForAction ?? sourceRegionData.unit_type ?? "infantry"))?.manpower_cost ?? 1
           }
+          unitsConfig={unitsConfig}
+          myCosmetics={gameState?.players[myUserId]?.cosmetics}
           onSelectedUnitTypeChange={handleSelectedActionUnitTypeChange}
           onConfirm={handleConfirmAction}
           onRemoveTarget={handleRemoveTarget}
@@ -1463,6 +1470,7 @@ export default function GamePage({
           allowedAbility={tutorial.isActive ? (tutorial.currentStep?.allowedAbility ?? null) : undefined}
           abilityScrolls={gameState?.players[myUserId]?.ability_scrolls}
           abilityLevels={gameState?.players[myUserId]?.ability_levels}
+          myCosmetics={gameState?.players[myUserId]?.cosmetics}
         />
       )}
 
@@ -1520,6 +1528,7 @@ export default function GamePage({
           unlockedBuildings={gameState?.players[myUserId]?.unlocked_buildings}
           unlockedUnits={gameState?.players[myUserId]?.unlocked_units}
           buildingLevels={gameState?.players[myUserId]?.building_levels}
+          myCosmetics={gameState?.players[myUserId]?.cosmetics}
         />
       )}
     </div>

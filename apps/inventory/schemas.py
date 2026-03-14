@@ -99,3 +99,40 @@ class DeckOutSchema(Schema):
 
     class Config:
         from_attributes = True
+
+
+class EquipCosmeticInSchema(Schema):
+    item_slug: str
+
+
+class UnequipCosmeticInSchema(Schema):
+    slot: str
+
+
+class EquippedCosmeticOutSchema(Schema):
+    slot: str
+    item_slug: str
+    item_name: str
+    asset_url: str | None = None
+    cosmetic_params: dict | None = None
+
+    class Config:
+        from_attributes = True
+
+    @staticmethod
+    def resolve_item_slug(obj):
+        return obj.item.slug
+
+    @staticmethod
+    def resolve_item_name(obj):
+        return obj.item.name
+
+    @staticmethod
+    def resolve_asset_url(obj):
+        if obj.item.cosmetic_asset and obj.item.cosmetic_asset.file:
+            return obj.item.cosmetic_asset.file.url
+        return None
+
+    @staticmethod
+    def resolve_cosmetic_params(obj):
+        return obj.item.cosmetic_params

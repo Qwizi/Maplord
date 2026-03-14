@@ -4,7 +4,7 @@ import { memo, useMemo } from "react";
 import Image from "next/image";
 import type { BuildingQueueItem, UnitQueueItem } from "@/hooks/useGameSocket";
 import type { BuildingType, UnitType } from "@/lib/api";
-import { getActionAsset, getBuildingAsset, getUnitAsset } from "@/lib/gameAssets";
+import { getActionAsset, getPlayerBuildingAsset, getPlayerUnitAsset } from "@/lib/gameAssets";
 
 interface BuildQueueProps {
   queue: BuildingQueueItem[];
@@ -12,6 +12,7 @@ interface BuildQueueProps {
   buildings: BuildingType[];
   units: UnitType[];
   myUserId: string;
+  myCosmetics?: Record<string, unknown>;
 }
 
 export default memo(function BuildQueue({
@@ -20,6 +21,7 @@ export default memo(function BuildQueue({
   buildings,
   units,
   myUserId,
+  myCosmetics,
 }: BuildQueueProps) {
   const myBuilds = useMemo(() => queue.filter((item) => item.player_id === myUserId), [queue, myUserId]);
   const myUnits = useMemo(() => unitQueue.filter((item) => item.player_id === myUserId), [unitQueue, myUserId]);
@@ -42,7 +44,7 @@ export default memo(function BuildQueue({
       name: config?.name || item.building_type,
       remaining: item.ticks_remaining,
       total: item.total_ticks || 1,
-      image: getBuildingAsset(config?.asset_key || item.building_type) || getActionAsset("build"),
+      image: getPlayerBuildingAsset(config?.asset_key || item.building_type, myCosmetics, config?.asset_url) || getActionAsset("build"),
     };
   });
 
@@ -53,7 +55,7 @@ export default memo(function BuildQueue({
       name: config?.name || item.unit_type,
       remaining: item.ticks_remaining,
       total: item.total_ticks || 1,
-      image: getUnitAsset(config?.asset_key || item.unit_type),
+      image: getPlayerUnitAsset(config?.asset_key || item.unit_type, myCosmetics, config?.asset_url),
     };
   });
 
@@ -71,7 +73,7 @@ export default memo(function BuildQueue({
         {unitItems.length > 0 && (
           <QueueSection
             title={`Produkcja (${unitItems.length})`}
-            asset={getUnitAsset("default")}
+            asset={getPlayerUnitAsset("default", myCosmetics)}
             items={unitItems}
             accentClass="from-cyan-400 to-cyan-200"
           />

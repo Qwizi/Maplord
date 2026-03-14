@@ -1,9 +1,72 @@
 from django.contrib import admin
-from unfold.admin import ModelAdmin
+from unfold.admin import ModelAdmin, TabularInline
 from unfold.decorators import display
 from unfold.contrib.filters.admin import RangeNumericFilter
-from apps.inventory.models import ItemCategory, Item, UserInventory, ItemDrop, Wallet
+from apps.inventory.models import ItemCategory, Item, UserInventory, ItemDrop, Wallet, EquippedCosmetic, Deck, DeckItem
 
+
+# ── Inlines ──────────────────────────────────────────────────
+
+class UserInventoryInline(TabularInline):
+    """Inline on User admin — manage inventory directly from user page."""
+    model = UserInventory
+    extra = 1
+    autocomplete_fields = ['item']
+    fields = ['item', 'quantity', 'acquired_at']
+    readonly_fields = ['acquired_at']
+
+
+class EquippedCosmeticInline(TabularInline):
+    """Inline on User admin — equip/unequip cosmetics from user page."""
+    model = EquippedCosmetic
+    extra = 1
+    autocomplete_fields = ['item']
+    fields = ['slot', 'item', 'equipped_at']
+    readonly_fields = ['equipped_at']
+
+
+class EquippedByInline(TabularInline):
+    """Inline on Item admin — see which users have this item equipped."""
+    model = EquippedCosmetic
+    extra = 0
+    fk_name = 'item'
+    fields = ['user', 'slot', 'equipped_at']
+    readonly_fields = ['user', 'slot', 'equipped_at']
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+class ItemInventoryInline(TabularInline):
+    """Inline on Item admin — see which users own this item."""
+    model = UserInventory
+    extra = 0
+    fk_name = 'item'
+    fields = ['user', 'quantity', 'acquired_at']
+    readonly_fields = ['user', 'quantity', 'acquired_at']
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+class DeckItemInline(TabularInline):
+    """Inline on Deck admin — manage items in a deck."""
+    model = DeckItem
+    extra = 1
+    autocomplete_fields = ['item']
+    fields = ['item', 'quantity']
+
+
+class DeckInline(TabularInline):
+    """Inline on User admin — see/manage user's decks."""
+    model = Deck
+    extra = 0
+    fields = ['name', 'is_default', 'created_at']
+    readonly_fields = ['created_at']
+    show_change_link = True
+
+
+# ── Model Admins ─────────────────────────────────────────────
 
 @admin.register(ItemCategory)
 class ItemCategoryAdmin(ModelAdmin):
@@ -32,8 +95,10 @@ class ItemAdmin(ModelAdmin):
     list_fullwidth = True
     search_fields = ('name', 'slug')
     prepopulated_fields = {'slug': ('name',)}
+    raw_id_fields = ('cosmetic_asset', 'opens_crate')
+    inlines = [EquippedByInline, ItemInventoryInline]
     fieldsets = (
-        (None, {'fields': ('name', 'slug', 'description', 'category', 'item_type', 'rarity', 'icon', 'asset_key')}),
+        (None, {'fields': ('name', 'slug', 'description', 'category', 'item_type', 'rarity', 'icon', 'asset_key', 'cosmetic_asset', 'cosmetic_params')}),
         ('Properties', {'fields': ('is_stackable', 'is_tradeable', 'is_consumable', 'max_stack', 'base_value')}),
         ('Crate / Key', {'classes': ('collapse',), 'fields': ('crate_loot_table', 'opens_crate')}),
         ('Boost / Blueprint', {'classes': ('collapse',), 'fields': ('boost_params', 'blueprint_ref')}),
@@ -62,7 +127,7 @@ class UserInventoryAdmin(ModelAdmin):
     list_filter_submit = True
     list_fullwidth = True
     search_fields = ('user__username', 'item__name')
-    raw_id_fields = ('user', 'item')
+    autocomplete_fields = ['user', 'item']
 
 
 @admin.register(ItemDrop)
@@ -93,3 +158,36 @@ class WalletAdmin(ModelAdmin):
     list_fullwidth = True
     search_fields = ('user__username',)
     raw_id_fields = ('user',)
+
+
+@admin.register(EquippedCosmetic)
+class EquippedCosmeticAdmin(ModelAdmin):
+    list_display = ['user', 'slot', 'item', 'display_item_type', 'equipped_at']
+    list_filter = ['slot', 'item__item_type']
+    search_fields = ['user__username', 'item__name', 'slot']
+    autocomplete_fields = ['user', 'item']
+    readonly_fields = ['equipped_at']
+
+    @display(description="Type")
+    def display_item_type(self, obj):
+        return obj.item.get_item_type_display()
+
+
+@admin.register(Deck)
+class DeckAdmin(ModelAdmin):
+    list_display = ('name', 'user', 'is_default', 'display_item_count', 'created_at')
+    list_filter = ('is_default',)
+    list_filter_submit = True
+    list_fullwidth = True
+    search_fields = ('name', 'user__username')
+    autocomplete_fields = ['user']
+    inlines = [DeckItemInline]
+    readonly_fields = ['created_at', 'updated_at']
+    fieldsets = (
+        (None, {'fields': ('user', 'name', 'is_default')}),
+        ('Timestamps', {'fields': ('created_at', 'updated_at')}),
+    )
+
+    def display_item_count(self, obj):
+        return obj.items.count()
+    display_item_count.short_description = 'Items'

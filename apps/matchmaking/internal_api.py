@@ -114,6 +114,29 @@ def _consume_default_deck(user) -> dict:
     }
 
 
+def _build_cosmetic_snapshot(user) -> dict:
+    """Build cosmetic snapshot. Static skins are {slot: url_string}.
+    VFX cosmetics are {slot: {url: str|None, params: dict}}."""
+    from apps.inventory.models import EquippedCosmetic
+    snapshot = {}
+    for ec in EquippedCosmetic.objects.filter(user=user).select_related('item__cosmetic_asset'):
+        url = None
+        if ec.item.cosmetic_asset and ec.item.cosmetic_asset.file:
+            url = ec.item.cosmetic_asset.file.url
+
+        if ec.slot.startswith('vfx_'):
+            # VFX slot: include params alongside URL
+            snapshot[ec.slot] = {
+                'url': url,
+                'params': ec.item.cosmetic_params or {},
+            }
+        else:
+            # Static skin slot: just the URL
+            if url:
+                snapshot[ec.slot] = url
+    return snapshot
+
+
 # --- Schemas ---
 
 
@@ -430,14 +453,17 @@ class MatchmakingInternalController(ControllerBase):
         entry_ids = []
         for i, entry in enumerate(queue_entries):
             deck_snapshot = {}
+            cosmetic_snapshot = {}
             if not entry.user.is_bot:
                 deck_snapshot = _consume_default_deck(entry.user)
+                cosmetic_snapshot = _build_cosmetic_snapshot(entry.user)
 
             MatchPlayer.objects.create(
                 match=match,
                 user=entry.user,
                 color=colors[i % len(colors)],
                 deck_snapshot=deck_snapshot,
+                cosmetic_snapshot=cosmetic_snapshot,
             )
             users.append(str(entry.user.id))
             if entry.user.is_bot:

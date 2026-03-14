@@ -3,6 +3,7 @@
 import { memo, useCallback, useMemo } from "react";
 import Image from "next/image";
 import type { AbilityType } from "@/lib/api";
+import { getAssetUrl } from "@/lib/assetOverrides";
 
 interface AbilityBarProps {
   abilities: AbilityType[];
@@ -17,6 +18,8 @@ interface AbilityBarProps {
   abilityScrolls?: Record<string, number>;
   /** Per-ability level from deck; used to show Lvl badge on each button */
   abilityLevels?: Record<string, number>;
+  /** Current player's cosmetics for overriding ability icons */
+  myCosmetics?: Record<string, unknown>;
 }
 
 export default memo(function AbilityBar({
@@ -29,6 +32,7 @@ export default memo(function AbilityBar({
   allowedAbility,
   abilityScrolls,
   abilityLevels,
+  myCosmetics,
 }: AbilityBarProps) {
   const sorted = useMemo(() => {
     const s = abilityScrolls;
@@ -63,6 +67,7 @@ export default memo(function AbilityBar({
             locked={allowedAbility != null && allowedAbility !== ability.slug}
             remainingUses={abilityScrolls?.[ability.slug]}
             abilityLevel={abilityLevels?.[ability.slug]}
+            myCosmetics={myCosmetics}
           />
         ))}
       </div>
@@ -82,6 +87,7 @@ export default memo(function AbilityBar({
             locked={allowedAbility != null && allowedAbility !== ability.slug}
             remainingUses={abilityScrolls?.[ability.slug]}
             abilityLevel={abilityLevels?.[ability.slug]}
+            myCosmetics={myCosmetics}
           />
         ))}
       </div>
@@ -100,6 +106,7 @@ function AbilityButton({
   locked = false,
   remainingUses,
   abilityLevel,
+  myCosmetics,
 }: {
   ability: AbilityType;
   abilityCooldowns: Record<string, number>;
@@ -113,6 +120,8 @@ function AbilityButton({
   remainingUses?: number;
   /** Ability level from the player's deck; shows a Lvl badge below the cost */
   abilityLevel?: number;
+  /** Current player's cosmetics for overriding ability icons */
+  myCosmetics?: Record<string, unknown>;
 }) {
   const cooldownReady = abilityCooldowns[ability.slug] ?? 0;
   const isOnCooldown = currentTick < cooldownReady;
@@ -144,7 +153,7 @@ function AbilityButton({
         }`}
       >
         <Image
-          src={`/assets/abilities/${ability.asset_key}.webp`}
+          src={(() => { const v = myCosmetics?.[ability.asset_key]; const url = typeof v === "string" ? v : typeof v === "object" && v !== null && "url" in v ? (v as { url?: string | null }).url : null; return url ?? ability.asset_url ?? getAssetUrl(ability.asset_key, `/assets/abilities/${ability.asset_key}.webp`); })()}
           alt={ability.name}
           width={40}
           height={40}

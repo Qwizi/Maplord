@@ -56,6 +56,10 @@ class MatchPlayer(models.Model):
         default=dict, blank=True,
         help_text='Snapshot of deck items consumed for this match',
     )
+    cosmetic_snapshot = models.JSONField(
+        default=dict, blank=True,
+        help_text='Frozen cosmetic overrides: {asset_key: asset_url}',
+    )
 
     class Meta:
         unique_together = ('match', 'user')

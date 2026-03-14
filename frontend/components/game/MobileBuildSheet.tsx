@@ -4,7 +4,7 @@ import { memo, useMemo, useState } from "react";
 import Image from "next/image";
 import type { GameRegion, BuildingQueueItem } from "@/hooks/useGameSocket";
 import type { BuildingType, UnitType } from "@/lib/api";
-import { getBuildingAsset, getActionAsset, getUnitAsset } from "@/lib/gameAssets";
+import { getPlayerBuildingAsset, getActionAsset, getPlayerUnitAsset } from "@/lib/gameAssets";
 import { Lock } from "lucide-react";
 
 type SheetMode = null | "build" | "produce";
@@ -24,6 +24,7 @@ interface MobileBuildSheetProps {
   unlockedUnits?: string[];
   /** Player's max buildable levels from their deck */
   buildingLevels?: Record<string, number>;
+  myCosmetics?: Record<string, unknown>;
 }
 
 export default memo(function MobileBuildSheet({
@@ -38,8 +39,13 @@ export default memo(function MobileBuildSheet({
   unlockedBuildings,
   unlockedUnits,
   buildingLevels,
+  myCosmetics,
 }: MobileBuildSheetProps) {
   const [mode, setMode] = useState<SheetMode>(null);
+  const unitConfigMap = useMemo(
+    () => new Map(units.map((u) => [u.slug, u])),
+    [units]
+  );
   const hasBuildingLocks = unlockedBuildings != null && unlockedBuildings.length > 0;
   const hasUnitLocks = unlockedUnits != null && unlockedUnits.length > 0;
 
@@ -123,7 +129,7 @@ export default memo(function MobileBuildSheet({
             className="flex h-10 w-10 items-center justify-center rounded-full border border-cyan-400/20 bg-slate-950/92 shadow-[0_8px_24px_rgba(0,0,0,0.4)] backdrop-blur-xl transition-colors active:bg-cyan-500/20"
           >
             <Image
-              src={getUnitAsset(region.unit_type ?? "default")}
+              src={getPlayerUnitAsset(region.unit_type ?? "default", myCosmetics, unitConfigMap.get(region.unit_type ?? "")?.asset_url)}
               alt="Produkuj"
               width={22}
               height={22}
@@ -148,7 +154,7 @@ export default memo(function MobileBuildSheet({
         <div className="sticky top-0 z-10 flex items-center justify-between bg-slate-950/95 px-4 pb-2 pt-3 backdrop-blur-xl">
           <h4 className={`flex items-center gap-2 text-sm font-medium ${isBuildMode ? "text-amber-400" : "text-cyan-300"}`}>
             <Image
-              src={isBuildMode ? getActionAsset("build") : getUnitAsset(region.unit_type ?? "default")}
+              src={isBuildMode ? getActionAsset("build") : getPlayerUnitAsset(region.unit_type ?? "default", myCosmetics)}
               alt=""
               width={16}
               height={16}
@@ -211,9 +217,9 @@ export default memo(function MobileBuildSheet({
                   className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-amber-400/10 bg-amber-500/10 px-3 py-2.5 text-left transition-colors active:bg-amber-500/20 disabled:opacity-40"
                 >
                   <span className="flex min-w-0 items-center gap-2.5">
-                    {getBuildingAsset(building.asset_key || building.slug) && (
+                    {getPlayerBuildingAsset(building.asset_key || building.slug, myCosmetics, building.asset_url) && (
                       <Image
-                        src={getBuildingAsset(building.asset_key || building.slug)!}
+                        src={getPlayerBuildingAsset(building.asset_key || building.slug, myCosmetics, building.asset_url)!}
                         alt={building.name}
                         width={28}
                         height={28}
@@ -268,7 +274,7 @@ export default memo(function MobileBuildSheet({
                 >
                   <span className="flex min-w-0 items-center gap-2.5">
                     <Image
-                      src={getUnitAsset(unit.asset_key || unit.slug)}
+                      src={getPlayerUnitAsset(unit.asset_key || unit.slug, myCosmetics, unit.asset_url)}
                       alt={unit.name}
                       width={24}
                       height={24}

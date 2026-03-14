@@ -12,6 +12,7 @@ CATEGORIES = [
     {'name': 'Skrzynie', 'slug': 'crates', 'order': 6},
     {'name': 'Klucze', 'slug': 'keys', 'order': 7},
     {'name': 'Kosmetyki', 'slug': 'cosmetics', 'order': 8},
+    {'name': 'Animacje', 'slug': 'animacje', 'order': 9},
 ]
 
 ITEMS = [
@@ -170,6 +171,150 @@ ITEMS = [
     {'name': 'Emblemat Smoka', 'slug': 'emblem-dragon', 'category_slug': 'cosmetics', 'item_type': 'cosmetic', 'rarity': 'rare', 'icon': 'emblem_dragon', 'base_value': 60},
     {'name': 'Ślad Ognia', 'slug': 'effect-fire-trail', 'category_slug': 'cosmetics', 'item_type': 'cosmetic', 'rarity': 'epic', 'icon': 'effect_fire', 'base_value': 180},
     {'name': 'Efekt Błyskawicy', 'slug': 'effect-lightning', 'category_slug': 'cosmetics', 'item_type': 'cosmetic', 'rarity': 'legendary', 'icon': 'effect_lightning', 'base_value': 500},
+
+    # --- Animacje VFX ---
+    {
+        'name': 'Ognisty Szturm',
+        'slug': 'vfx-ognisty-szturm',
+        'category_slug': 'animacje',
+        'item_type': 'cosmetic',
+        'asset_key': 'vfx_attack',
+        'rarity': 'epic',
+        'base_value': 500,
+        'cosmetic_params': {
+            'trail': {
+                'color': '#ff6b00',
+                'opacity': 0.7,
+                'width': 5,
+                'glow': True,
+                'glow_color': '#ff6b0044',
+                'glow_width': 10,
+                'particle_color': '#fbbf24',
+                'particle_count': 8,
+            },
+            'impact_attack': {
+                'duration': 800,
+                'layers': [
+                    {'type': 'ring', 'color': '#ff6b00', 'radius': [10, 160], 'opacity_start': 0.8, 'opacity_curve': 1.2, 'duration_pct': 1.0},
+                    {'type': 'fill', 'color': '#ef4444', 'radius': [8, 100], 'opacity_start': 0.9, 'opacity_curve': 1.5, 'duration_pct': 0.6},
+                    {'type': 'fill', 'color': '#fbbf24', 'radius': [4, 30], 'opacity_start': 1.0, 'opacity_curve': 1.0, 'duration_pct': 0.3},
+                ],
+            },
+            'pulse': {'color': '#ff6b00', 'rings': 4, 'radius_expand': 60},
+        },
+    },
+    {
+        'name': 'Lodowy Podmuch',
+        'slug': 'vfx-lodowy-podmuch',
+        'category_slug': 'animacje',
+        'item_type': 'cosmetic',
+        'asset_key': 'vfx_attack',
+        'rarity': 'rare',
+        'base_value': 300,
+        'cosmetic_params': {
+            'trail': {
+                'color': '#38bdf8',
+                'opacity': 0.6,
+                'width': 3,
+                'blur': 1.5,
+                'glow': True,
+                'glow_color': '#38bdf844',
+                'glow_width': 8,
+                'particle_color': '#a5f3fc',
+            },
+            'impact_attack': {
+                'duration': 700,
+                'layers': [
+                    {'type': 'ring', 'color': '#22d3ee', 'radius': [8, 120], 'opacity_start': 0.7, 'opacity_curve': 1.3, 'duration_pct': 1.0},
+                    {'type': 'fill', 'color': '#a5f3fc', 'radius': [6, 50], 'opacity_start': 0.85, 'opacity_curve': 1.5, 'duration_pct': 0.5},
+                ],
+            },
+            'pulse': {'color': '#38bdf8'},
+        },
+    },
+    {
+        'name': 'Widmowy Ruch',
+        'slug': 'vfx-widmowy-ruch',
+        'category_slug': 'animacje',
+        'item_type': 'cosmetic',
+        'asset_key': 'vfx_move',
+        'rarity': 'uncommon',
+        'base_value': 150,
+        'cosmetic_params': {
+            'trail': {
+                'color': '#64748b',
+                'opacity': 0.15,
+                'width': 1,
+                'line_style': 'dashed',
+                'dash_pattern': [2, 6],
+                'particles': 'none',
+            },
+            'impact_move': {
+                'duration': 300,
+                'layers': [
+                    {'type': 'ring', 'color': '#94a3b8', 'radius': [4, 30], 'opacity_start': 0.4, 'opacity_curve': 1.5, 'duration_pct': 1.0},
+                ],
+            },
+            'pulse': {'enabled': False},
+        },
+    },
+    {
+        'name': 'Królewski Szturm',
+        'slug': 'vfx-krolewski-szturm',
+        'category_slug': 'animacje',
+        'item_type': 'cosmetic',
+        'asset_key': 'vfx_attack',
+        'rarity': 'legendary',
+        'base_value': 1000,
+        'cosmetic_params': {
+            'trail': {
+                'color': '#a855f7',
+                'width': 5,
+                'glow': True,
+                'glow_color': '#a855f744',
+                'glow_width': 12,
+                'particle_color': '#e9d5ff',
+                'particle_count': 10,
+                'particle_head_size': 6,
+            },
+            'impact_attack': {
+                'duration': 1000,
+                'layers': [
+                    {'type': 'ring', 'color': '#a855f7', 'radius': [12, 180], 'opacity_start': 0.7, 'opacity_curve': 1.2, 'duration_pct': 1.0},
+                    {'type': 'ring', 'color': '#e9d5ff', 'radius': [8, 120], 'opacity_start': 0.5, 'opacity_curve': 1.3, 'duration_pct': 0.8},
+                    {'type': 'fill', 'color': '#7c3aed', 'radius': [6, 50], 'opacity_start': 0.9, 'opacity_curve': 1.5, 'duration_pct': 0.4},
+                ],
+            },
+            'pulse': {'color': '#a855f7', 'rings': 4, 'radius_expand': 60},
+        },
+    },
+    {
+        'name': 'Nuklearny Chaos',
+        'slug': 'vfx-nuklearny-chaos',
+        'category_slug': 'animacje',
+        'item_type': 'cosmetic',
+        'asset_key': 'vfx_nuke',
+        'rarity': 'legendary',
+        'base_value': 800,
+        'cosmetic_params': {
+            'trail': {
+                'color': '#ef4444',
+                'width': 8,
+                'glow': True,
+                'glow_color': '#ef444444',
+                'glow_width': 14,
+            },
+            'impact_attack': {
+                'duration': 2200,
+                'layers': [
+                    {'type': 'ring', 'color': '#ff6b00', 'radius': [12, 200], 'opacity_start': 0.8, 'opacity_curve': 1.0, 'duration_pct': 1.0},
+                    {'type': 'ring', 'color': '#ef4444', 'radius': [10, 140], 'opacity_start': 0.9, 'opacity_curve': 1.2, 'duration_pct': 0.8},
+                    {'type': 'fill', 'color': '#fbbf24', 'radius': [8, 60], 'opacity_start': 1.0, 'opacity_curve': 1.0, 'duration_pct': 0.5},
+                    {'type': 'fill', 'color': '#ffffff', 'radius': [4, 25], 'opacity_start': 1.0, 'opacity_curve': 2.0, 'duration_pct': 0.2},
+                ],
+            },
+        },
+    },
 ]
 
 RECIPES = [
@@ -368,6 +513,7 @@ class Command(BaseCommand):
                 'item_type': item_data['item_type'],
                 'rarity': item_data['rarity'],
                 'icon': item_data.get('icon', ''),
+                'asset_key': item_data.get('asset_key', ''),
                 'base_value': item_data.get('base_value', 0),
                 'is_consumable': item_data.get('is_consumable', False),
                 'is_tradeable': item_data.get('is_tradeable', True),
@@ -378,6 +524,8 @@ class Command(BaseCommand):
                 defaults['crate_loot_table'] = item_data['crate_loot_table']
             if 'boost_params' in item_data:
                 defaults['boost_params'] = item_data['boost_params']
+            if 'cosmetic_params' in item_data:
+                defaults['cosmetic_params'] = item_data['cosmetic_params']
 
             obj, created = Item.objects.update_or_create(
                 slug=item_data['slug'],

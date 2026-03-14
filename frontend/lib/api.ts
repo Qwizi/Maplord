@@ -135,6 +135,7 @@ export interface BuildingType {
   name: string;
   slug: string;
   asset_key: string;
+  asset_url: string | null;
   description: string;
   icon: string;
   cost: number;
@@ -156,6 +157,7 @@ export interface UnitType {
   name: string;
   slug: string;
   asset_key: string;
+  asset_url: string | null;
   description: string;
   icon: string;
   attack: number;
@@ -228,9 +230,11 @@ export interface AbilityType {
   name: string;
   slug: string;
   asset_key: string;
+  asset_url: string | null;
   description: string;
   icon: string;
   sound_key: string;
+  sound_url: string | null;
   target_type: "enemy" | "own" | "any";
   range: number;
   energy_cost: number;
@@ -893,6 +897,48 @@ export async function cancelListing(
   return fetchAPI(`/marketplace/cancel/${listingId}/`, {
     method: "POST",
     token,
+  });
+}
+
+// --- Cosmetics ---
+
+export interface EquippedCosmeticOut {
+  slot: string;
+  item_slug: string;
+  item_name: string;
+  asset_url: string | null;
+}
+
+export interface EquippedCosmeticDetail {
+  slot: string;
+  item_slug: string;
+  item_name: string;
+  asset_url: string | null;
+}
+
+export async function getEquippedCosmetics(token: string): Promise<EquippedCosmeticOut[]> {
+  return fetchAPI<EquippedCosmeticOut[]>("/inventory/cosmetics/equipped/", { token });
+}
+
+export async function equipCosmetic(
+  token: string,
+  item_slug: string
+): Promise<EquippedCosmeticDetail> {
+  return fetchAPI<EquippedCosmeticDetail>("/inventory/cosmetics/equip/", {
+    method: "POST",
+    token,
+    body: JSON.stringify({ item_slug }),
+  });
+}
+
+export async function unequipCosmetic(
+  token: string,
+  slot: string
+): Promise<{ detail: string }> {
+  return fetchAPI<{ detail: string }>("/inventory/cosmetics/unequip/", {
+    method: "POST",
+    token,
+    body: JSON.stringify({ slot }),
   });
 }
 

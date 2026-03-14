@@ -19,6 +19,7 @@ import {
   Medal,
   MoreHorizontal,
   Settings,
+  Shirt,
   Store,
   Trophy,
   UserCircle,
@@ -57,6 +58,7 @@ const ACTION_ITEMS: NavItem[] = [
 
 const ECONOMY_ITEMS: NavItem[] = [
   { href: "/inventory", label: "Ekwipunek", icon: <Backpack size={18} /> },
+  { href: "/cosmetics", label: "Kosmetyki", icon: <Shirt size={18} /> },
   { href: "/decks", label: "Talia", icon: <Layers size={18} /> },
   { href: "/marketplace", label: "Rynek", icon: <Store size={18} /> },
   { href: "/crafting", label: "Kuźnia", icon: <Hammer size={18} /> },
@@ -161,6 +163,7 @@ const BREADCRUMB_LABELS: Record<string, string> = {
   dashboard: "Panel",
   leaderboard: "Ranking",
   inventory: "Ekwipunek",
+  cosmetics: "Kosmetyki",
   decks: "Talia",
   marketplace: "Rynek",
   crafting: "Kuźnia",
