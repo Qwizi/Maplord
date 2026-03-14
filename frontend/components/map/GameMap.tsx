@@ -895,9 +895,16 @@ export default memo(function GameMap({
     applyFeatureStatesRef.current = applyColors;
     applyColors();
 
-    // ② Labels: small GeoJSON point source (layout property workaround)
+    prevRegionsRef.current = regions;
+    prevPlayersRef.current = players;
+  }, [regions, players, myUserId, getRegionColor, buildingIcons, centroids, layersReady]);
+
+  // ── Effect A1b: Labels (separate from regions — depends on animations) ──
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !layersReady) return;
+
     const animatedTargets = new Set(animations.map((a) => a.targetId));
-    // Submarine reveal — show unit counts on enemy provinces revealed by our submarines
     const revealedRegions = new Set<string>();
     for (const effect of activeEffects) {
       if (effect.effect_type === "ab_pr_submarine" && effect.source_player_id === myUserId) {
@@ -922,9 +929,7 @@ export default memo(function GameMap({
       labelFeatures.push({
         type: "Feature",
         geometry: { type: "Point", coordinates: centroid },
-        properties: {
-          units_text: labelText,
-        },
+        properties: { units_text: labelText },
       });
     }
     try {
@@ -932,13 +937,8 @@ export default memo(function GameMap({
         type: "FeatureCollection",
         features: labelFeatures,
       } as unknown as GeoJSON.FeatureCollection);
-    } catch {
-      // source not ready yet
-    }
-
-    prevRegionsRef.current = regions;
-    prevPlayersRef.current = players;
-  }, [regions, players, myUserId, animations, getRegionColor, buildingIcons, centroids, activeEffects, layersReady]);
+    } catch { /* source not ready */ }
+  }, [regions, players, myUserId, animations, buildingIcons, centroids, activeEffects, layersReady]);
 
   // ── Effect A2: selection + target markers ──
   //
