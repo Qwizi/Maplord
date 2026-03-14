@@ -260,31 +260,37 @@ export default function DashboardPage() {
                 </label>
               </div>
 
-              {/* ── Przycisk szukaj / anuluj (ten sam slot) ── */}
-              <div className="flex flex-col items-start gap-2 sm:items-end pointer-events-auto opacity-100">
+              {/* ── Przycisk szukaj / anuluj ── */}
+              <div className="pointer-events-auto opacity-100 flex flex-col items-start sm:items-end gap-2">
+                {inQueue && (
+                  <div className="flex items-center gap-3 text-sm text-slate-300">
+                    <span>{playersInQueue} w kolejce</span>
+                    <span className="text-slate-500">·</span>
+                    <span className="text-slate-300">{currentMode?.name ?? "Tryb domyślny"}</span>
+                    {fillBots && queueSeconds < 30 && (
+                      <>
+                        <span className="text-slate-500">·</span>
+                        <span className="text-amber-300 text-xs">Boty za {30 - queueSeconds}s</span>
+                      </>
+                    )}
+                    {fillBots && queueSeconds >= 30 && (
+                      <>
+                        <span className="text-slate-500">·</span>
+                        <span className="text-emerald-300 text-xs">Boty dołączają...</span>
+                      </>
+                    )}
+                  </div>
+                )}
                 {inQueue ? (
-                  <>
-                    {/* Timer + loader */}
-                    <div className="flex items-center gap-3 mb-1">
-                      <Loader2 className="h-5 w-5 animate-spin text-cyan-400" />
-                      <div className="text-right">
-                        <p className="font-display text-lg tabular-nums text-zinc-50">
-                          {Math.floor(queueSeconds / 60)}:{String(queueSeconds % 60).padStart(2, "0")}
-                        </p>
-                        <p className="text-[11px] text-slate-300">
-                          {playersInQueue} w kolejce · {currentMode?.name ?? "Tryb domyślny"}
-                        </p>
-                      </div>
-                    </div>
-                    <Button
-                      size="lg"
-                      className="h-12 gap-2 rounded-xl border border-red-400 bg-red-500 px-10 font-display text-base uppercase tracking-wider text-white shadow-[0_0_20px_rgba(239,68,68,0.3)] hover:bg-red-600 hover:shadow-[0_0_28px_rgba(239,68,68,0.4)] transition-all"
-                      onClick={leaveQueue}
-                    >
-                      <X className="h-5 w-5" />
-                      Anuluj szukanie
-                    </Button>
-                  </>
+                  <Button
+                    size="lg"
+                    className="h-12 gap-3 rounded-xl border border-red-400 bg-red-500 px-8 font-display text-base uppercase tracking-wider text-white shadow-[0_0_20px_rgba(239,68,68,0.3)] hover:bg-red-600 hover:shadow-[0_0_28px_rgba(239,68,68,0.4)] transition-all"
+                    onClick={leaveQueue}
+                  >
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <span className="tabular-nums">{Math.floor(queueSeconds / 60)}:{String(queueSeconds % 60).padStart(2, "0")}</span>
+                    <span>· Anuluj</span>
+                  </Button>
                 ) : (
                   <Button
                     size="lg"
