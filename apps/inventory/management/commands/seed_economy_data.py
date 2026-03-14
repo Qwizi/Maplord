@@ -16,110 +16,133 @@ CATEGORIES = [
 ]
 
 ITEMS = [
-    # --- Materiały ---
-    {'name': 'Złom stalowy', 'slug': 'steel-scrap', 'category_slug': 'materials', 'item_type': 'material', 'rarity': 'common', 'icon': 'steel_scrap', 'base_value': 5},
-    {'name': 'Płytka obwodu', 'slug': 'circuit-board', 'category_slug': 'materials', 'item_type': 'material', 'rarity': 'common', 'icon': 'circuit_board', 'base_value': 5},
-    {'name': 'Ogniwo paliwowe', 'slug': 'fuel-cell', 'category_slug': 'materials', 'item_type': 'material', 'rarity': 'uncommon', 'icon': 'fuel_cell', 'base_value': 15},
-    {'name': 'Proch strzelniczy', 'slug': 'gunpowder', 'category_slug': 'materials', 'item_type': 'material', 'rarity': 'uncommon', 'icon': 'gunpowder', 'base_value': 15},
-    {'name': 'Protokół dowodzenia', 'slug': 'command-protocol', 'category_slug': 'materials', 'item_type': 'material', 'rarity': 'rare', 'icon': 'command_protocol', 'base_value': 40},
-    {'name': 'Światłowód', 'slug': 'optic-fiber', 'category_slug': 'materials', 'item_type': 'material', 'rarity': 'rare', 'icon': 'optic_fiber', 'base_value': 40},
-    {'name': 'Rdzeń plazmowy', 'slug': 'plasma-core', 'category_slug': 'materials', 'item_type': 'material', 'rarity': 'epic', 'icon': 'plasma_core', 'base_value': 120},
-    {'name': 'Fragment artefaktu', 'slug': 'artifact-fragment', 'category_slug': 'materials', 'item_type': 'material', 'rarity': 'legendary', 'icon': 'artifact_fragment', 'base_value': 350},
+    # --- Tier 0: Surowe materiały (drop z meczy, fundament ekonomii) ---
+    {'name': 'Ruda miedzi', 'slug': 'copper-ore', 'category_slug': 'materials', 'item_type': 'material', 'rarity': 'common', 'icon': '🪨', 'base_value': 2},
+    {'name': 'Ruda ołowiu', 'slug': 'lead-ore', 'category_slug': 'materials', 'item_type': 'material', 'rarity': 'common', 'icon': '🪨', 'base_value': 2},
+    {'name': 'Krzem surowy', 'slug': 'raw-silicon', 'category_slug': 'materials', 'item_type': 'material', 'rarity': 'common', 'icon': '🔶', 'base_value': 2},
+    {'name': 'Węgiel', 'slug': 'carbon', 'category_slug': 'materials', 'item_type': 'material', 'rarity': 'common', 'icon': '⬛', 'base_value': 2},
+    {'name': 'Ruda wolframu', 'slug': 'tungsten-ore', 'category_slug': 'materials', 'item_type': 'material', 'rarity': 'common', 'icon': '🔵', 'base_value': 3},
+    {'name': 'Rtęć', 'slug': 'mercury', 'category_slug': 'materials', 'item_type': 'material', 'rarity': 'common', 'icon': '💧', 'base_value': 3},
+
+    # --- Tier 1: Podstawowe przetworzone (craftowalny z Tier 0) ---
+    {'name': 'Złom stalowy', 'slug': 'steel-scrap', 'category_slug': 'materials', 'item_type': 'material', 'rarity': 'common', 'icon': '⚙️', 'base_value': 8},
+    {'name': 'Płytka obwodu', 'slug': 'circuit-board', 'category_slug': 'materials', 'item_type': 'material', 'rarity': 'common', 'icon': '🔌', 'base_value': 8},
+    {'name': 'Ogniwo paliwowe', 'slug': 'fuel-cell', 'category_slug': 'materials', 'item_type': 'material', 'rarity': 'uncommon', 'icon': '🔋', 'base_value': 15},
+    {'name': 'Proch strzelniczy', 'slug': 'gunpowder', 'category_slug': 'materials', 'item_type': 'material', 'rarity': 'uncommon', 'icon': '💥', 'base_value': 15},
+    {'name': 'Protokół dowodzenia', 'slug': 'command-protocol', 'category_slug': 'materials', 'item_type': 'material', 'rarity': 'rare', 'icon': '📡', 'base_value': 40},
+    {'name': 'Światłowód', 'slug': 'optic-fiber', 'category_slug': 'materials', 'item_type': 'material', 'rarity': 'rare', 'icon': '🔬', 'base_value': 40},
+    {'name': 'Rdzeń plazmowy', 'slug': 'plasma-core', 'category_slug': 'materials', 'item_type': 'material', 'rarity': 'epic', 'icon': '⚡', 'base_value': 120},
+    {'name': 'Fragment artefaktu', 'slug': 'artifact-fragment', 'category_slug': 'materials', 'item_type': 'material', 'rarity': 'legendary', 'icon': '💎', 'base_value': 350},
+
+    # Tier 1.5 (between basic and uncommon) — crafted from tier 1
+    {'name': 'Stop żelazny', 'slug': 'iron-alloy', 'category_slug': 'materials', 'item_type': 'material', 'rarity': 'common', 'icon': '🔩', 'base_value': 8},
+    {'name': 'Kondensator', 'slug': 'capacitor', 'category_slug': 'materials', 'item_type': 'material', 'rarity': 'common', 'icon': '🔧', 'base_value': 8},
+
+    # Tier 2.5 (between uncommon and rare)
+    {'name': 'Amunicja pancerna', 'slug': 'armor-piercing-ammo', 'category_slug': 'materials', 'item_type': 'material', 'rarity': 'uncommon', 'icon': '🎯', 'base_value': 25},
+    {'name': 'Moduł radarowy', 'slug': 'radar-module', 'category_slug': 'materials', 'item_type': 'material', 'rarity': 'uncommon', 'icon': '📡', 'base_value': 25},
+
+    # Tier 3.5 (between rare and epic)
+    {'name': 'Kompozyt tytanowy', 'slug': 'titanium-composite', 'category_slug': 'materials', 'item_type': 'material', 'rarity': 'rare', 'icon': '🛡️', 'base_value': 65},
+    {'name': 'Procesor kwantowy', 'slug': 'quantum-processor', 'category_slug': 'materials', 'item_type': 'material', 'rarity': 'rare', 'icon': '💻', 'base_value': 65},
+
+    # Tier 4.5 (between epic and legendary)
+    {'name': 'Antymateria', 'slug': 'antimatter', 'category_slug': 'materials', 'item_type': 'material', 'rarity': 'epic', 'icon': '☄️', 'base_value': 200},
 
     # --- Blueprinty budynków (6 budynków × 3 poziomy) ---
     # Koszary
-    {'name': 'Blueprint: Koszary Lvl 1', 'slug': 'bp-barracks-1', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'common', 'icon': 'bp_barracks', 'base_value': 20, 'is_consumable': False, 'blueprint_ref': 'barracks', 'level': 1},
-    {'name': 'Blueprint: Koszary Lvl 2', 'slug': 'bp-barracks-2', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'uncommon', 'icon': 'bp_barracks', 'base_value': 50, 'is_consumable': False, 'blueprint_ref': 'barracks', 'level': 2},
-    {'name': 'Blueprint: Koszary Lvl 3', 'slug': 'bp-barracks-3', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'rare', 'icon': 'bp_barracks', 'base_value': 100, 'is_consumable': False, 'blueprint_ref': 'barracks', 'level': 3},
+    {'name': 'Blueprint: Koszary Lvl 1', 'slug': 'bp-barracks-1', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'common', 'icon': '🏗️', 'base_value': 20, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'barracks', 'level': 1},
+    {'name': 'Blueprint: Koszary Lvl 2', 'slug': 'bp-barracks-2', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'uncommon', 'icon': '🏗️', 'base_value': 50, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'barracks', 'level': 2},
+    {'name': 'Blueprint: Koszary Lvl 3', 'slug': 'bp-barracks-3', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'rare', 'icon': '🏗️', 'base_value': 100, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'barracks', 'level': 3},
     # Fabryka
-    {'name': 'Blueprint: Fabryka Lvl 1', 'slug': 'bp-factory-1', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'common', 'icon': 'bp_factory', 'base_value': 30, 'is_consumable': False, 'blueprint_ref': 'factory', 'level': 1},
-    {'name': 'Blueprint: Fabryka Lvl 2', 'slug': 'bp-factory-2', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'uncommon', 'icon': 'bp_factory', 'base_value': 70, 'is_consumable': False, 'blueprint_ref': 'factory', 'level': 2},
-    {'name': 'Blueprint: Fabryka Lvl 3', 'slug': 'bp-factory-3', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'rare', 'icon': 'bp_factory', 'base_value': 120, 'is_consumable': False, 'blueprint_ref': 'factory', 'level': 3},
+    {'name': 'Blueprint: Fabryka Lvl 1', 'slug': 'bp-factory-1', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'common', 'icon': '🏭', 'base_value': 30, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'factory', 'level': 1},
+    {'name': 'Blueprint: Fabryka Lvl 2', 'slug': 'bp-factory-2', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'uncommon', 'icon': '🏭', 'base_value': 70, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'factory', 'level': 2},
+    {'name': 'Blueprint: Fabryka Lvl 3', 'slug': 'bp-factory-3', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'rare', 'icon': '🏭', 'base_value': 120, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'factory', 'level': 3},
     # Wieża obronna
-    {'name': 'Blueprint: Wieża Lvl 1', 'slug': 'bp-tower-1', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'common', 'icon': 'bp_tower', 'base_value': 25, 'is_consumable': False, 'blueprint_ref': 'tower', 'level': 1},
-    {'name': 'Blueprint: Wieża Lvl 2', 'slug': 'bp-tower-2', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'uncommon', 'icon': 'bp_tower', 'base_value': 60, 'is_consumable': False, 'blueprint_ref': 'tower', 'level': 2},
-    {'name': 'Blueprint: Wieża Lvl 3', 'slug': 'bp-tower-3', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'rare', 'icon': 'bp_tower', 'base_value': 110, 'is_consumable': False, 'blueprint_ref': 'tower', 'level': 3},
+    {'name': 'Blueprint: Wieża Lvl 1', 'slug': 'bp-tower-1', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'common', 'icon': '🗼', 'base_value': 25, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'tower', 'level': 1},
+    {'name': 'Blueprint: Wieża Lvl 2', 'slug': 'bp-tower-2', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'uncommon', 'icon': '🗼', 'base_value': 60, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'tower', 'level': 2},
+    {'name': 'Blueprint: Wieża Lvl 3', 'slug': 'bp-tower-3', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'rare', 'icon': '🗼', 'base_value': 110, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'tower', 'level': 3},
     # Port
-    {'name': 'Blueprint: Port Lvl 1', 'slug': 'bp-port-1', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'uncommon', 'icon': 'bp_port', 'base_value': 50, 'is_consumable': False, 'blueprint_ref': 'port', 'level': 1},
-    {'name': 'Blueprint: Port Lvl 2', 'slug': 'bp-port-2', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'rare', 'icon': 'bp_port', 'base_value': 100, 'is_consumable': False, 'blueprint_ref': 'port', 'level': 2},
-    {'name': 'Blueprint: Port Lvl 3', 'slug': 'bp-port-3', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'epic', 'icon': 'bp_port', 'base_value': 180, 'is_consumable': False, 'blueprint_ref': 'port', 'level': 3},
+    {'name': 'Blueprint: Port Lvl 1', 'slug': 'bp-port-1', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'uncommon', 'icon': '⚓', 'base_value': 50, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'port', 'level': 1},
+    {'name': 'Blueprint: Port Lvl 2', 'slug': 'bp-port-2', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'rare', 'icon': '⚓', 'base_value': 100, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'port', 'level': 2},
+    {'name': 'Blueprint: Port Lvl 3', 'slug': 'bp-port-3', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'epic', 'icon': '⚓', 'base_value': 180, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'port', 'level': 3},
     # Lotnisko
-    {'name': 'Blueprint: Lotnisko Lvl 1', 'slug': 'bp-carrier-1', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'uncommon', 'icon': 'bp_carrier', 'base_value': 50, 'is_consumable': False, 'blueprint_ref': 'carrier', 'level': 1},
-    {'name': 'Blueprint: Lotnisko Lvl 2', 'slug': 'bp-carrier-2', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'rare', 'icon': 'bp_carrier', 'base_value': 100, 'is_consumable': False, 'blueprint_ref': 'carrier', 'level': 2},
-    {'name': 'Blueprint: Lotnisko Lvl 3', 'slug': 'bp-carrier-3', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'epic', 'icon': 'bp_carrier', 'base_value': 180, 'is_consumable': False, 'blueprint_ref': 'carrier', 'level': 3},
+    {'name': 'Blueprint: Lotnisko Lvl 1', 'slug': 'bp-carrier-1', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'uncommon', 'icon': '✈️', 'base_value': 50, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'carrier', 'level': 1},
+    {'name': 'Blueprint: Lotnisko Lvl 2', 'slug': 'bp-carrier-2', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'rare', 'icon': '✈️', 'base_value': 100, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'carrier', 'level': 2},
+    {'name': 'Blueprint: Lotnisko Lvl 3', 'slug': 'bp-carrier-3', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'epic', 'icon': '✈️', 'base_value': 180, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'carrier', 'level': 3},
     # Elektrownia
-    {'name': 'Blueprint: Elektrownia Lvl 1', 'slug': 'bp-radar-1', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'common', 'icon': 'bp_radar', 'base_value': 20, 'is_consumable': False, 'blueprint_ref': 'radar', 'level': 1},
-    {'name': 'Blueprint: Elektrownia Lvl 2', 'slug': 'bp-radar-2', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'uncommon', 'icon': 'bp_radar', 'base_value': 50, 'is_consumable': False, 'blueprint_ref': 'radar', 'level': 2},
-    {'name': 'Blueprint: Elektrownia Lvl 3', 'slug': 'bp-radar-3', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'rare', 'icon': 'bp_radar', 'base_value': 100, 'is_consumable': False, 'blueprint_ref': 'radar', 'level': 3},
+    {'name': 'Blueprint: Elektrownia Lvl 1', 'slug': 'bp-radar-1', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'common', 'icon': '📡', 'base_value': 20, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'radar', 'level': 1},
+    {'name': 'Blueprint: Elektrownia Lvl 2', 'slug': 'bp-radar-2', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'uncommon', 'icon': '📡', 'base_value': 50, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'radar', 'level': 2},
+    {'name': 'Blueprint: Elektrownia Lvl 3', 'slug': 'bp-radar-3', 'category_slug': 'blueprints-building', 'item_type': 'blueprint_building', 'rarity': 'rare', 'icon': '📡', 'base_value': 100, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'radar', 'level': 3},
 
     # --- Blueprinty jednostek (3 actual units × 3 levels) ---
     # Czołg
-    {'name': 'Blueprint: Czołg Lvl 1', 'slug': 'bp-tank-1', 'category_slug': 'blueprints-unit', 'item_type': 'blueprint_unit', 'rarity': 'uncommon', 'icon': 'bp_tank', 'base_value': 40, 'is_consumable': False, 'blueprint_ref': 'tank', 'level': 1},
-    {'name': 'Blueprint: Czołg Lvl 2', 'slug': 'bp-tank-2', 'category_slug': 'blueprints-unit', 'item_type': 'blueprint_unit', 'rarity': 'rare', 'icon': 'bp_tank', 'base_value': 90, 'is_consumable': False, 'blueprint_ref': 'tank', 'level': 2},
-    {'name': 'Blueprint: Czołg Lvl 3', 'slug': 'bp-tank-3', 'category_slug': 'blueprints-unit', 'item_type': 'blueprint_unit', 'rarity': 'epic', 'icon': 'bp_tank', 'base_value': 180, 'is_consumable': False, 'blueprint_ref': 'tank', 'level': 3},
+    {'name': 'Blueprint: Czołg Lvl 1', 'slug': 'bp-tank-1', 'category_slug': 'blueprints-unit', 'item_type': 'blueprint_unit', 'rarity': 'uncommon', 'icon': '🚀', 'base_value': 40, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'tank', 'level': 1},
+    {'name': 'Blueprint: Czołg Lvl 2', 'slug': 'bp-tank-2', 'category_slug': 'blueprints-unit', 'item_type': 'blueprint_unit', 'rarity': 'rare', 'icon': '🚀', 'base_value': 90, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'tank', 'level': 2},
+    {'name': 'Blueprint: Czołg Lvl 3', 'slug': 'bp-tank-3', 'category_slug': 'blueprints-unit', 'item_type': 'blueprint_unit', 'rarity': 'epic', 'icon': '🚀', 'base_value': 180, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'tank', 'level': 3},
     # Okręt
-    {'name': 'Blueprint: Okręt Lvl 1', 'slug': 'bp-ship-1', 'category_slug': 'blueprints-unit', 'item_type': 'blueprint_unit', 'rarity': 'rare', 'icon': 'bp_ship', 'base_value': 80, 'is_consumable': False, 'blueprint_ref': 'ship', 'level': 1},
-    {'name': 'Blueprint: Okręt Lvl 2', 'slug': 'bp-ship-2', 'category_slug': 'blueprints-unit', 'item_type': 'blueprint_unit', 'rarity': 'epic', 'icon': 'bp_ship', 'base_value': 160, 'is_consumable': False, 'blueprint_ref': 'ship', 'level': 2},
-    {'name': 'Blueprint: Okręt Lvl 3', 'slug': 'bp-ship-3', 'category_slug': 'blueprints-unit', 'item_type': 'blueprint_unit', 'rarity': 'legendary', 'icon': 'bp_ship', 'base_value': 350, 'is_consumable': False, 'blueprint_ref': 'ship', 'level': 3},
+    {'name': 'Blueprint: Okręt Lvl 1', 'slug': 'bp-ship-1', 'category_slug': 'blueprints-unit', 'item_type': 'blueprint_unit', 'rarity': 'rare', 'icon': '🚢', 'base_value': 80, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'ship', 'level': 1},
+    {'name': 'Blueprint: Okręt Lvl 2', 'slug': 'bp-ship-2', 'category_slug': 'blueprints-unit', 'item_type': 'blueprint_unit', 'rarity': 'epic', 'icon': '🚢', 'base_value': 160, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'ship', 'level': 2},
+    {'name': 'Blueprint: Okręt Lvl 3', 'slug': 'bp-ship-3', 'category_slug': 'blueprints-unit', 'item_type': 'blueprint_unit', 'rarity': 'legendary', 'icon': '🚢', 'base_value': 350, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'ship', 'level': 3},
     # Myśliwiec
-    {'name': 'Blueprint: Myśliwiec Lvl 1', 'slug': 'bp-fighter-1', 'category_slug': 'blueprints-unit', 'item_type': 'blueprint_unit', 'rarity': 'rare', 'icon': 'bp_fighter', 'base_value': 70, 'is_consumable': False, 'blueprint_ref': 'fighter', 'level': 1},
-    {'name': 'Blueprint: Myśliwiec Lvl 2', 'slug': 'bp-fighter-2', 'category_slug': 'blueprints-unit', 'item_type': 'blueprint_unit', 'rarity': 'epic', 'icon': 'bp_fighter', 'base_value': 150, 'is_consumable': False, 'blueprint_ref': 'fighter', 'level': 2},
-    {'name': 'Blueprint: Myśliwiec Lvl 3', 'slug': 'bp-fighter-3', 'category_slug': 'blueprints-unit', 'item_type': 'blueprint_unit', 'rarity': 'legendary', 'icon': 'bp_fighter', 'base_value': 300, 'is_consumable': False, 'blueprint_ref': 'fighter', 'level': 3},
+    {'name': 'Blueprint: Myśliwiec Lvl 1', 'slug': 'bp-fighter-1', 'category_slug': 'blueprints-unit', 'item_type': 'blueprint_unit', 'rarity': 'rare', 'icon': '✈️', 'base_value': 70, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'fighter', 'level': 1},
+    {'name': 'Blueprint: Myśliwiec Lvl 2', 'slug': 'bp-fighter-2', 'category_slug': 'blueprints-unit', 'item_type': 'blueprint_unit', 'rarity': 'epic', 'icon': '✈️', 'base_value': 150, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'fighter', 'level': 2},
+    {'name': 'Blueprint: Myśliwiec Lvl 3', 'slug': 'bp-fighter-3', 'category_slug': 'blueprints-unit', 'item_type': 'blueprint_unit', 'rarity': 'legendary', 'icon': '✈️', 'base_value': 300, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'fighter', 'level': 3},
 
     # --- Pakiety taktyczne (5 zdolności × 3 poziomy) ---
     # Tarcza (Shield) — Lvl 1 darmowy, domyślnie w decku
-    {'name': 'Pakiet: Tarcza Lvl 1', 'slug': 'pkg-shield-1', 'category_slug': 'tactical-packages', 'item_type': 'tactical_package', 'rarity': 'common', 'icon': 'pkg_shield', 'base_value': 0, 'is_consumable': False, 'blueprint_ref': 'ab_shield', 'level': 1},
-    {'name': 'Pakiet: Tarcza Lvl 2', 'slug': 'pkg-shield-2', 'category_slug': 'tactical-packages', 'item_type': 'tactical_package', 'rarity': 'uncommon', 'icon': 'pkg_shield', 'base_value': 50, 'is_consumable': False, 'blueprint_ref': 'ab_shield', 'level': 2},
-    {'name': 'Pakiet: Tarcza Lvl 3', 'slug': 'pkg-shield-3', 'category_slug': 'tactical-packages', 'item_type': 'tactical_package', 'rarity': 'rare', 'icon': 'pkg_shield', 'base_value': 120, 'is_consumable': False, 'blueprint_ref': 'ab_shield', 'level': 3},
+    {'name': 'Pakiet: Tarcza Lvl 1', 'slug': 'pkg-shield-1', 'category_slug': 'tactical-packages', 'item_type': 'tactical_package', 'rarity': 'common', 'icon': '🛡️', 'base_value': 0, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'ab_shield', 'level': 1},
+    {'name': 'Pakiet: Tarcza Lvl 2', 'slug': 'pkg-shield-2', 'category_slug': 'tactical-packages', 'item_type': 'tactical_package', 'rarity': 'uncommon', 'icon': '🛡️', 'base_value': 50, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'ab_shield', 'level': 2},
+    {'name': 'Pakiet: Tarcza Lvl 3', 'slug': 'pkg-shield-3', 'category_slug': 'tactical-packages', 'item_type': 'tactical_package', 'rarity': 'rare', 'icon': '🛡️', 'base_value': 120, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'ab_shield', 'level': 3},
     # Wirus
-    {'name': 'Pakiet: Wirus Lvl 1', 'slug': 'pkg-virus-1', 'category_slug': 'tactical-packages', 'item_type': 'tactical_package', 'rarity': 'uncommon', 'icon': 'pkg_virus', 'base_value': 40, 'is_consumable': False, 'blueprint_ref': 'ab_virus', 'level': 1},
-    {'name': 'Pakiet: Wirus Lvl 2', 'slug': 'pkg-virus-2', 'category_slug': 'tactical-packages', 'item_type': 'tactical_package', 'rarity': 'rare', 'icon': 'pkg_virus', 'base_value': 90, 'is_consumable': False, 'blueprint_ref': 'ab_virus', 'level': 2},
-    {'name': 'Pakiet: Wirus Lvl 3', 'slug': 'pkg-virus-3', 'category_slug': 'tactical-packages', 'item_type': 'tactical_package', 'rarity': 'epic', 'icon': 'pkg_virus', 'base_value': 180, 'is_consumable': False, 'blueprint_ref': 'ab_virus', 'level': 3},
+    {'name': 'Pakiet: Wirus Lvl 1', 'slug': 'pkg-virus-1', 'category_slug': 'tactical-packages', 'item_type': 'tactical_package', 'rarity': 'uncommon', 'icon': '🧬', 'base_value': 40, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'ab_virus', 'level': 1},
+    {'name': 'Pakiet: Wirus Lvl 2', 'slug': 'pkg-virus-2', 'category_slug': 'tactical-packages', 'item_type': 'tactical_package', 'rarity': 'rare', 'icon': '🧬', 'base_value': 90, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'ab_virus', 'level': 2},
+    {'name': 'Pakiet: Wirus Lvl 3', 'slug': 'pkg-virus-3', 'category_slug': 'tactical-packages', 'item_type': 'tactical_package', 'rarity': 'epic', 'icon': '🧬', 'base_value': 180, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'ab_virus', 'level': 3},
     # Uderzenie Nuklearne
-    {'name': 'Pakiet: Uderzenie Nuklearne Lvl 1', 'slug': 'pkg-nuke-1', 'category_slug': 'tactical-packages', 'item_type': 'tactical_package', 'rarity': 'rare', 'icon': 'pkg_nuke', 'base_value': 100, 'is_consumable': False, 'blueprint_ref': 'ab_province_nuke', 'level': 1},
-    {'name': 'Pakiet: Uderzenie Nuklearne Lvl 2', 'slug': 'pkg-nuke-2', 'category_slug': 'tactical-packages', 'item_type': 'tactical_package', 'rarity': 'epic', 'icon': 'pkg_nuke', 'base_value': 250, 'is_consumable': False, 'blueprint_ref': 'ab_province_nuke', 'level': 2},
-    {'name': 'Pakiet: Uderzenie Nuklearne Lvl 3', 'slug': 'pkg-nuke-3', 'category_slug': 'tactical-packages', 'item_type': 'tactical_package', 'rarity': 'legendary', 'icon': 'pkg_nuke', 'base_value': 500, 'is_consumable': False, 'blueprint_ref': 'ab_province_nuke', 'level': 3},
+    {'name': 'Pakiet: Uderzenie Nuklearne Lvl 1', 'slug': 'pkg-nuke-1', 'category_slug': 'tactical-packages', 'item_type': 'tactical_package', 'rarity': 'rare', 'icon': '☢️', 'base_value': 100, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'ab_province_nuke', 'level': 1},
+    {'name': 'Pakiet: Uderzenie Nuklearne Lvl 2', 'slug': 'pkg-nuke-2', 'category_slug': 'tactical-packages', 'item_type': 'tactical_package', 'rarity': 'epic', 'icon': '☢️', 'base_value': 250, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'ab_province_nuke', 'level': 2},
+    {'name': 'Pakiet: Uderzenie Nuklearne Lvl 3', 'slug': 'pkg-nuke-3', 'category_slug': 'tactical-packages', 'item_type': 'tactical_package', 'rarity': 'legendary', 'icon': '☢️', 'base_value': 500, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'ab_province_nuke', 'level': 3},
     # Wywiad
-    {'name': 'Pakiet: Wywiad Lvl 1', 'slug': 'pkg-recon-1', 'category_slug': 'tactical-packages', 'item_type': 'tactical_package', 'rarity': 'common', 'icon': 'pkg_recon', 'base_value': 20, 'is_consumable': False, 'blueprint_ref': 'ab_pr_submarine', 'level': 1},
-    {'name': 'Pakiet: Wywiad Lvl 2', 'slug': 'pkg-recon-2', 'category_slug': 'tactical-packages', 'item_type': 'tactical_package', 'rarity': 'uncommon', 'icon': 'pkg_recon', 'base_value': 50, 'is_consumable': False, 'blueprint_ref': 'ab_pr_submarine', 'level': 2},
-    {'name': 'Pakiet: Wywiad Lvl 3', 'slug': 'pkg-recon-3', 'category_slug': 'tactical-packages', 'item_type': 'tactical_package', 'rarity': 'rare', 'icon': 'pkg_recon', 'base_value': 110, 'is_consumable': False, 'blueprint_ref': 'ab_pr_submarine', 'level': 3},
+    {'name': 'Pakiet: Wywiad Lvl 1', 'slug': 'pkg-recon-1', 'category_slug': 'tactical-packages', 'item_type': 'tactical_package', 'rarity': 'common', 'icon': '🔭', 'base_value': 20, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'ab_pr_submarine', 'level': 1},
+    {'name': 'Pakiet: Wywiad Lvl 2', 'slug': 'pkg-recon-2', 'category_slug': 'tactical-packages', 'item_type': 'tactical_package', 'rarity': 'uncommon', 'icon': '🔭', 'base_value': 50, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'ab_pr_submarine', 'level': 2},
+    {'name': 'Pakiet: Wywiad Lvl 3', 'slug': 'pkg-recon-3', 'category_slug': 'tactical-packages', 'item_type': 'tactical_package', 'rarity': 'rare', 'icon': '🔭', 'base_value': 110, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'ab_pr_submarine', 'level': 3},
     # Pobór
-    {'name': 'Pakiet: Pobór Lvl 1', 'slug': 'pkg-conscription-1', 'category_slug': 'tactical-packages', 'item_type': 'tactical_package', 'rarity': 'common', 'icon': 'pkg_conscription', 'base_value': 15, 'is_consumable': False, 'blueprint_ref': 'ab_conscription_point', 'level': 1},
-    {'name': 'Pakiet: Pobór Lvl 2', 'slug': 'pkg-conscription-2', 'category_slug': 'tactical-packages', 'item_type': 'tactical_package', 'rarity': 'uncommon', 'icon': 'pkg_conscription', 'base_value': 40, 'is_consumable': False, 'blueprint_ref': 'ab_conscription_point', 'level': 2},
-    {'name': 'Pakiet: Pobór Lvl 3', 'slug': 'pkg-conscription-3', 'category_slug': 'tactical-packages', 'item_type': 'tactical_package', 'rarity': 'rare', 'icon': 'pkg_conscription', 'base_value': 100, 'is_consumable': False, 'blueprint_ref': 'ab_conscription_point', 'level': 3},
+    {'name': 'Pakiet: Pobór Lvl 1', 'slug': 'pkg-conscription-1', 'category_slug': 'tactical-packages', 'item_type': 'tactical_package', 'rarity': 'common', 'icon': '📯', 'base_value': 15, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'ab_conscription_point', 'level': 1},
+    {'name': 'Pakiet: Pobór Lvl 2', 'slug': 'pkg-conscription-2', 'category_slug': 'tactical-packages', 'item_type': 'tactical_package', 'rarity': 'uncommon', 'icon': '📯', 'base_value': 40, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'ab_conscription_point', 'level': 2},
+    {'name': 'Pakiet: Pobór Lvl 3', 'slug': 'pkg-conscription-3', 'category_slug': 'tactical-packages', 'item_type': 'tactical_package', 'rarity': 'rare', 'icon': '📯', 'base_value': 100, 'is_consumable': False, 'is_stackable': False, 'blueprint_ref': 'ab_conscription_point', 'level': 3},
 
     # --- Bonusy (4 × 3 poziomy) ---
     # Mobilizacja
-    {'name': 'Bonus: Mobilizacja Lvl 1', 'slug': 'boost-mobilization-1', 'category_slug': 'boosts', 'item_type': 'boost', 'rarity': 'common', 'icon': 'boost_mobilization', 'base_value': 15, 'is_consumable': True, 'level': 1,
+    {'name': 'Bonus: Mobilizacja Lvl 1', 'slug': 'boost-mobilization-1', 'category_slug': 'boosts', 'item_type': 'boost', 'rarity': 'common', 'icon': '⚡', 'base_value': 15, 'is_consumable': True, 'is_stackable': False, 'level': 1,
      'boost_params': {'effect_type': 'unit_bonus', 'value': 0.15}},
-    {'name': 'Bonus: Mobilizacja Lvl 2', 'slug': 'boost-mobilization-2', 'category_slug': 'boosts', 'item_type': 'boost', 'rarity': 'uncommon', 'icon': 'boost_mobilization', 'base_value': 35, 'is_consumable': True, 'level': 2,
+    {'name': 'Bonus: Mobilizacja Lvl 2', 'slug': 'boost-mobilization-2', 'category_slug': 'boosts', 'item_type': 'boost', 'rarity': 'uncommon', 'icon': '⚡', 'base_value': 35, 'is_consumable': True, 'is_stackable': False, 'level': 2,
      'boost_params': {'effect_type': 'unit_bonus', 'value': 0.30}},
-    {'name': 'Bonus: Mobilizacja Lvl 3', 'slug': 'boost-mobilization-3', 'category_slug': 'boosts', 'item_type': 'boost', 'rarity': 'rare', 'icon': 'boost_mobilization', 'base_value': 70, 'is_consumable': True, 'level': 3,
+    {'name': 'Bonus: Mobilizacja Lvl 3', 'slug': 'boost-mobilization-3', 'category_slug': 'boosts', 'item_type': 'boost', 'rarity': 'rare', 'icon': '⚡', 'base_value': 70, 'is_consumable': True, 'is_stackable': False, 'level': 3,
      'boost_params': {'effect_type': 'unit_bonus', 'value': 0.50}},
     # Fortyfikacja
-    {'name': 'Bonus: Fortyfikacja Lvl 1', 'slug': 'boost-fortification-1', 'category_slug': 'boosts', 'item_type': 'boost', 'rarity': 'common', 'icon': 'boost_fortification', 'base_value': 15, 'is_consumable': True, 'level': 1,
+    {'name': 'Bonus: Fortyfikacja Lvl 1', 'slug': 'boost-fortification-1', 'category_slug': 'boosts', 'item_type': 'boost', 'rarity': 'common', 'icon': '🏰', 'base_value': 15, 'is_consumable': True, 'is_stackable': False, 'level': 1,
      'boost_params': {'effect_type': 'defense_bonus', 'value': 0.10}},
-    {'name': 'Bonus: Fortyfikacja Lvl 2', 'slug': 'boost-fortification-2', 'category_slug': 'boosts', 'item_type': 'boost', 'rarity': 'uncommon', 'icon': 'boost_fortification', 'base_value': 35, 'is_consumable': True, 'level': 2,
+    {'name': 'Bonus: Fortyfikacja Lvl 2', 'slug': 'boost-fortification-2', 'category_slug': 'boosts', 'item_type': 'boost', 'rarity': 'uncommon', 'icon': '🏰', 'base_value': 35, 'is_consumable': True, 'is_stackable': False, 'level': 2,
      'boost_params': {'effect_type': 'defense_bonus', 'value': 0.20}},
-    {'name': 'Bonus: Fortyfikacja Lvl 3', 'slug': 'boost-fortification-3', 'category_slug': 'boosts', 'item_type': 'boost', 'rarity': 'rare', 'icon': 'boost_fortification', 'base_value': 70, 'is_consumable': True, 'level': 3,
+    {'name': 'Bonus: Fortyfikacja Lvl 3', 'slug': 'boost-fortification-3', 'category_slug': 'boosts', 'item_type': 'boost', 'rarity': 'rare', 'icon': '🏰', 'base_value': 70, 'is_consumable': True, 'is_stackable': False, 'level': 3,
      'boost_params': {'effect_type': 'defense_bonus', 'value': 0.35}},
     # Ekonomia Wojenna
-    {'name': 'Bonus: Ekonomia Wojenna Lvl 1', 'slug': 'boost-war-economy-1', 'category_slug': 'boosts', 'item_type': 'boost', 'rarity': 'uncommon', 'icon': 'boost_war_economy', 'base_value': 25, 'is_consumable': True, 'level': 1,
+    {'name': 'Bonus: Ekonomia Wojenna Lvl 1', 'slug': 'boost-war-economy-1', 'category_slug': 'boosts', 'item_type': 'boost', 'rarity': 'uncommon', 'icon': '💰', 'base_value': 25, 'is_consumable': True, 'is_stackable': False, 'level': 1,
      'boost_params': {'effect_type': 'energy_bonus', 'value': 0.20}},
-    {'name': 'Bonus: Ekonomia Wojenna Lvl 2', 'slug': 'boost-war-economy-2', 'category_slug': 'boosts', 'item_type': 'boost', 'rarity': 'rare', 'icon': 'boost_war_economy', 'base_value': 60, 'is_consumable': True, 'level': 2,
+    {'name': 'Bonus: Ekonomia Wojenna Lvl 2', 'slug': 'boost-war-economy-2', 'category_slug': 'boosts', 'item_type': 'boost', 'rarity': 'rare', 'icon': '💰', 'base_value': 60, 'is_consumable': True, 'is_stackable': False, 'level': 2,
      'boost_params': {'effect_type': 'energy_bonus', 'value': 0.40}},
-    {'name': 'Bonus: Ekonomia Wojenna Lvl 3', 'slug': 'boost-war-economy-3', 'category_slug': 'boosts', 'item_type': 'boost', 'rarity': 'epic', 'icon': 'boost_war_economy', 'base_value': 130, 'is_consumable': True, 'level': 3,
+    {'name': 'Bonus: Ekonomia Wojenna Lvl 3', 'slug': 'boost-war-economy-3', 'category_slug': 'boosts', 'item_type': 'boost', 'rarity': 'epic', 'icon': '💰', 'base_value': 130, 'is_consumable': True, 'is_stackable': False, 'level': 3,
      'boost_params': {'effect_type': 'energy_bonus', 'value': 0.65}},
     # Blitzkrieg
-    {'name': 'Bonus: Blitzkrieg Lvl 1', 'slug': 'boost-blitzkrieg-1', 'category_slug': 'boosts', 'item_type': 'boost', 'rarity': 'uncommon', 'icon': 'boost_blitzkrieg', 'base_value': 25, 'is_consumable': True, 'level': 1,
+    {'name': 'Bonus: Blitzkrieg Lvl 1', 'slug': 'boost-blitzkrieg-1', 'category_slug': 'boosts', 'item_type': 'boost', 'rarity': 'uncommon', 'icon': '⚔️', 'base_value': 25, 'is_consumable': True, 'is_stackable': False, 'level': 1,
      'boost_params': {'effect_type': 'attack_bonus', 'value': 0.15}},
-    {'name': 'Bonus: Blitzkrieg Lvl 2', 'slug': 'boost-blitzkrieg-2', 'category_slug': 'boosts', 'item_type': 'boost', 'rarity': 'rare', 'icon': 'boost_blitzkrieg', 'base_value': 60, 'is_consumable': True, 'level': 2,
+    {'name': 'Bonus: Blitzkrieg Lvl 2', 'slug': 'boost-blitzkrieg-2', 'category_slug': 'boosts', 'item_type': 'boost', 'rarity': 'rare', 'icon': '⚔️', 'base_value': 60, 'is_consumable': True, 'is_stackable': False, 'level': 2,
      'boost_params': {'effect_type': 'attack_bonus', 'value': 0.30}},
-    {'name': 'Bonus: Blitzkrieg Lvl 3', 'slug': 'boost-blitzkrieg-3', 'category_slug': 'boosts', 'item_type': 'boost', 'rarity': 'epic', 'icon': 'boost_blitzkrieg', 'base_value': 130, 'is_consumable': True, 'level': 3,
+    {'name': 'Bonus: Blitzkrieg Lvl 3', 'slug': 'boost-blitzkrieg-3', 'category_slug': 'boosts', 'item_type': 'boost', 'rarity': 'epic', 'icon': '⚔️', 'base_value': 130, 'is_consumable': True, 'is_stackable': False, 'level': 3,
      'boost_params': {'effect_type': 'attack_bonus', 'value': 0.50}},
 
     # --- Skrzynie ---
-    {'name': 'Skrzynia Żołnierska', 'slug': 'crate-soldier', 'category_slug': 'crates', 'item_type': 'crate', 'rarity': 'common', 'icon': 'crate_soldier', 'base_value': 20, 'is_consumable': True,
+    {'name': 'Skrzynia Żołnierska', 'slug': 'crate-soldier', 'category_slug': 'crates', 'item_type': 'crate', 'rarity': 'common', 'icon': '📦', 'base_value': 20, 'is_consumable': True,
      'crate_loot_table': [
          {'item_slug': 'steel-scrap', 'weight': 40, 'min_qty': 2, 'max_qty': 5},
          {'item_slug': 'circuit-board', 'weight': 40, 'min_qty': 2, 'max_qty': 5},
@@ -129,7 +152,7 @@ ITEMS = [
          {'item_slug': 'bp-barracks-1', 'weight': 3, 'min_qty': 1, 'max_qty': 1},
          {'item_slug': 'pkg-shield-1', 'weight': 2, 'min_qty': 1, 'max_qty': 1},
      ]},
-    {'name': 'Skrzynia Oficerska', 'slug': 'crate-officer', 'category_slug': 'crates', 'item_type': 'crate', 'rarity': 'uncommon', 'icon': 'crate_officer', 'base_value': 50, 'is_consumable': True,
+    {'name': 'Skrzynia Oficerska', 'slug': 'crate-officer', 'category_slug': 'crates', 'item_type': 'crate', 'rarity': 'uncommon', 'icon': '🎁', 'base_value': 50, 'is_consumable': True,
      'crate_loot_table': [
          {'item_slug': 'fuel-cell', 'weight': 30, 'min_qty': 1, 'max_qty': 3},
          {'item_slug': 'gunpowder', 'weight': 30, 'min_qty': 1, 'max_qty': 3},
@@ -141,7 +164,7 @@ ITEMS = [
          {'item_slug': 'boost-fortification-1', 'weight': 4, 'min_qty': 1, 'max_qty': 1},
          {'item_slug': 'pkg-recon-1', 'weight': 3, 'min_qty': 1, 'max_qty': 1},
      ]},
-    {'name': 'Skrzynia Generalna', 'slug': 'crate-general', 'category_slug': 'crates', 'item_type': 'crate', 'rarity': 'rare', 'icon': 'crate_general', 'base_value': 120, 'is_consumable': True,
+    {'name': 'Skrzynia Generalna', 'slug': 'crate-general', 'category_slug': 'crates', 'item_type': 'crate', 'rarity': 'rare', 'icon': '👑', 'base_value': 120, 'is_consumable': True,
      'crate_loot_table': [
          {'item_slug': 'command-protocol', 'weight': 25, 'min_qty': 1, 'max_qty': 3},
          {'item_slug': 'optic-fiber', 'weight': 25, 'min_qty': 1, 'max_qty': 3},
@@ -157,20 +180,20 @@ ITEMS = [
      ]},
 
     # --- Klucze ---
-    {'name': 'Klucz Żołnierski', 'slug': 'key-soldier', 'category_slug': 'keys', 'item_type': 'key', 'rarity': 'common', 'icon': 'key_soldier', 'base_value': 15, 'is_consumable': True, 'opens_crate_slug': 'crate-soldier'},
-    {'name': 'Klucz Oficerski', 'slug': 'key-officer', 'category_slug': 'keys', 'item_type': 'key', 'rarity': 'uncommon', 'icon': 'key_officer', 'base_value': 35, 'is_consumable': True, 'opens_crate_slug': 'crate-officer'},
-    {'name': 'Klucz Generalny', 'slug': 'key-general', 'category_slug': 'keys', 'item_type': 'key', 'rarity': 'rare', 'icon': 'key_general', 'base_value': 80, 'is_consumable': True, 'opens_crate_slug': 'crate-general'},
+    {'name': 'Klucz Żołnierski', 'slug': 'key-soldier', 'category_slug': 'keys', 'item_type': 'key', 'rarity': 'common', 'icon': '🔑', 'base_value': 15, 'is_consumable': True, 'opens_crate_slug': 'crate-soldier'},
+    {'name': 'Klucz Oficerski', 'slug': 'key-officer', 'category_slug': 'keys', 'item_type': 'key', 'rarity': 'uncommon', 'icon': '🗝️', 'base_value': 35, 'is_consumable': True, 'opens_crate_slug': 'crate-officer'},
+    {'name': 'Klucz Generalny', 'slug': 'key-general', 'category_slug': 'keys', 'item_type': 'key', 'rarity': 'rare', 'icon': '🔐', 'base_value': 80, 'is_consumable': True, 'opens_crate_slug': 'crate-general'},
 
     # --- Kosmetyki ---
-    {'name': 'Kamuflaż Pustynny', 'slug': 'skin-desert-camo', 'category_slug': 'cosmetics', 'item_type': 'cosmetic', 'rarity': 'uncommon', 'icon': 'skin_desert', 'base_value': 40},
-    {'name': 'Biel Arktyczna', 'slug': 'skin-arctic-white', 'category_slug': 'cosmetics', 'item_type': 'cosmetic', 'rarity': 'uncommon', 'icon': 'skin_arctic', 'base_value': 40},
-    {'name': 'Szkarłat Bojowy', 'slug': 'skin-blood-red', 'category_slug': 'cosmetics', 'item_type': 'cosmetic', 'rarity': 'rare', 'icon': 'skin_blood_red', 'base_value': 80},
-    {'name': 'Złoty Dowódca', 'slug': 'skin-golden-commander', 'category_slug': 'cosmetics', 'item_type': 'cosmetic', 'rarity': 'epic', 'icon': 'skin_golden', 'base_value': 200},
-    {'name': 'Emblemat Czaszki', 'slug': 'emblem-skull', 'category_slug': 'cosmetics', 'item_type': 'cosmetic', 'rarity': 'common', 'icon': 'emblem_skull', 'base_value': 15},
-    {'name': 'Emblemat Orła', 'slug': 'emblem-eagle', 'category_slug': 'cosmetics', 'item_type': 'cosmetic', 'rarity': 'uncommon', 'icon': 'emblem_eagle', 'base_value': 30},
-    {'name': 'Emblemat Smoka', 'slug': 'emblem-dragon', 'category_slug': 'cosmetics', 'item_type': 'cosmetic', 'rarity': 'rare', 'icon': 'emblem_dragon', 'base_value': 60},
-    {'name': 'Ślad Ognia', 'slug': 'effect-fire-trail', 'category_slug': 'cosmetics', 'item_type': 'cosmetic', 'rarity': 'epic', 'icon': 'effect_fire', 'base_value': 180},
-    {'name': 'Efekt Błyskawicy', 'slug': 'effect-lightning', 'category_slug': 'cosmetics', 'item_type': 'cosmetic', 'rarity': 'legendary', 'icon': 'effect_lightning', 'base_value': 500},
+    {'name': 'Kamuflaż Pustynny', 'slug': 'skin-desert-camo', 'category_slug': 'cosmetics', 'item_type': 'cosmetic', 'rarity': 'uncommon', 'icon': '🎨', 'base_value': 40, 'is_stackable': False},
+    {'name': 'Biel Arktyczna', 'slug': 'skin-arctic-white', 'category_slug': 'cosmetics', 'item_type': 'cosmetic', 'rarity': 'uncommon', 'icon': '🎨', 'base_value': 40, 'is_stackable': False},
+    {'name': 'Szkarłat Bojowy', 'slug': 'skin-blood-red', 'category_slug': 'cosmetics', 'item_type': 'cosmetic', 'rarity': 'rare', 'icon': '🎨', 'base_value': 80, 'is_stackable': False},
+    {'name': 'Złoty Dowódca', 'slug': 'skin-golden-commander', 'category_slug': 'cosmetics', 'item_type': 'cosmetic', 'rarity': 'epic', 'icon': '🎨', 'base_value': 200, 'is_stackable': False},
+    {'name': 'Emblemat Czaszki', 'slug': 'emblem-skull', 'category_slug': 'cosmetics', 'item_type': 'cosmetic', 'rarity': 'common', 'icon': '🏅', 'base_value': 15, 'is_stackable': False},
+    {'name': 'Emblemat Orła', 'slug': 'emblem-eagle', 'category_slug': 'cosmetics', 'item_type': 'cosmetic', 'rarity': 'uncommon', 'icon': '🏅', 'base_value': 30, 'is_stackable': False},
+    {'name': 'Emblemat Smoka', 'slug': 'emblem-dragon', 'category_slug': 'cosmetics', 'item_type': 'cosmetic', 'rarity': 'rare', 'icon': '🏅', 'base_value': 60, 'is_stackable': False},
+    {'name': 'Ślad Ognia', 'slug': 'effect-fire-trail', 'category_slug': 'cosmetics', 'item_type': 'cosmetic', 'rarity': 'epic', 'icon': '✨', 'base_value': 180, 'is_stackable': False},
+    {'name': 'Efekt Błyskawicy', 'slug': 'effect-lightning', 'category_slug': 'cosmetics', 'item_type': 'cosmetic', 'rarity': 'legendary', 'icon': '✨', 'base_value': 500, 'is_stackable': False},
 
     # --- Animacje VFX ---
     {
@@ -180,6 +203,8 @@ ITEMS = [
         'item_type': 'cosmetic',
         'asset_key': 'vfx_attack',
         'rarity': 'epic',
+        'icon': '🌟',
+        'is_stackable': False,
         'base_value': 500,
         'cosmetic_params': {
             'trail': {
@@ -210,6 +235,8 @@ ITEMS = [
         'item_type': 'cosmetic',
         'asset_key': 'vfx_attack',
         'rarity': 'rare',
+        'icon': '🌟',
+        'is_stackable': False,
         'base_value': 300,
         'cosmetic_params': {
             'trail': {
@@ -239,6 +266,8 @@ ITEMS = [
         'item_type': 'cosmetic',
         'asset_key': 'vfx_move',
         'rarity': 'uncommon',
+        'icon': '🌟',
+        'is_stackable': False,
         'base_value': 150,
         'cosmetic_params': {
             'trail': {
@@ -265,6 +294,8 @@ ITEMS = [
         'item_type': 'cosmetic',
         'asset_key': 'vfx_attack',
         'rarity': 'legendary',
+        'icon': '🌟',
+        'is_stackable': False,
         'base_value': 1000,
         'cosmetic_params': {
             'trail': {
@@ -295,6 +326,8 @@ ITEMS = [
         'item_type': 'cosmetic',
         'asset_key': 'vfx_nuke',
         'rarity': 'legendary',
+        'icon': '🌟',
+        'is_stackable': False,
         'base_value': 800,
         'cosmetic_params': {
             'trail': {
@@ -323,6 +356,8 @@ ITEMS = [
         'item_type': 'cosmetic',
         'asset_key': 'vfx_attack',
         'rarity': 'legendary',
+        'icon': '🌟',
+        'is_stackable': False,
         'base_value': 1200,
         'cosmetic_params': {
             'trail': {
@@ -367,6 +402,8 @@ ITEMS = [
         'item_type': 'cosmetic',
         'asset_key': 'vfx_attack',
         'rarity': 'legendary',
+        'icon': '🌟',
+        'is_stackable': False,
         'base_value': 1500,
         'cosmetic_params': {
             'trail': {
@@ -413,6 +450,8 @@ ITEMS = [
         'item_type': 'cosmetic',
         'asset_key': 'vfx_attack',
         'rarity': 'epic',
+        'icon': '🌟',
+        'is_stackable': False,
         'base_value': 600,
         'cosmetic_params': {
             'trail': {
@@ -453,6 +492,8 @@ ITEMS = [
         'item_type': 'cosmetic',
         'asset_key': 'vfx_attack',
         'rarity': 'legendary',
+        'icon': '🌟',
+        'is_stackable': False,
         'base_value': 2000,
         'cosmetic_params': {
             'trail': {
@@ -500,6 +541,8 @@ ITEMS = [
         'item_type': 'cosmetic',
         'asset_key': 'vfx_move',
         'rarity': 'rare',
+        'icon': '🌟',
+        'is_stackable': False,
         'base_value': 350,
         'cosmetic_params': {
             'trail': {
@@ -537,6 +580,8 @@ ITEMS = [
         'item_type': 'cosmetic',
         'asset_key': 'vfx_nuke',
         'rarity': 'legendary',
+        'icon': '🌟',
+        'is_stackable': False,
         'base_value': 2500,
         'cosmetic_params': {
             'trail': {
@@ -577,6 +622,8 @@ ITEMS = [
         'item_type': 'cosmetic',
         'asset_key': 'vfx_attack',
         'rarity': 'epic',
+        'icon': '🌟',
+        'is_stackable': False,
         'base_value': 700,
         'cosmetic_params': {
             'trail': {
@@ -618,6 +665,8 @@ ITEMS = [
         'item_type': 'cosmetic',
         'asset_key': 'vfx_move',
         'rarity': 'epic',
+        'icon': '🌟',
+        'is_stackable': False,
         'base_value': 450,
         'cosmetic_params': {
             'trail': {
@@ -655,6 +704,8 @@ ITEMS = [
         'item_type': 'cosmetic',
         'asset_key': 'vfx_move',
         'rarity': 'legendary',
+        'icon': '🌟',
+        'is_stackable': False,
         'base_value': 800,
         'cosmetic_params': {
             'trail': {
@@ -697,6 +748,8 @@ ITEMS = [
         'item_type': 'cosmetic',
         'asset_key': 'vfx_move',
         'rarity': 'rare',
+        'icon': '🌟',
+        'is_stackable': False,
         'base_value': 250,
         'cosmetic_params': {
             'trail': {
@@ -736,6 +789,8 @@ ITEMS = [
         'item_type': 'cosmetic',
         'asset_key': 'vfx_nuke',
         'rarity': 'legendary',
+        'icon': '🌟',
+        'is_stackable': False,
         'base_value': 1800,
         'cosmetic_params': {
             'trail': {
@@ -772,6 +827,8 @@ ITEMS = [
         'item_type': 'cosmetic',
         'asset_key': 'vfx_nuke',
         'rarity': 'legendary',
+        'icon': '🌟',
+        'is_stackable': False,
         'base_value': 3000,
         'cosmetic_params': {
             'trail': {
@@ -812,6 +869,8 @@ ITEMS = [
         'item_type': 'cosmetic',
         'asset_key': 'vfx_nuke',
         'rarity': 'epic',
+        'icon': '🌟',
+        'is_stackable': False,
         'base_value': 900,
         'cosmetic_params': {
             'trail': {
@@ -1007,6 +1066,124 @@ RECIPES = [
      'ingredients': [('plasma-core', 1), ('gunpowder', 5)]},
     {'name': 'Stwórz Złoty Dowódca', 'slug': 'craft-skin-golden', 'result_slug': 'skin-golden-commander', 'gold_cost': 150,
      'ingredients': [('plasma-core', 2), ('artifact-fragment', 1), ('command-protocol', 3)]},
+
+    # -------------------------------------------------------------------------
+    # Material Crafting (tier progression)
+    # -------------------------------------------------------------------------
+
+    # Tier 0 → Tier 1 (raw → basic processed)
+    {'name': 'Wytop złomu stalowego', 'slug': 'craft-steel-scrap', 'result_slug': 'steel-scrap', 'gold_cost': 2,
+     'ingredients': [('copper-ore', 2), ('carbon', 1)]},
+    {'name': 'Produkcja płytki obwodu', 'slug': 'craft-circuit-board', 'result_slug': 'circuit-board', 'gold_cost': 2,
+     'ingredients': [('raw-silicon', 2), ('copper-ore', 1)]},
+
+    # Tier 1 → Tier 1.5
+    {'name': 'Wytop stopu żelaznego', 'slug': 'craft-iron-alloy', 'result_slug': 'iron-alloy', 'gold_cost': 3,
+     'ingredients': [('steel-scrap', 3)]},
+    {'name': 'Złóż kondensator', 'slug': 'craft-capacitor', 'result_slug': 'capacitor', 'gold_cost': 3,
+     'ingredients': [('circuit-board', 3)]},
+
+    # Tier 1 + 1.5 → Tier 2
+    {'name': 'Synteza ogniwa', 'slug': 'craft-fuel-cell', 'result_slug': 'fuel-cell', 'gold_cost': 5,
+     'ingredients': [('iron-alloy', 2), ('steel-scrap', 2)]},
+    {'name': 'Produkcja prochu', 'slug': 'craft-gunpowder', 'result_slug': 'gunpowder', 'gold_cost': 5,
+     'ingredients': [('iron-alloy', 1), ('capacitor', 1), ('steel-scrap', 2)]},
+
+    # Tier 2 → Tier 2.5
+    {'name': 'Produkcja amunicji', 'slug': 'craft-armor-piercing-ammo', 'result_slug': 'armor-piercing-ammo', 'gold_cost': 8,
+     'ingredients': [('gunpowder', 2), ('iron-alloy', 2)]},
+    {'name': 'Montaż modułu radarowego', 'slug': 'craft-radar-module', 'result_slug': 'radar-module', 'gold_cost': 8,
+     'ingredients': [('circuit-board', 3), ('capacitor', 2)]},
+
+    # Tier 2 + 2.5 → Tier 3
+    {'name': 'Synteza protokołu', 'slug': 'craft-command-protocol', 'result_slug': 'command-protocol', 'gold_cost': 15,
+     'ingredients': [('radar-module', 2), ('fuel-cell', 1)]},
+    {'name': 'Wytwarzanie światłowodu', 'slug': 'craft-optic-fiber', 'result_slug': 'optic-fiber', 'gold_cost': 15,
+     'ingredients': [('capacitor', 3), ('fuel-cell', 1)]},
+
+    # Tier 3 → Tier 3.5
+    {'name': 'Formuła tytanowa', 'slug': 'craft-titanium-composite', 'result_slug': 'titanium-composite', 'gold_cost': 25,
+     'ingredients': [('command-protocol', 1), ('armor-piercing-ammo', 2), ('iron-alloy', 3)]},
+    {'name': 'Budowa procesora kwantowego', 'slug': 'craft-quantum-processor', 'result_slug': 'quantum-processor', 'gold_cost': 25,
+     'ingredients': [('optic-fiber', 2), ('radar-module', 2)]},
+
+    # Tier 3 + 3.5 → Tier 4
+    {'name': 'Synteza rdzenia plazmowego', 'slug': 'craft-plasma-core', 'result_slug': 'plasma-core', 'gold_cost': 50,
+     'ingredients': [('titanium-composite', 1), ('quantum-processor', 1), ('fuel-cell', 3)]},
+
+    # Tier 4 → Tier 4.5
+    {'name': 'Generacja antymaterii', 'slug': 'craft-antimatter', 'result_slug': 'antimatter', 'gold_cost': 80,
+     'ingredients': [('plasma-core', 2), ('quantum-processor', 1)]},
+
+    # Tier 4 + 4.5 → Tier 5
+    {'name': 'Ekstrakcja fragmentu', 'slug': 'craft-artifact-fragment', 'result_slug': 'artifact-fragment', 'gold_cost': 150,
+     'ingredients': [('antimatter', 2), ('plasma-core', 1)]},
+
+    # -------------------------------------------------------------------------
+    # Key Crafting
+    # -------------------------------------------------------------------------
+    {'name': 'Kucie klucza żołnierskiego', 'slug': 'craft-key-soldier', 'result_slug': 'key-soldier', 'gold_cost': 5,
+     'ingredients': [('iron-alloy', 2), ('steel-scrap', 3)]},
+    {'name': 'Kucie klucza oficerskiego', 'slug': 'craft-key-officer', 'result_slug': 'key-officer', 'gold_cost': 15,
+     'ingredients': [('iron-alloy', 3), ('radar-module', 1)]},
+    {'name': 'Kucie klucza generalnego', 'slug': 'craft-key-general', 'result_slug': 'key-general', 'gold_cost': 35,
+     'ingredients': [('titanium-composite', 1), ('command-protocol', 1)]},
+
+    # -------------------------------------------------------------------------
+    # Cosmetic Crafting
+    # -------------------------------------------------------------------------
+    {'name': 'Biel Arktyczna', 'slug': 'craft-skin-arctic', 'result_slug': 'skin-arctic-white', 'gold_cost': 15,
+     'ingredients': [('steel-scrap', 4), ('circuit-board', 2)]},
+    {'name': 'Emblemat Czaszki', 'slug': 'craft-emblem-skull', 'result_slug': 'emblem-skull', 'gold_cost': 5,
+     'ingredients': [('iron-alloy', 2)]},
+    {'name': 'Emblemat Orła', 'slug': 'craft-emblem-eagle', 'result_slug': 'emblem-eagle', 'gold_cost': 10,
+     'ingredients': [('iron-alloy', 3), ('capacitor', 1)]},
+    {'name': 'Emblemat Smoka', 'slug': 'craft-emblem-dragon', 'result_slug': 'emblem-dragon', 'gold_cost': 25,
+     'ingredients': [('command-protocol', 1), ('armor-piercing-ammo', 1)]},
+    {'name': 'Ślad Ognia', 'slug': 'craft-effect-fire', 'result_slug': 'effect-fire-trail', 'gold_cost': 80,
+     'ingredients': [('plasma-core', 1), ('titanium-composite', 1), ('fuel-cell', 3)]},
+    {'name': 'Efekt Błyskawicy', 'slug': 'craft-effect-lightning', 'result_slug': 'effect-lightning', 'gold_cost': 200,
+     'ingredients': [('antimatter', 1), ('plasma-core', 2), ('quantum-processor', 1)]},
+
+    # -------------------------------------------------------------------------
+    # VFX Cosmetic Crafting
+    # -------------------------------------------------------------------------
+    {'name': 'Ognisty Szturm', 'slug': 'craft-vfx-ognisty', 'result_slug': 'vfx-ognisty-szturm', 'gold_cost': 200,
+     'ingredients': [('plasma-core', 2), ('titanium-composite', 2), ('fuel-cell', 5)]},
+    {'name': 'Lodowy Podmuch', 'slug': 'craft-vfx-lodowy', 'result_slug': 'vfx-lodowy-podmuch', 'gold_cost': 120,
+     'ingredients': [('plasma-core', 1), ('quantum-processor', 1), ('optic-fiber', 3)]},
+    {'name': 'Widmowy Ruch', 'slug': 'craft-vfx-widmowy', 'result_slug': 'vfx-widmowy-ruch', 'gold_cost': 60,
+     'ingredients': [('optic-fiber', 3), ('radar-module', 2)]},
+    {'name': 'Królewski Szturm', 'slug': 'craft-vfx-krolewski', 'result_slug': 'vfx-krolewski-szturm', 'gold_cost': 400,
+     'ingredients': [('artifact-fragment', 1), ('antimatter', 1), ('plasma-core', 2)]},
+    {'name': 'Nuklearny Chaos', 'slug': 'craft-vfx-nuklearny', 'result_slug': 'vfx-nuklearny-chaos', 'gold_cost': 300,
+     'ingredients': [('antimatter', 1), ('plasma-core', 2), ('titanium-composite', 1)]},
+    {'name': 'Plazma', 'slug': 'craft-vfx-plazma', 'result_slug': 'vfx-plazma', 'gold_cost': 500,
+     'ingredients': [('antimatter', 2), ('quantum-processor', 2), ('plasma-core', 1)]},
+    {'name': 'Nekromancja', 'slug': 'craft-vfx-nekromancja', 'result_slug': 'vfx-nekromancja', 'gold_cost': 600,
+     'ingredients': [('artifact-fragment', 1), ('antimatter', 2), ('quantum-processor', 1)]},
+    {'name': 'Cichy Zabójca', 'slug': 'craft-vfx-cichy', 'result_slug': 'vfx-cichy-zabojca', 'gold_cost': 250,
+     'ingredients': [('plasma-core', 2), ('optic-fiber', 4), ('radar-module', 2)]},
+    {'name': 'Supernowa', 'slug': 'craft-vfx-supernowa', 'result_slug': 'vfx-supernowa', 'gold_cost': 800,
+     'ingredients': [('artifact-fragment', 2), ('antimatter', 2), ('plasma-core', 2)]},
+    {'name': 'Ciche Wody', 'slug': 'craft-vfx-ciche-wody', 'result_slug': 'vfx-ciche-wody', 'gold_cost': 140,
+     'ingredients': [('plasma-core', 1), ('optic-fiber', 3), ('fuel-cell', 3)]},
+    {'name': 'Piekielna Zagłada', 'slug': 'craft-vfx-piekielna', 'result_slug': 'vfx-piekielna-zaglada', 'gold_cost': 1000,
+     'ingredients': [('artifact-fragment', 2), ('antimatter', 3), ('plasma-core', 2)]},
+    {'name': 'Matryca', 'slug': 'craft-vfx-matryca', 'result_slug': 'vfx-matryca', 'gold_cost': 280,
+     'ingredients': [('quantum-processor', 2), ('plasma-core', 1), ('optic-fiber', 3)]},
+    {'name': 'Złoty Konwój', 'slug': 'craft-vfx-zloty-konwoj', 'result_slug': 'vfx-zloty-konwoj', 'gold_cost': 180,
+     'ingredients': [('titanium-composite', 2), ('plasma-core', 1), ('fuel-cell', 3)]},
+    {'name': 'Teleportacja', 'slug': 'craft-vfx-teleportacja', 'result_slug': 'vfx-teleportacja', 'gold_cost': 300,
+     'ingredients': [('antimatter', 1), ('quantum-processor', 2), ('optic-fiber', 2)]},
+    {'name': 'Burza Piaskowa', 'slug': 'craft-vfx-burza', 'result_slug': 'vfx-burza-piaskowa', 'gold_cost': 100,
+     'ingredients': [('titanium-composite', 1), ('fuel-cell', 3), ('iron-alloy', 4)]},
+    {'name': 'Lodowa Apokalipsa', 'slug': 'craft-vfx-lodowa-apokalipsa', 'result_slug': 'vfx-lodowa-apokalipsa', 'gold_cost': 700,
+     'ingredients': [('artifact-fragment', 1), ('antimatter', 2), ('quantum-processor', 2)]},
+    {'name': 'Czarna Dziura', 'slug': 'craft-vfx-czarna-dziura', 'result_slug': 'vfx-czarna-dziura', 'gold_cost': 1200,
+     'ingredients': [('artifact-fragment', 3), ('antimatter', 3), ('plasma-core', 3)]},
+    {'name': 'Toksyczna Mgła', 'slug': 'craft-vfx-toksyczna', 'result_slug': 'vfx-toksyczna-mgla', 'gold_cost': 350,
+     'ingredients': [('antimatter', 1), ('plasma-core', 2), ('command-protocol', 3)]},
 ]
 
 
@@ -1044,6 +1221,7 @@ class Command(BaseCommand):
                 'asset_key': item_data.get('asset_key', ''),
                 'base_value': item_data.get('base_value', 0),
                 'is_consumable': item_data.get('is_consumable', False),
+                'is_stackable': item_data.get('is_stackable', True),
                 'is_tradeable': item_data.get('is_tradeable', True),
                 'blueprint_ref': item_data.get('blueprint_ref', ''),
                 'level': item_data.get('level', 1),

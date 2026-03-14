@@ -24,7 +24,7 @@ def _consume_default_deck(user) -> dict:
     Tarcza (Shield) Lvl 1 is always available as a free ability regardless of deck.
     Returns at minimum the free ability even if the user has no default deck.
     """
-    from apps.inventory.models import Deck, Item, UserInventory
+    from apps.inventory.models import Deck, Item, ItemInstance, UserInventory
     from django.db import transaction
 
     # Free ability — always available
@@ -35,6 +35,7 @@ def _consume_default_deck(user) -> dict:
     building_levels: dict[str, int] = {}
     unlocked_units: list[str] = []
     active_boosts: list[dict] = []
+    instance_ids: list[str] = []
 
     try:
         deck = Deck.objects.prefetch_related(
@@ -48,6 +49,7 @@ def _consume_default_deck(user) -> dict:
             'ability_scrolls': ability_scrolls,
             'ability_levels': ability_levels,
             'active_boosts': active_boosts,
+            'instance_ids': instance_ids,
         }
 
     with transaction.atomic():
@@ -59,9 +61,13 @@ def _consume_default_deck(user) -> dict:
             # Non-consumable items: verify ownership but do NOT remove from
             # inventory or deck. They persist across matches.
             if not item.is_consumable:
-                owns = UserInventory.objects.filter(
-                    user=user, item=item, quantity__gte=1,
-                ).exists()
+                if item.is_stackable:
+                    owns = UserInventory.objects.filter(
+                        user=user, item=item, quantity__gte=1,
+                    ).exists()
+                else:
+                    owns = ItemInstance.objects.filter(owner=user, item=item).exists()
+
                 if not owns:
                     continue
 
@@ -81,22 +87,40 @@ def _consume_default_deck(user) -> dict:
                 elif item.item_type == Item.ItemType.BLUEPRINT_UNIT:
                     if item.blueprint_ref and item.blueprint_ref not in unlocked_units:
                         unlocked_units.append(item.blueprint_ref)
+
+                # Track instance IDs for post-match StatTrak updates
+                if not item.is_stackable and deck_item.instance_id:
+                    instance_ids.append(str(deck_item.instance_id))
                 continue
 
             # Consumable items: remove from inventory AND deck on use.
             consumed = 0
-            try:
-                inv = UserInventory.objects.select_for_update().get(
-                    user=user, item=item
-                )
-                consumed = min(inv.quantity, qty)
-                inv.quantity -= consumed
-                if inv.quantity == 0:
-                    inv.delete()
+            if item.is_stackable:
+                try:
+                    inv = UserInventory.objects.select_for_update().get(
+                        user=user, item=item
+                    )
+                    consumed = min(inv.quantity, qty)
+                    inv.quantity -= consumed
+                    if inv.quantity == 0:
+                        inv.delete()
+                    else:
+                        inv.save(update_fields=['quantity'])
+                except UserInventory.DoesNotExist:
+                    consumed = 0
+            else:
+                # Non-stackable consumable: delete the specific ItemInstance
+                if deck_item.instance_id:
+                    try:
+                        inst = ItemInstance.objects.get(
+                            id=deck_item.instance_id, owner=user
+                        )
+                        inst.delete()
+                        consumed = 1
+                    except ItemInstance.DoesNotExist:
+                        consumed = 0
                 else:
-                    inv.save(update_fields=['quantity'])
-            except UserInventory.DoesNotExist:
-                consumed = 0
+                    consumed = 0
 
             if consumed == 0:
                 continue
@@ -119,6 +143,7 @@ def _consume_default_deck(user) -> dict:
         'ability_scrolls': ability_scrolls,
         'ability_levels': ability_levels,
         'active_boosts': active_boosts,
+        'instance_ids': instance_ids,
     }
 
 
