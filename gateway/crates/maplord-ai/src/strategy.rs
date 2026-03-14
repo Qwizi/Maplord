@@ -207,7 +207,7 @@ impl BotBrain {
             // Try to build factory on capital
             if let Some(capital_id) = &player.capital_region_id {
                 if let Some(capital) = regions.get(capital_id) {
-                    let factory_count = capital.buildings.get("factory").copied().unwrap_or(0);
+                    let factory_count = capital.building_instances.iter().filter(|b| b.building_type == "factory").count();
                     if factory_count < 1 {
                         if let Some(factory_cfg) = settings.building_types.get("factory") {
                             if player.energy >= factory_cfg.energy_cost {
@@ -233,7 +233,7 @@ impl BotBrain {
         // 3. PRODUCE UNITS: Only 20% chance when factory available
         if rng.gen_bool(0.2) {
             for (rid, region) in &my_regions {
-                let factory_count = region.buildings.get("factory").copied().unwrap_or(0);
+                let factory_count = region.building_instances.iter().filter(|b| b.building_type == "factory").count();
                 if factory_count > 0 {
                     for (unit_slug, unit_cfg) in &settings.unit_types {
                         if unit_cfg.produced_by_slug.as_deref() == Some("factory")
@@ -323,8 +323,7 @@ mod tests {
             unit_type: Some("infantry".into()),
             is_capital,
             building_type: None,
-            buildings: HashMap::new(),
-            building_levels: HashMap::new(),
+            building_instances: Vec::new(),
             defense_bonus: 0.0,
             vision_range: 0,
             unit_generation_bonus: 0.0,

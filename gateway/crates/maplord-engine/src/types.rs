@@ -208,8 +208,16 @@ pub struct ActiveEffect {
 }
 
 fn default_f64_one() -> f64 { 1.0 }
-fn default_i64_one() -> i64 { 1 }
+pub fn default_i64_one() -> i64 { 1 }
 fn default_movement_type() -> String { "land".into() }
+
+/// An individual building instance placed in a region.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct BuildingInstance {
+    pub building_type: String,
+    #[serde(default = "default_i64_one")]
+    pub level: i64,
+}
 
 /// Player state stored in Redis.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -300,11 +308,9 @@ pub struct Region {
     pub is_capital: bool,
     #[serde(default)]
     pub building_type: Option<String>,
+    /// Individual building instances in this region.
     #[serde(default)]
-    pub buildings: HashMap<String, i64>,
-    /// Building levels: building_slug → level (1-3). All instances of a type in a region share one level.
-    #[serde(default)]
-    pub building_levels: HashMap<String, i64>,
+    pub building_instances: Vec<BuildingInstance>,
     #[serde(default)]
     pub defense_bonus: f64,
     #[serde(default)]

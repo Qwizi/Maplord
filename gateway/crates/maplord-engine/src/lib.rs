@@ -246,11 +246,15 @@ impl GameEngine {
             };
 
             if building.is_upgrade {
-                // Upgrade: advance the building level and recompute stats.
-                region.building_levels.insert(
-                    building.building_type.clone(),
-                    building.target_level,
-                );
+                // Upgrade: find the lowest-level instance of this type and bump it.
+                let slug = &building.building_type;
+                if let Some(instance) = region.building_instances
+                    .iter_mut()
+                    .filter(|b| &b.building_type == slug)
+                    .min_by_key(|b| b.level)
+                {
+                    instance.level = building.target_level;
+                }
                 self.recompute_region_building_stats(region);
 
                 events.push(Event::BuildingUpgraded {
@@ -260,16 +264,12 @@ impl GameEngine {
                     new_level: building.target_level,
                 });
             } else {
-                // New construction: increment count and initialise level to 1 if not set.
-                let count = region
-                    .buildings
-                    .entry(building.building_type.clone())
-                    .or_insert(0);
-                *count += 1;
-                let building_count = *count;
-                region.building_levels
-                    .entry(building.building_type.clone())
-                    .or_insert(1);
+                // New construction: push a fresh level-1 instance.
+                region.building_instances.push(BuildingInstance {
+                    building_type: building.building_type.clone(),
+                    level: 1,
+                });
+                let building_count = Self::count_buildings(&region.building_instances, &building.building_type);
                 self.recompute_region_building_stats(region);
 
                 if let Some(player) = players.get_mut(&building.player_id) {
@@ -1302,7 +1302,7 @@ impl GameEngine {
             )];
         }
 
-        let current_count = region.buildings.get(building_type).copied().unwrap_or(0);
+        let current_count = Self::count_buildings(&region.building_instances, building_type);
 
         // "build" action = always build a NEW instance (check max_per_region)
         // "upgrade_building" action = upgrade existing instance (check max_level)
@@ -1318,7 +1318,13 @@ impl GameEngine {
             if current_count == 0 {
                 return vec![reject_action(player_id, "Brak budynku do ulepszenia", action)];
             }
-            let current_level = region.building_levels.get(building_type).copied().unwrap_or(1);
+            // Find the level of the lowest-level instance (the one that will be upgraded).
+            let current_level = region.building_instances
+                .iter()
+                .filter(|b| &b.building_type == building_type)
+                .map(|b| b.level)
+                .min()
+                .unwrap_or(1);
             let deck_max = player.building_levels.get(building_type).copied().unwrap_or(1);
             let config_max = config.max_level;
             let max_allowed_level = deck_max.min(config_max);
@@ -1352,7 +1358,12 @@ impl GameEngine {
         }
 
         if is_upgrade {
-            let current_level = region.building_levels.get(building_type).copied().unwrap_or(1);
+            let current_level = region.building_instances
+                .iter()
+                .filter(|b| &b.building_type == building_type)
+                .map(|b| b.level)
+                .min()
+                .unwrap_or(1);
             let next_level = current_level + 1;
             let upgrade_cost = get_level_stat_i64(&config.level_stats, next_level, "energy_cost")
                 .unwrap_or(config.energy_cost * next_level);
@@ -1470,7 +1481,7 @@ impl GameEngine {
             }
         };
 
-        if region.buildings.get(&produced_by_slug).copied().unwrap_or(0) < 1 {
+        if Self::count_buildings(&region.building_instances, &produced_by_slug) < 1 {
             return vec![reject_action(
                 player_id,
                 "Ten region nie ma wymaganej infrastruktury",
@@ -1793,8 +1804,7 @@ impl GameEngine {
                     region.unit_count = 0;
                     region.unit_type = None;
                     region.is_capital = false;
-                    region.buildings.clear();
-                    region.building_levels.clear();
+                    region.building_instances.clear();
                     region.building_type = None;
                     region.defense_bonus = 0.0;
                     region.vision_range = 0;
@@ -1935,6 +1945,17 @@ impl GameEngine {
 
     // --- Helper methods ---
 
+    /// Count how many building instances of a given type exist in a slice.
+    pub fn count_buildings(instances: &[BuildingInstance], slug: &str) -> i64 {
+        instances.iter().filter(|b| b.building_type == slug).count() as i64
+    }
+
+    /// Get the Nth instance (by insertion order) of a given building type.
+    #[allow(dead_code)]
+    pub fn get_building_instance<'a>(instances: &'a [BuildingInstance], slug: &str, index: usize) -> Option<&'a BuildingInstance> {
+        instances.iter().filter(|b| b.building_type == slug).nth(index)
+    }
+
     fn recompute_region_building_stats(&self, region: &mut Region) {
         region.defense_bonus = 0.0;
         region.vision_range = 0;
@@ -1944,31 +1965,27 @@ impl GameEngine {
         let mut primary_slug: Option<String> = None;
         let mut primary_order: i64 = i64::MAX;
 
-        for (slug, &count) in &region.buildings.clone() {
-            if count <= 0 {
-                continue;
-            }
-            let Some(config) = self.settings.building_types.get(slug) else { continue };
-            let level = region.building_levels.get(slug).copied().unwrap_or(1);
+        for instance in &region.building_instances {
+            let Some(config) = self.settings.building_types.get(&instance.building_type) else { continue };
 
             // Use level_stats if available; otherwise fall back to base config values.
-            let defense = get_level_stat(&config.level_stats, level, "defense_bonus")
+            let defense = get_level_stat(&config.level_stats, instance.level, "defense_bonus")
                 .unwrap_or(config.defense_bonus);
-            let vision = get_level_stat_i64(&config.level_stats, level, "vision_range")
+            let vision = get_level_stat_i64(&config.level_stats, instance.level, "vision_range")
                 .unwrap_or(config.vision_range);
-            let unit_gen = get_level_stat(&config.level_stats, level, "unit_generation_bonus")
+            let unit_gen = get_level_stat(&config.level_stats, instance.level, "unit_generation_bonus")
                 .unwrap_or(config.unit_generation_bonus);
-            let energy_gen = get_level_stat(&config.level_stats, level, "energy_generation_bonus")
+            let energy_gen = get_level_stat(&config.level_stats, instance.level, "energy_generation_bonus")
                 .unwrap_or(config.energy_generation_bonus);
 
-            region.defense_bonus += defense * count as f64;
-            region.vision_range += vision * count;
-            region.unit_generation_bonus += unit_gen * count as f64;
-            region.energy_generation_bonus += energy_gen * count as f64;
+            region.defense_bonus += defense;
+            region.vision_range += vision;
+            region.unit_generation_bonus += unit_gen;
+            region.energy_generation_bonus += energy_gen;
 
             let order = config.order;
             if primary_slug.is_none() || order < primary_order {
-                primary_slug = Some(slug.clone());
+                primary_slug = Some(instance.building_type.clone());
                 primary_order = order;
             }
         }
@@ -2281,8 +2298,7 @@ fn can_station_unit(region: &Region, unit_type: &str, engine: &GameEngine) -> bo
     // Special units require their production building to station;
     // without one they are dropped and their infantry backing remains.
     if let Some(ref produced_by) = config.produced_by_slug {
-        let building_count = region.buildings.get(produced_by).copied().unwrap_or(0);
-        if building_count <= 0 {
+        if GameEngine::count_buildings(&region.building_instances, produced_by) <= 0 {
             return false;
         }
     }

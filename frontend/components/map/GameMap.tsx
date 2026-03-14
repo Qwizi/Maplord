@@ -1017,8 +1017,18 @@ export default memo(function GameMap({
         desiredCapitalIds.add(regionId);
       }
 
-      const buildingEntries = Object.entries(region.buildings ?? {})
-        .filter(([, count]) => count > 0)
+      // Derive building counts: prefer building_instances (new format), fall back to buildings HashMap
+      const buildingCountsForMap: Record<string, number> = {};
+      if (region.building_instances && region.building_instances.length > 0) {
+        for (const inst of region.building_instances) {
+          buildingCountsForMap[inst.building_type] = (buildingCountsForMap[inst.building_type] ?? 0) + 1;
+        }
+      } else {
+        for (const [slug, count] of Object.entries(region.buildings ?? {})) {
+          if (count > 0) buildingCountsForMap[slug] = count;
+        }
+      }
+      const buildingEntries = Object.entries(buildingCountsForMap)
         .map(([slug, count]) => {
           const assetKey = buildingIcons[slug] || slug;
           const assetUrl = getBuildingAsset(assetKey);

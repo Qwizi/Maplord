@@ -27,8 +27,6 @@ interface RegionPanelProps {
   unlockedUnits?: string[];
   /** Player's max buildable levels from their deck */
   buildingLevels?: Record<string, number>;
-  /** Current building levels in this region */
-  regionBuildingLevels?: Record<string, number>;
 }
 
 export default memo(function RegionPanel({
@@ -46,13 +44,22 @@ export default memo(function RegionPanel({
   unlockedBuildings,
   unlockedUnits,
   buildingLevels,
-  regionBuildingLevels,
 }: RegionPanelProps) {
   const hasBuildingLocks = unlockedBuildings != null && unlockedBuildings.length > 0;
   const hasUnitLocks = unlockedUnits != null && unlockedUnits.length > 0;
   const isOwned = region.owner_id === myUserId;
   const owner = region.owner_id ? players[region.owner_id] : null;
-  const buildingCounts = useMemo(() => region.buildings ?? {}, [region.buildings]);
+  const buildingCounts = useMemo(() => {
+    // Prefer building_instances (new engine format); fall back to legacy buildings HashMap
+    if (region.building_instances && region.building_instances.length > 0) {
+      const counts: Record<string, number> = {};
+      for (const inst of region.building_instances) {
+        counts[inst.building_type] = (counts[inst.building_type] ?? 0) + 1;
+      }
+      return counts;
+    }
+    return region.buildings ?? {};
+  }, [region.building_instances, region.buildings]);
 
   const unitConfigMap = useMemo(
     () => new Map(units.map((unit) => [unit.slug, unit])),
@@ -276,13 +283,47 @@ export default memo(function RegionPanel({
             </div>
             <div className="grid gap-2">
               {compactDisplayedBuildings.map((building) => {
-                const regionLevel = regionBuildingLevels?.[building.slug];
-                const levelColor =
-                  regionLevel === 3
-                    ? "text-yellow-300 bg-yellow-300/10 border-yellow-300/20"
-                    : regionLevel === 2
-                      ? "text-blue-300 bg-blue-300/10 border-blue-300/20"
-                      : "text-zinc-400 bg-white/[0.06] border-white/10";
+                // Collect all instances for this building type, sorted by level ascending
+                const instances = (region.building_instances ?? [])
+                  .filter((inst) => inst.building_type === building.slug)
+                  .sort((a, b) => a.level - b.level);
+                // Fall back to legacy count with no level info
+                const legacyCount = !region.building_instances ? (buildingCounts[building.slug] ?? 0) : 0;
+
+                if (instances.length > 0) {
+                  return instances.map((inst, idx) => {
+                    const levelColor =
+                      inst.level >= 3
+                        ? "text-yellow-300 bg-yellow-300/10 border-yellow-300/20"
+                        : inst.level === 2
+                          ? "text-blue-300 bg-blue-300/10 border-blue-300/20"
+                          : "text-zinc-400 bg-white/[0.06] border-white/10";
+                    return (
+                      <div
+                        key={`${building.slug}-${idx}`}
+                        className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-white/10 bg-slate-900/60 px-3 py-2"
+                      >
+                        <div className="flex min-w-0 items-center gap-2">
+                          {getBuildingAsset(building.asset_key || building.slug) && (
+                            <Image
+                              src={getBuildingAsset(building.asset_key || building.slug)!}
+                              alt={building.name}
+                              width={22}
+                              height={22}
+                              className="h-[22px] w-[22px] object-contain"
+                            />
+                          )}
+                          <span className="truncate text-sm text-zinc-100">{building.name}</span>
+                        </div>
+                        <span className={`rounded border px-1.5 py-0.5 text-[10px] font-medium ${levelColor}`}>
+                          Lvl {inst.level}
+                        </span>
+                      </div>
+                    );
+                  });
+                }
+
+                // Legacy fallback: show count badge without level
                 return (
                   <div
                     key={building.slug}
@@ -300,14 +341,7 @@ export default memo(function RegionPanel({
                       )}
                       <span className="truncate text-sm text-zinc-100">{building.name}</span>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      {regionLevel != null && (
-                        <span className={`rounded border px-1.5 py-0.5 text-[10px] font-medium ${levelColor}`}>
-                          Lvl {regionLevel}
-                        </span>
-                      )}
-                      <Badge variant="secondary">x{buildingCounts[building.slug]}</Badge>
-                    </div>
+                    <Badge variant="secondary">x{legacyCount}</Badge>
                   </div>
                 );
               })}
@@ -403,7 +437,14 @@ export default memo(function RegionPanel({
           <div className="mt-3 space-y-2">
             {compactBuildOptions.map((building) => {
               const isBuildingLocked = hasBuildingLocks && !unlockedBuildings!.includes(building.slug);
-              const currentRegionLevel = regionBuildingLevels?.[building.slug];
+              // Derive the minimum level instance for this building type (weakest = first to upgrade)
+              const typeInstances = (region.building_instances ?? [])
+                .filter((inst) => inst.building_type === building.slug)
+                .sort((a, b) => a.level - b.level);
+              // Current region level = min level of existing instances (or from legacy building_levels)
+              const currentRegionLevel = typeInstances.length > 0
+                ? typeInstances[0].level
+                : region.building_levels?.[building.slug];
               const playerMaxLevel = buildingLevels?.[building.slug];
               const canUpgrade =
                 currentRegionLevel != null &&
@@ -414,7 +455,9 @@ export default memo(function RegionPanel({
                 playerMaxLevel != null &&
                 currentRegionLevel >= playerMaxLevel;
               const hasBuilt = (buildingCounts[building.slug] ?? 0) > 0;
-              const upgradeLabel = canUpgrade ? `Ulepsz do Lvl ${currentRegionLevel! + 1}` : "Buduj Lvl 1";
+              const upgradeLabel = canUpgrade
+                ? `Ulepsz do Lvl ${currentRegionLevel! + 1}${typeInstances.length > 1 ? ` (najslabsza: Lvl ${currentRegionLevel})` : ""}`
+                : "Buduj Lvl 1";
               const displayName = hasBuilt && currentRegionLevel != null
                 ? `${building.name} Lvl ${currentRegionLevel}`
                 : building.name;

@@ -1029,7 +1029,7 @@ async fn eliminate_player(
                 region.unit_count = 0;
                 region.unit_type = None;
                 region.is_capital = false;
-                region.buildings.clear();
+                region.building_instances.clear();
                 region.building_type = None;
                 region.defense_bonus = 0.0;
                 region.vision_range = 0;
@@ -1290,8 +1290,7 @@ async fn initialize_game(
                 unit_type: Some(default_unit_type.clone()),
                 is_capital: false,
                 building_type: None,
-                buildings: HashMap::new(),
-                building_levels: HashMap::new(),
+                building_instances: Vec::new(),
                 defense_bonus: 0.0,
                 vision_range: 0,
                 unit_generation_bonus: 0.0,

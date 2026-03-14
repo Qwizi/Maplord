@@ -24,8 +24,6 @@ interface MobileBuildSheetProps {
   unlockedUnits?: string[];
   /** Player's max buildable levels from their deck */
   buildingLevels?: Record<string, number>;
-  /** Current building levels in this region */
-  regionBuildingLevels?: Record<string, number>;
 }
 
 export default memo(function MobileBuildSheet({
@@ -40,13 +38,22 @@ export default memo(function MobileBuildSheet({
   unlockedBuildings,
   unlockedUnits,
   buildingLevels,
-  regionBuildingLevels,
 }: MobileBuildSheetProps) {
   const [mode, setMode] = useState<SheetMode>(null);
   const hasBuildingLocks = unlockedBuildings != null && unlockedBuildings.length > 0;
   const hasUnitLocks = unlockedUnits != null && unlockedUnits.length > 0;
 
-  const buildingCounts = useMemo(() => region.buildings ?? {}, [region.buildings]);
+  const buildingCounts = useMemo(() => {
+    // Prefer building_instances (new engine format); fall back to legacy buildings HashMap
+    if (region.building_instances && region.building_instances.length > 0) {
+      const counts: Record<string, number> = {};
+      for (const inst of region.building_instances) {
+        counts[inst.building_type] = (counts[inst.building_type] ?? 0) + 1;
+      }
+      return counts;
+    }
+    return region.buildings ?? {};
+  }, [region.building_instances, region.buildings]);
 
   const queuedBuildingCounts = useMemo(
     () =>
@@ -159,7 +166,13 @@ export default memo(function MobileBuildSheet({
           {isBuildMode &&
             buildOptions.map((building) => {
               const isBuildingLocked = hasBuildingLocks && !unlockedBuildings!.includes(building.slug);
-              const currentRegionLevel = regionBuildingLevels?.[building.slug];
+              // Derive the minimum level instance for this building type (weakest = first to upgrade)
+              const typeInstances = (region.building_instances ?? [])
+                .filter((inst) => inst.building_type === building.slug)
+                .sort((a, b) => a.level - b.level);
+              const currentRegionLevel = typeInstances.length > 0
+                ? typeInstances[0].level
+                : region.building_levels?.[building.slug];
               const playerMaxLevel = buildingLevels?.[building.slug];
               const canUpgrade =
                 currentRegionLevel != null &&
@@ -170,7 +183,9 @@ export default memo(function MobileBuildSheet({
                 playerMaxLevel != null &&
                 currentRegionLevel >= playerMaxLevel;
               const hasBuilt = (buildingCounts[building.slug] ?? 0) > 0;
-              const upgradeLabel = canUpgrade ? `Ulepsz do Lvl ${currentRegionLevel! + 1}` : "Buduj Lvl 1";
+              const upgradeLabel = canUpgrade
+                ? `Ulepsz do Lvl ${currentRegionLevel! + 1}${typeInstances.length > 1 ? ` (najslabsza: Lvl ${currentRegionLevel})` : ""}`
+                : "Buduj Lvl 1";
               const displayName = hasBuilt && currentRegionLevel != null
                 ? `${building.name} Lvl ${currentRegionLevel}`
                 : building.name;

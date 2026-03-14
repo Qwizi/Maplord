@@ -38,6 +38,7 @@ export interface GameRegion {
   building_type: string | null;
   buildings?: Record<string, number>;
   building_levels?: Record<string, number>;
+  building_instances?: Array<{ building_type: string; level: number }>;
   defense_bonus: number;
   vision_range?: number;
   unit_generation_bonus?: number;

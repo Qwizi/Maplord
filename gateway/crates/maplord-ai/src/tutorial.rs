@@ -70,8 +70,10 @@ impl BotStrategy for TutorialBotBrain {
         if current_tick == 80 {
             if let Some(capital_id) = &player.capital_region_id {
                 if let Some(capital) = regions.get(capital_id) {
-                    let barracks_count =
-                        capital.buildings.get("barracks").copied().unwrap_or(0);
+                    let barracks_count = capital.building_instances
+                        .iter()
+                        .filter(|b| b.building_type == "barracks")
+                        .count();
                     if barracks_count < 1 {
                         if let Some(cfg) = settings.building_types.get("barracks") {
                             if player.energy >= cfg.energy_cost {

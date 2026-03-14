@@ -1404,7 +1404,6 @@ export default function GamePage({
             unlockedBuildings={gameState?.players[myUserId]?.unlocked_buildings}
             unlockedUnits={gameState?.players[myUserId]?.unlocked_units}
             buildingLevels={gameState?.players[myUserId]?.building_levels}
-            regionBuildingLevels={sourceRegionData?.building_levels}
           />
         </div>
       )}
@@ -1455,7 +1454,6 @@ export default function GamePage({
           unlockedBuildings={gameState?.players[myUserId]?.unlocked_buildings}
           unlockedUnits={gameState?.players[myUserId]?.unlocked_units}
           buildingLevels={gameState?.players[myUserId]?.building_levels}
-          regionBuildingLevels={sourceRegionData?.building_levels}
         />
       )}
     </div>
