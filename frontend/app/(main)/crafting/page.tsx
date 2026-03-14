@@ -128,6 +128,12 @@ export default function CraftingPage() {
 
   return (
     <div className="space-y-6">
+      {/* ── Page header ─────────────────────────────────────────────────────── */}
+      <div className="space-y-1">
+        <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">Kuźnia</p>
+        <h1 className="font-display text-3xl text-zinc-50">Warsztat rzemieślniczy</h1>
+      </div>
+
       {/* Wallet bar */}
       {wallet && (
         <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/55 px-6 py-3 backdrop-blur-xl">
@@ -137,7 +143,7 @@ export default function CraftingPage() {
         </div>
       )}
 
-      <div className="rounded-[24px] border border-white/10 bg-slate-950/55 p-6 backdrop-blur-xl">
+      <div className="rounded-2xl border border-white/10 bg-slate-950/55 p-6 backdrop-blur-xl">
         <div className="mb-4 flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04]">
             <Hammer className="h-5 w-5 text-cyan-300" />

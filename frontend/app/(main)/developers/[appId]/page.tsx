@@ -366,7 +366,7 @@ function APIKeysTab({ appId, token }: APIKeysTabProps) {
       )}
 
       {keys.length === 0 ? (
-        <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-5 py-10 text-center">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-5 py-10 text-center">
           <Key className="mx-auto h-8 w-8 text-slate-600" />
           <p className="mt-3 text-sm text-slate-500">
             Brak kluczy API. Utworz klucz API, aby korzystac z publicznego API.
@@ -907,7 +907,7 @@ function WebhookRow({
       {/* Deliveries panel */}
       {expanded && (
         <div className="border-t border-white/10 bg-black/20 p-4">
-          <p className="mb-3 text-[11px] uppercase tracking-[0.2em] text-slate-500">
+          <p className="mb-3 text-[11px] uppercase tracking-[0.24em] text-slate-500">
             Dostarczenia
           </p>
           {loadingDeliveries ? (
@@ -920,7 +920,7 @@ function WebhookRow({
               {deliveries.slice(0, 10).map((delivery) => (
                 <div
                   key={delivery.id}
-                  className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2"
+                  className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2"
                 >
                   <div
                     className={`h-2 w-2 rounded-full ${
@@ -1032,7 +1032,7 @@ function WebhooksTab({ appId, token }: WebhooksTabProps) {
       </div>
 
       {webhooks.length === 0 ? (
-        <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-5 py-10 text-center">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-5 py-10 text-center">
           <Webhook className="mx-auto h-8 w-8 text-slate-600" />
           <p className="mt-3 text-sm text-slate-500">
             Brak webhookow. Dodaj webhook, aby otrzymywac zdarzenia z MapLord.
@@ -1094,7 +1094,7 @@ function UsageTab({ appId, token }: UsageTabProps) {
 
   if (!usage) {
     return (
-      <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-5 py-10 text-center">
+      <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-5 py-10 text-center">
         <BarChart3 className="mx-auto h-8 w-8 text-slate-600" />
         <p className="mt-3 text-sm text-slate-500">
           Nie udalo sie zaladowac danych.
@@ -1160,7 +1160,7 @@ function UsageTab({ appId, token }: UsageTabProps) {
             key={stat.label}
             className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"
           >
-            <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-slate-500">
+            <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.24em] text-slate-500">
               {stat.icon}
               {stat.label}
             </div>
@@ -1173,7 +1173,7 @@ function UsageTab({ appId, token }: UsageTabProps) {
 
       {successRate !== null && (
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-          <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
+          <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
             Skutecznosc dostarczeń webhookow
           </p>
           <div className="mt-3 flex items-end gap-3">
@@ -1426,7 +1426,7 @@ export default function DeveloperAppDetailPage() {
           <div className="flex shrink-0 items-center gap-2">
             <button
               onClick={() => setEditOpen(true)}
-              className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.05] px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-white/[0.09] hover:text-zinc-100"
+              className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-slate-300 hover:bg-white/[0.08] transition-colors"
             >
               <Edit className="h-4 w-4" />
               Edytuj
@@ -1434,7 +1434,7 @@ export default function DeveloperAppDetailPage() {
             <button
               onClick={handleDelete}
               disabled={deleting}
-              className="inline-flex items-center gap-2 rounded-full border border-red-400/25 bg-red-400/5 px-4 py-2 text-sm text-red-400 transition-colors hover:border-red-400/40 hover:bg-red-400/10 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-xl border border-red-400/20 bg-red-500/10 px-4 py-2 text-sm text-red-300 hover:bg-red-500/20 transition-colors disabled:opacity-50"
             >
               {deleting ? (
                 <RefreshCw className="h-4 w-4 animate-spin" />
@@ -1448,7 +1448,7 @@ export default function DeveloperAppDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="rounded-[24px] border border-white/10 bg-slate-950/55 p-6 backdrop-blur-xl">
+      <div className="rounded-2xl border border-white/10 bg-slate-950/55 p-6 backdrop-blur-xl">
         <Tabs defaultValue="keys">
           <TabsList className="mb-6 w-full justify-start gap-1 rounded-2xl border border-white/10 bg-white/[0.03] p-1">
             <TabsTrigger

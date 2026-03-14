@@ -53,13 +53,11 @@ export default function LeaderboardPage() {
 
   return (
     <div className="space-y-6">
-        <div className="mb-6 flex items-center justify-between gap-3">
-          <div>
-            <div className="text-[11px] uppercase tracking-[0.24em] text-amber-200/70">
-              Leaderboard
-            </div>
-            <h1 className="mt-2 font-display text-3xl text-zinc-50">Ranking graczy</h1>
-            <p className="mt-2 text-sm text-slate-400">
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1">
+            <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">Ranking</p>
+            <h1 className="font-display text-3xl text-zinc-50">Tabela liderów</h1>
+            <p className="mt-1 text-sm text-slate-400">
               Ranking uwzględnia ELO, wygrane, win rate i średni placement.
             </p>
           </div>
@@ -69,8 +67,8 @@ export default function LeaderboardPage() {
         </div>
 
         {myPlacement > 0 && user && (
-          <div className="rounded-[24px] border border-cyan-300/25 bg-cyan-400/10 px-4 py-3 backdrop-blur-xl">
-            <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-200/70">
+          <div className="rounded-2xl border border-cyan-300/25 bg-cyan-400/10 px-4 py-3 backdrop-blur-xl">
+            <div className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
               Twoja pozycja
             </div>
             <div className="mt-1 flex items-center justify-between gap-3">
@@ -97,7 +95,7 @@ export default function LeaderboardPage() {
             return (
               <div
                 key={entry.id}
-                className={`grid grid-cols-[52px_minmax(0,1fr)_auto] items-center gap-3 rounded-[24px] border p-4 backdrop-blur-xl ${
+                className={`grid grid-cols-[52px_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border p-4 backdrop-blur-xl ${
                   isMe
                     ? "border-cyan-300/25 bg-cyan-400/10"
                     : "border-white/10 bg-slate-950/60"
@@ -127,7 +125,7 @@ export default function LeaderboardPage() {
                     <Trophy className="h-4 w-4" />
                     <span className="font-display text-2xl">{entry.elo_rating}</span>
                   </div>
-                  <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                  <div className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
                     ELO
                   </div>
                 </div>
@@ -136,7 +134,7 @@ export default function LeaderboardPage() {
           })}
         </div>
 
-        <div className="flex items-center justify-between rounded-[24px] border border-white/10 bg-slate-950/55 px-4 py-3 backdrop-blur-xl">
+        <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-slate-950/55 px-4 py-3 backdrop-blur-xl">
           <div className="text-sm text-slate-400">
             Strona {safePage} z {totalPages}
           </div>

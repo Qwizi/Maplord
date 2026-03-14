@@ -162,9 +162,15 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {/* ── Page header ───────────────────────────────────────── */}
+      <div className="space-y-1">
+        <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">Akcja</p>
+        <h1 className="font-display text-3xl text-zinc-50">Panel dowodzenia</h1>
+      </div>
+
       {/* ── Player overview ──────────────────────────────────── */}
       <section className="grid gap-5 lg:grid-cols-[1fr_1fr]">
-        <div className="relative overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/55 p-6 backdrop-blur-xl">
+        <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-slate-950/55 p-6 backdrop-blur-xl">
           <div className="pointer-events-none absolute -right-4 -top-4 h-32 w-32 opacity-15">
             <Image src="/assets/match_making/g707.webp" alt="" fill className="object-contain" />
           </div>
@@ -173,7 +179,7 @@ export default function DashboardPage() {
               <User className="h-7 w-7 text-cyan-200" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="font-display text-xs uppercase tracking-[0.3em] text-cyan-200/70">
+              <p className="font-display text-xs uppercase tracking-[0.24em] text-cyan-200/70">
                 Dowodca
               </p>
               <h2 className="mt-1 truncate font-display text-3xl text-zinc-50">
@@ -199,12 +205,12 @@ export default function DashboardPage() {
         </div>
 
         {/* Queue status */}
-        <div className="relative overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/55 p-6 backdrop-blur-xl">
+        <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-slate-950/55 p-6 backdrop-blur-xl">
           <div className="pointer-events-none absolute inset-y-0 right-0 w-1/3 opacity-40">
             <Image src="/assets/match_making/path17.webp" alt="" fill className="object-contain object-right" />
           </div>
           <div className="relative">
-            <p className="font-display text-xs uppercase tracking-[0.3em] text-amber-200/70">
+            <p className="font-display text-xs uppercase tracking-[0.24em] text-amber-200/70">
               Matchmaking
             </p>
             <h2 className="mt-1 font-display text-3xl text-zinc-50">
@@ -236,7 +242,7 @@ export default function DashboardPage() {
 
       {/* ── Tutorial card ─────────────────────────────────── */}
       {user && !user.tutorial_completed && !activeMatch && !inQueue && (
-        <section className="rounded-[24px] border border-amber-300/20 bg-gradient-to-br from-amber-500/[0.06] to-cyan-500/[0.04] p-6 backdrop-blur-xl">
+        <section className="rounded-2xl border border-amber-300/20 bg-gradient-to-br from-amber-500/[0.06] to-cyan-500/[0.04] p-6 backdrop-blur-xl">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-4">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-amber-300/20 bg-amber-400/10">
@@ -270,7 +276,7 @@ export default function DashboardPage() {
 
       {/* ── Game mode selector ───────────────────────────────── */}
       {gameModes.length > 0 && !activeMatch && !inQueue && (
-        <section className="rounded-[24px] border border-white/10 bg-slate-950/55 p-6 backdrop-blur-xl">
+        <section className="rounded-2xl border border-white/10 bg-slate-950/55 p-6 backdrop-blur-xl">
           <div className="mb-5 flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04]">
               <Target className="h-5 w-5 text-cyan-300" />
@@ -325,7 +331,7 @@ export default function DashboardPage() {
       )}
 
       {/* ── Action bar: find game / active match / queue ──── */}
-      <section className="rounded-[24px] border border-white/10 bg-slate-950/55 p-6 backdrop-blur-xl">
+      <section className="rounded-2xl border border-white/10 bg-slate-950/55 p-6 backdrop-blur-xl">
         <div className="mb-5 flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04]">
             <Swords className={`h-5 w-5 ${activeMatch ? "text-emerald-300" : inQueue ? "text-amber-200" : "text-red-400"}`} />
@@ -465,7 +471,7 @@ export default function DashboardPage() {
       </section>
 
       {/* ── Recent matches ───────────────────────────────────── */}
-      <section className="rounded-[24px] border border-white/10 bg-slate-950/55 p-6 backdrop-blur-xl">
+      <section className="rounded-2xl border border-white/10 bg-slate-950/55 p-6 backdrop-blur-xl">
         <div className="mb-5 flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04]">
             <Trophy className="h-5 w-5 text-amber-300" />
@@ -481,7 +487,7 @@ export default function DashboardPage() {
         </div>
 
         {recentMatches.length === 0 ? (
-          <div className="rounded-2xl border border-white/8 bg-white/[0.02] px-5 py-8 text-center">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-5 py-8 text-center">
             <Swords className="mx-auto h-8 w-8 text-slate-600" />
             <p className="mt-3 text-sm text-slate-500">
               Dolacz do kolejki i rozegraj swoj pierwszy mecz

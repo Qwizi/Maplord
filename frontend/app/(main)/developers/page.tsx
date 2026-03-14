@@ -96,7 +96,7 @@ function AppCard({ app }: { app: DeveloperApp }) {
       </div>
 
       {/* Client ID */}
-      <div className="rounded-xl border border-white/8 bg-black/20 px-3 py-2">
+      <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
         <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
           Client ID
         </div>
@@ -418,13 +418,9 @@ export default function DevelopersPage() {
     <div className="space-y-6">
       {/* ── Header ─────────────────────────────────────────── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <div className="text-[11px] uppercase tracking-[0.24em] text-cyan-200/70">
-            Portal deweloperski
-          </div>
-          <h1 className="mt-2 font-display text-3xl text-zinc-50">
-            Moje aplikacje
-          </h1>
+        <div className="space-y-1">
+          <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">Deweloperzy</p>
+          <h1 className="font-display text-3xl text-zinc-50">Panel deweloperski</h1>
           <p className="mt-2 max-w-lg text-sm text-slate-400">
             Tworzenie aplikacji, kluczy API i webhookow do integracji z MapLord.
           </p>
@@ -453,13 +449,13 @@ export default function DevelopersPage() {
       {/* ── Stats strip ────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 backdrop-blur-xl">
-          <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
+          <div className="text-[10px] uppercase tracking-[0.24em] text-slate-500">
             Wszystkie
           </div>
           <div className="mt-1 font-display text-2xl text-zinc-50">{apps.length}</div>
         </div>
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 backdrop-blur-xl">
-          <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
+          <div className="text-[10px] uppercase tracking-[0.24em] text-slate-500">
             Aktywne
           </div>
           <div className="mt-1 font-display text-2xl text-emerald-300">
@@ -467,7 +463,7 @@ export default function DevelopersPage() {
           </div>
         </div>
         <div className="col-span-2 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 backdrop-blur-xl sm:col-span-1">
-          <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
+          <div className="text-[10px] uppercase tracking-[0.24em] text-slate-500">
             Nieaktywne
           </div>
           <div className="mt-1 font-display text-2xl text-slate-400">
