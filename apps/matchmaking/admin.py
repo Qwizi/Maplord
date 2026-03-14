@@ -8,7 +8,8 @@ def cancel_matches(modeladmin, request, queryset):
     import redis
     from django.conf import settings
 
-    r = redis.Redis.from_url(settings.REDIS_URL)
+    redis_url = f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_GAME_DB}"
+    r = redis.Redis.from_url(redis_url)
     count = 0
     for match in queryset.filter(status__in=['selecting', 'in_progress']):
         r.set(f"game:{match.id}:cancel_requested", "1", ex=300)

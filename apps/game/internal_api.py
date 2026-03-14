@@ -227,7 +227,8 @@ class GameInternalController(ControllerBase):
         from apps.matchmaking.models import Match
 
         match_id = body.match_id
-        r = redis.Redis.from_url(settings.REDIS_URL)
+        redis_url = f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_GAME_DB}"
+        r = redis.Redis.from_url(redis_url)
         r.set(f"game:{match_id}:cancel_requested", "1", ex=300)
 
         Match.objects.filter(id=match_id).update(status='cancelled')
