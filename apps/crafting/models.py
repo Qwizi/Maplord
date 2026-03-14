@@ -53,6 +53,10 @@ class CraftingLog(models.Model):
     result_item = models.ForeignKey('inventory.Item', on_delete=models.CASCADE)
     result_quantity = models.PositiveIntegerField()
     gold_spent = models.PositiveIntegerField(default=0)
+    instance = models.ForeignKey(
+        'inventory.ItemInstance', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='crafting_logs',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -2,7 +2,7 @@ from django.contrib import admin
 from unfold.admin import ModelAdmin, TabularInline
 from unfold.decorators import display
 from unfold.contrib.filters.admin import RangeNumericFilter
-from apps.inventory.models import ItemCategory, Item, UserInventory, ItemDrop, Wallet, EquippedCosmetic, Deck, DeckItem
+from apps.inventory.models import ItemCategory, Item, UserInventory, ItemDrop, Wallet, EquippedCosmetic, Deck, DeckItem, ItemInstance
 
 
 # ── Inlines ──────────────────────────────────────────────────
@@ -64,6 +64,16 @@ class DeckInline(TabularInline):
     fields = ['name', 'is_default', 'created_at']
     readonly_fields = ['created_at']
     show_change_link = True
+
+
+class ItemInstanceInline(TabularInline):
+    """Inline on User admin — view item instances owned by the user."""
+    model = ItemInstance
+    extra = 0
+    fk_name = 'owner'
+    fields = ['item', 'pattern_seed', 'wear', 'stattrak', 'nametag', 'created_at']
+    readonly_fields = ['created_at']
+    autocomplete_fields = ['item']
 
 
 # ── Model Admins ─────────────────────────────────────────────
@@ -171,6 +181,31 @@ class EquippedCosmeticAdmin(ModelAdmin):
     @display(description="Type")
     def display_item_type(self, obj):
         return obj.item.get_item_type_display()
+
+
+@admin.register(ItemInstance)
+class ItemInstanceAdmin(ModelAdmin):
+    list_display = ('item', 'owner', 'display_wear', 'pattern_seed', 'display_stattrak', 'nametag', 'created_at')
+    list_filter = ('item__item_type', 'item__rarity', 'stattrak')
+    list_filter_submit = True
+    list_fullwidth = True
+    search_fields = ('owner__username', 'item__name', 'nametag')
+    raw_id_fields = ('owner', 'item', 'first_owner', 'crafted_by', 'dropped_from_match')
+    readonly_fields = ('created_at',)
+    fieldsets = (
+        (None, {'fields': ('item', 'owner')}),
+        ('Properties', {'fields': ('pattern_seed', 'wear', 'nametag')}),
+        ('StatTrak', {'fields': ('stattrak', 'stattrak_matches', 'stattrak_kills', 'stattrak_units_produced')}),
+        ('Provenance', {'fields': ('first_owner', 'crafted_by', 'dropped_from_match', 'created_at')}),
+    )
+
+    @display(description="Wear")
+    def display_wear(self, obj):
+        return f"{obj.wear_condition.label} ({obj.wear:.4f})"
+
+    @display(description="ST", label=True)
+    def display_stattrak(self, obj):
+        return "ST" if obj.stattrak else "-"
 
 
 @admin.register(Deck)

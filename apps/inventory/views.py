@@ -16,7 +16,10 @@ from apps.inventory.schemas import (
     InventoryItemOutSchema,
     ItemCategoryOutSchema,
     ItemDropOutSchema,
+    ItemInstanceOutSchema,
+    ItemOutSchema,
     OpenCrateInSchema,
+    RenameInstanceInSchema,
     UnequipCosmeticInSchema,
     WalletOutSchema,
 )
@@ -29,32 +32,92 @@ def get_or_create_wallet(user):
     return wallet
 
 
-def add_item_to_inventory(user, item, quantity=1):
-    """Add items to user inventory, respecting stack limits."""
-    inv, created = UserInventory.objects.get_or_create(
-        user=user, item=item,
-        defaults={'quantity': quantity},
+def create_item_instance(item, owner, *, stattrak=False, crafted_by=None, dropped_from_match=None):
+    """Create a new unique ItemInstance with random pattern seed and wear."""
+    from apps.inventory.models import ItemInstance
+
+    pattern_seed = random.randint(0, 999)
+
+    # Wear ranges vary by rarity: rarer items get lower average wear
+    wear_ranges = {
+        'legendary': (0.0, 0.15),
+        'epic': (0.0, 0.25),
+        'rare': (0.0, 0.38),
+        'uncommon': (0.0, 0.45),
+        'common': (0.0, 0.80),
+    }
+    min_w, max_w = wear_ranges.get(item.rarity, (0.0, 1.0))
+    wear = round(random.uniform(min_w, max_w), 4)
+
+    # StatTrak chance if not explicitly set
+    if not stattrak:
+        stattrak_chance = {
+            'legendary': 0.20, 'epic': 0.15, 'rare': 0.10,
+            'uncommon': 0.05, 'common': 0.01,
+        }
+        stattrak = random.random() < stattrak_chance.get(item.rarity, 0.01)
+
+    return ItemInstance.objects.create(
+        item=item, owner=owner,
+        pattern_seed=pattern_seed, wear=wear,
+        stattrak=stattrak,
+        first_owner=owner, crafted_by=crafted_by,
+        dropped_from_match=dropped_from_match,
     )
-    if not created:
-        inv.quantity = min(inv.quantity + quantity, item.max_stack)
-        inv.save(update_fields=['quantity'])
-    return inv
+
+
+def add_item_to_inventory(user, item, quantity=1, **instance_kwargs):
+    """Add items to user inventory.
+
+    Stackable items: increment UserInventory.quantity.
+    Non-stackable items: create ItemInstance(s).
+    Returns UserInventory for stackable, ItemInstance (or list) for non-stackable.
+    """
+    if item.is_stackable:
+        inv, created = UserInventory.objects.get_or_create(
+            user=user, item=item, defaults={'quantity': quantity},
+        )
+        if not created:
+            inv.quantity = min(inv.quantity + quantity, item.max_stack)
+            inv.save(update_fields=['quantity'])
+        return inv
+    else:
+        instances = []
+        for _ in range(quantity):
+            instances.append(create_item_instance(item, user, **instance_kwargs))
+        return instances[0] if len(instances) == 1 else instances
 
 
 def remove_item_from_inventory(user, item, quantity=1):
-    """Remove items from inventory. Returns True if successful."""
-    try:
-        inv = UserInventory.objects.get(user=user, item=item)
-    except UserInventory.DoesNotExist:
-        return False
-    if inv.quantity < quantity:
-        return False
-    inv.quantity -= quantity
-    if inv.quantity == 0:
-        inv.delete()
+    """Remove items from user inventory.
+
+    Stackable: decrement quantity. Non-stackable: delete oldest instances.
+    Returns True on success, False if insufficient.
+    """
+    if item.is_stackable:
+        try:
+            inv = UserInventory.objects.get(user=user, item=item)
+        except UserInventory.DoesNotExist:
+            return False
+        if inv.quantity < quantity:
+            return False
+        inv.quantity -= quantity
+        if inv.quantity == 0:
+            inv.delete()
+        else:
+            inv.save(update_fields=['quantity'])
+        return True
     else:
-        inv.save(update_fields=['quantity'])
-    return True
+        from apps.inventory.models import ItemInstance
+        instances = list(
+            ItemInstance.objects.filter(owner=user, item=item)
+            .order_by('created_at')[:quantity]
+        )
+        if len(instances) < quantity:
+            return False
+        for inst in instances:
+            inst.delete()
+        return True
 
 
 @api_controller('/inventory', tags=['Inventory'])
@@ -69,13 +132,88 @@ class InventoryController:
         )
 
     @route.get('/my/', response=dict, auth=JWTAuth())
-    def my_inventory(self, request, limit: int = 50, offset: int = 0):
-        """Get current user's inventory."""
-        qs = (
-            UserInventory.objects.filter(user=request.user)
-            .select_related('item', 'item__category')
-        )
-        return paginate_qs(qs, limit, offset, schema=InventoryItemOutSchema)
+    def my_inventory(self, request, limit: int = 50, offset: int = 0, item_type: str = None):
+        """List user's inventory: stackable stacks + unique instances."""
+        from apps.inventory.models import ItemInstance
+
+        # Stackable items from UserInventory
+        stacks_qs = UserInventory.objects.filter(
+            user=request.user, item__is_stackable=True,
+        ).select_related('item', 'item__category')
+
+        # Unique instances
+        instances_qs = ItemInstance.objects.filter(
+            owner=request.user,
+        ).select_related('item', 'item__category', 'first_owner', 'crafted_by')
+
+        if item_type:
+            stacks_qs = stacks_qs.filter(item__item_type=item_type)
+            instances_qs = instances_qs.filter(item__item_type=item_type)
+
+        stacks = list(stacks_qs)
+        instances = list(instances_qs)
+
+        # Build unified entries
+        entries = []
+        for inv in stacks:
+            entries.append({
+                'id': str(inv.id),
+                'item': ItemOutSchema.from_orm(inv.item).dict(),
+                'quantity': inv.quantity,
+                'is_instance': False,
+                'instance': None,
+            })
+        for inst in instances:
+            entries.append({
+                'id': str(inst.id),
+                'item': ItemOutSchema.from_orm(inst.item).dict(),
+                'quantity': 1,
+                'is_instance': True,
+                'instance': ItemInstanceOutSchema.from_orm(inst).dict(),
+            })
+
+        # Sort by item type, rarity, name
+        entries.sort(key=lambda e: (
+            e['item'].get('item_type', ''),
+            e['item'].get('rarity', ''),
+            e['item'].get('name', ''),
+        ))
+
+        total = len(entries)
+        page = entries[offset:offset + limit]
+
+        return {
+            'items': page,
+            'count': total,
+        }
+
+    @route.get('/instances/{instance_id}/', response={200: ItemInstanceOutSchema, 404: dict}, auth=JWTAuth())
+    def get_instance(self, request, instance_id: str):
+        """Get details of a specific item instance."""
+        from apps.inventory.models import ItemInstance
+        try:
+            instance = ItemInstance.objects.select_related(
+                'item', 'first_owner', 'crafted_by'
+            ).get(id=instance_id)
+        except ItemInstance.DoesNotExist:
+            return 404, {'detail': 'Instance not found.'}
+        return 200, instance
+
+    @route.post('/instances/{instance_id}/rename/', response={200: ItemInstanceOutSchema, 400: dict, 404: dict}, auth=JWTAuth())
+    def rename_instance(self, request, instance_id: str, payload: RenameInstanceInSchema):
+        """Set or clear a nametag on an owned instance."""
+        from apps.inventory.models import ItemInstance
+        try:
+            instance = ItemInstance.objects.select_related('item', 'first_owner', 'crafted_by').get(
+                id=instance_id, owner=request.user,
+            )
+        except ItemInstance.DoesNotExist:
+            return 404, {'detail': 'Instance not found or not owned by you.'}
+        if len(payload.nametag) > 50:
+            return 400, {'detail': 'Nametag too long (max 50 characters).'}
+        instance.nametag = payload.nametag
+        instance.save(update_fields=['nametag'])
+        return 200, instance
 
     @route.get('/wallet/', response=WalletOutSchema, auth=JWTAuth())
     def my_wallet(self, request):

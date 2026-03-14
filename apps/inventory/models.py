@@ -132,6 +132,11 @@ class ItemDrop(models.Model):
         'matchmaking.Match', on_delete=models.SET_NULL,
         blank=True, null=True, related_name='item_drops',
     )
+    instance = models.ForeignKey(
+        'ItemInstance', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='drop_records',
+        help_text='For non-stackable drops: the specific instance that dropped',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -181,12 +186,96 @@ class DeckItem(models.Model):
     deck = models.ForeignKey(Deck, on_delete=models.CASCADE, related_name='items')
     item = models.ForeignKey(Item, on_delete=models.CASCADE, related_name='in_decks')
     quantity = models.PositiveIntegerField(default=1)
+    instance = models.ForeignKey(
+        'ItemInstance', on_delete=models.CASCADE,
+        null=True, blank=True, related_name='in_decks',
+        help_text='For non-stackable items: the specific instance in this slot',
+    )
 
     class Meta:
         unique_together = ('deck', 'item')
 
     def __str__(self):
         return f'{self.deck.name}: {self.item.name} x{self.quantity}'
+
+
+class ItemInstance(models.Model):
+    """A unique instance of an item in the game world (CS2-style).
+
+    Non-stackable items (blueprints, tactical packages, boosts, cosmetics)
+    exist as individual instances with unique properties. Stackable items
+    (materials, crates, keys) continue to use UserInventory with quantity.
+    """
+    class WearCondition(models.TextChoices):
+        FACTORY_NEW = 'factory_new', 'Factory New'
+        MINIMAL_WEAR = 'minimal_wear', 'Minimal Wear'
+        FIELD_TESTED = 'field_tested', 'Field-Tested'
+        WELL_WORN = 'well_worn', 'Well-Worn'
+        BATTLE_SCARRED = 'battle_scarred', 'Battle-Scarred'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    item = models.ForeignKey(Item, on_delete=models.CASCADE, related_name='instances')
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='item_instances',
+    )
+
+    # CS2-like visual properties
+    pattern_seed = models.PositiveIntegerField(default=0, help_text='0-999, determines visual variation')
+    wear = models.FloatField(default=0.0, help_text='0.0 = Factory New, 1.0 = Battle-Scarred')
+
+    # StatTrak
+    stattrak = models.BooleanField(default=False)
+    stattrak_matches = models.PositiveIntegerField(default=0)
+    stattrak_kills = models.PositiveIntegerField(default=0, help_text='Regions conquered with this item equipped')
+    stattrak_units_produced = models.PositiveIntegerField(default=0)
+
+    # Personalization
+    nametag = models.CharField(max_length=50, blank=True)
+
+    # Provenance
+    first_owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='first_owned_instances',
+    )
+    crafted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='crafted_instances',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    dropped_from_match = models.ForeignKey(
+        'matchmaking.Match', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='dropped_instances',
+    )
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['owner']),
+            models.Index(fields=['item']),
+            models.Index(fields=['owner', 'item']),
+        ]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        tag = f' "{self.nametag}"' if self.nametag else ''
+        st = ' StatTrak\u2122' if self.stattrak else ''
+        return f'{self.item.name}{st}{tag} ({self.wear_condition})'
+
+    @property
+    def wear_condition(self):
+        if self.wear < 0.07:
+            return self.WearCondition.FACTORY_NEW
+        elif self.wear < 0.15:
+            return self.WearCondition.MINIMAL_WEAR
+        elif self.wear < 0.38:
+            return self.WearCondition.FIELD_TESTED
+        elif self.wear < 0.45:
+            return self.WearCondition.WELL_WORN
+        return self.WearCondition.BATTLE_SCARRED
+
+    @property
+    def is_rare_pattern(self):
+        return self.pattern_seed < 10
 
 
 class EquippedCosmetic(models.Model):
@@ -205,6 +294,11 @@ class EquippedCosmetic(models.Model):
     )
     slot = models.CharField(max_length=100, help_text='Asset key slot, e.g. infantry, barracks')
     equipped_at = models.DateTimeField(auto_now_add=True)
+    instance = models.ForeignKey(
+        'ItemInstance', on_delete=models.CASCADE,
+        null=True, blank=True, related_name='equipped_as',
+        help_text='The specific instance equipped in this slot',
+    )
 
     class Meta:
         unique_together = ('user', 'slot')

@@ -31,6 +31,11 @@ class MarketListing(models.Model):
     quantity_remaining = models.PositiveIntegerField()
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
     is_bot_listing = models.BooleanField(default=False, help_text='Created by bot seeder')
+    instance = models.ForeignKey(
+        'inventory.ItemInstance', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='market_listings',
+        help_text='For non-stackable items: the specific instance listed',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(blank=True, null=True)
 
@@ -66,6 +71,10 @@ class MarketTransaction(models.Model):
     price_per_unit = models.PositiveIntegerField()
     total_price = models.PositiveIntegerField()
     fee = models.PositiveIntegerField(default=0, help_text='Transaction fee (gold sink)')
+    instance = models.ForeignKey(
+        'inventory.ItemInstance', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='market_transactions',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
