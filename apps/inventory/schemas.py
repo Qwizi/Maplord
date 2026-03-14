@@ -1,6 +1,22 @@
 import uuid
+from datetime import datetime
 from typing import Optional
 from ninja import Schema
+
+
+class DeckItemSlotSchema(Schema):
+    """Input schema for a single item slot when updating a deck."""
+    item_slug: str
+    quantity: int
+
+
+class DeckCreateSchema(Schema):
+    name: str
+
+
+class DeckUpdateSchema(Schema):
+    name: Optional[str] = None
+    items: Optional[list[DeckItemSlotSchema]] = None
 
 
 class ItemOutSchema(Schema):
@@ -16,6 +32,7 @@ class ItemOutSchema(Schema):
     is_tradeable: bool
     is_consumable: bool
     base_value: int
+    level: int
 
     class Config:
         from_attributes = True
@@ -55,7 +72,7 @@ class ItemDropOutSchema(Schema):
     quantity: int
     source: str
     match_id: Optional[uuid.UUID] = None
-    created_at: str
+    created_at: datetime
 
     class Config:
         from_attributes = True
@@ -64,3 +81,21 @@ class ItemDropOutSchema(Schema):
 class OpenCrateInSchema(Schema):
     crate_item_slug: str
     key_item_slug: str
+
+
+class DeckItemOutSchema(Schema):
+    item: ItemOutSchema
+    quantity: int
+
+    class Config:
+        from_attributes = True
+
+
+class DeckOutSchema(Schema):
+    id: uuid.UUID
+    name: str
+    is_default: bool
+    items: list[DeckItemOutSchema] = []
+
+    class Config:
+        from_attributes = True

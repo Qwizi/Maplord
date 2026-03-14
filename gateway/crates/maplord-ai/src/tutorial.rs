@@ -74,7 +74,7 @@ impl BotStrategy for TutorialBotBrain {
                         capital.buildings.get("barracks").copied().unwrap_or(0);
                     if barracks_count < 1 {
                         if let Some(cfg) = settings.building_types.get("barracks") {
-                            if player.currency >= cfg.currency_cost {
+                            if player.energy >= cfg.energy_cost {
                                 actions.push(Action {
                                     action_type: "build".into(),
                                     player_id: Some(self.player_id.clone()),
@@ -85,6 +85,7 @@ impl BotStrategy for TutorialBotBrain {
                                     units: None,
                                     unit_type: None,
                                     ability_type: None,
+                                    ..Default::default()
                                 });
                             }
                         }
@@ -184,6 +185,7 @@ impl TutorialBotBrain {
             region_id: None,
             building_type: None,
             ability_type: None,
+            ..Default::default()
         })
     }
 
@@ -221,6 +223,7 @@ impl TutorialBotBrain {
                                     region_id: None,
                                     building_type: None,
                                     ability_type: None,
+                                    ..Default::default()
                                 });
                             }
                         }

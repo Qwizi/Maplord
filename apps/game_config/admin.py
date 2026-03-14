@@ -50,7 +50,7 @@ class GameModeAdmin(admin.ModelAdmin):
             'fields': ('tick_interval_ms', 'capital_selection_time_seconds', 'match_duration_limit_minutes'),
         }),
         ('Economy', {
-            'fields': ('starting_currency', 'base_currency_per_tick', 'region_currency_per_tick',
+            'fields': ('starting_energy', 'base_energy_per_tick', 'region_energy_per_tick',
                        'base_unit_generation_rate', 'capital_generation_bonus'),
         }),
         ('Combat', {
@@ -90,7 +90,7 @@ class UnitTypeAdmin(admin.ModelAdmin):
 
 @admin.register(AbilityType)
 class AbilityTypeAdmin(admin.ModelAdmin):
-    list_display = ('icon', 'name', 'slug', 'target_type', 'range', 'currency_cost', 'cooldown_ticks', 'damage', 'effect_duration_ticks', 'is_active', 'order')
+    list_display = ('icon', 'name', 'slug', 'target_type', 'range', 'energy_cost', 'cooldown_ticks', 'damage', 'effect_duration_ticks', 'is_active', 'order')
     list_filter = ('is_active', 'target_type')
     search_fields = ('name', 'slug')
     prepopulated_fields = {'slug': ('name',)}

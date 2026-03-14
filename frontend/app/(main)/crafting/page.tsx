@@ -73,13 +73,13 @@ export default function CraftingPage() {
   const loadData = useCallback(async () => {
     if (!token) return;
     try {
-      const [rec, inv, wal] = await Promise.all([
+      const [rec, invRes, wal] = await Promise.all([
         getRecipes(),
         getMyInventory(token),
         getMyWallet(token),
       ]);
       setRecipes(rec);
-      setInventory(inv);
+      setInventory(invRes.items);
       setWallet(wal);
     } catch {
       toast.error("Nie udało się załadować receptur");

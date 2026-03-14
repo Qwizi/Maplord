@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from ninja import Schema
-from pydantic import EmailStr, Field
+from pydantic import EmailStr, Field, model_validator
 
 
 class RegisterSchema(Schema):
@@ -29,8 +29,14 @@ class LeaderboardEntrySchema(Schema):
     elo_rating: int
     matches_played: int
     wins: int
-    win_rate: float
-    average_placement: float
+    win_rate: float = 0.0
+    average_placement: float = 0.0
 
     class Config:
         from_attributes = True
+
+    @model_validator(mode='after')
+    def compute_derived(self) -> 'LeaderboardEntrySchema':
+        if self.matches_played > 0:
+            self.win_rate = self.wins / self.matches_played
+        return self

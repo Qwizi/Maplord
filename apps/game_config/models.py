@@ -19,25 +19,25 @@ class GameSettings(models.Model):
     # Unit generation
     base_unit_generation_rate = models.FloatField(default=1.0, help_text='Units generated per tick per region')
     capital_generation_bonus = models.FloatField(default=2.0, help_text='Multiplier for capital region')
-    starting_currency = models.PositiveIntegerField(default=120, help_text='Starting strategic currency for each player')
-    base_currency_per_tick = models.FloatField(default=2.0, help_text='Base currency generated per tick for each player')
-    region_currency_per_tick = models.FloatField(default=0.35, help_text='Currency generated per owned region each tick')
-    
+    starting_energy = models.PositiveIntegerField(default=120, help_text='Starting energy for each player')
+    base_energy_per_tick = models.FloatField(default=2.0, help_text='Base energy generated per tick for each player')
+    region_energy_per_tick = models.FloatField(default=0.35, help_text='Energy generated per owned region each tick')
+
     # Combat
     attacker_advantage = models.FloatField(default=0.0, help_text='Bonus for attacker (e.g. 0.1 = 10%)')
     defender_advantage = models.FloatField(default=0.1, help_text='Bonus for defender (e.g. 0.1 = 10%)')
     combat_randomness = models.FloatField(default=0.2, help_text='Random factor in combat (0-1)')
-    
+
     # Starting conditions
     starting_units = models.PositiveIntegerField(default=10, help_text='Units in capital at start')
     starting_regions = models.PositiveIntegerField(default=1, help_text='Number of starting regions')
     neutral_region_units = models.PositiveIntegerField(
         default=3, help_text='Garrison units in unowned (neutral) regions'
     )
-    
+
     # ELO
     elo_k_factor = models.PositiveIntegerField(default=32, help_text='K-factor for ELO calculation')
-    
+
     class Meta:
         verbose_name = 'Game Settings'
         verbose_name_plural = 'Game Settings'
@@ -74,7 +74,7 @@ class BuildingType(models.Model):
     
     # Costs & timing
     cost = models.PositiveIntegerField(default=50, help_text='Unit cost to build')
-    currency_cost = models.PositiveIntegerField(default=50, help_text='Currency cost to build')
+    energy_cost = models.PositiveIntegerField(default=50, help_text='Energy cost to build')
     build_time_ticks = models.PositiveIntegerField(default=10, help_text='Ticks to complete building')
     
     # Constraints
@@ -85,7 +85,7 @@ class BuildingType(models.Model):
     defense_bonus = models.FloatField(default=0.0, help_text='Defense bonus for region (e.g. 0.2 = 20%)')
     vision_range = models.PositiveIntegerField(default=0, help_text='Extra vision range in regions')
     unit_generation_bonus = models.FloatField(default=0.0, help_text='Extra units generated per tick')
-    currency_generation_bonus = models.FloatField(default=0.0, help_text='Extra currency generated per tick by the region')
+    energy_generation_bonus = models.FloatField(default=0.0, help_text='Extra energy generated per tick by the region')
     
     is_active = models.BooleanField(default=True)
     order = models.PositiveIntegerField(default=0)
@@ -164,9 +164,9 @@ class GameMode(models.Model):
     # Unit generation
     base_unit_generation_rate = models.FloatField(default=1.0, help_text='Units generated per tick per region')
     capital_generation_bonus = models.FloatField(default=2.0, help_text='Multiplier for capital region')
-    starting_currency = models.PositiveIntegerField(default=120, help_text='Starting strategic currency for each player')
-    base_currency_per_tick = models.FloatField(default=2.0, help_text='Base currency generated per tick for each player')
-    region_currency_per_tick = models.FloatField(default=0.35, help_text='Currency generated per owned region each tick')
+    starting_energy = models.PositiveIntegerField(default=120, help_text='Starting energy for each player')
+    base_energy_per_tick = models.FloatField(default=2.0, help_text='Base energy generated per tick for each player')
+    region_energy_per_tick = models.FloatField(default=0.35, help_text='Energy generated per owned region each tick')
 
     # Combat
     attacker_advantage = models.FloatField(default=0.0, help_text='Bonus for attacker (e.g. 0.1 = 10%)')
@@ -227,7 +227,7 @@ class AbilityType(models.Model):
     range = models.PositiveIntegerField(default=1, help_text='Max hops from owned regions to target')
 
     # Costs & timing
-    currency_cost = models.PositiveIntegerField(default=50, help_text='Currency cost to use')
+    energy_cost = models.PositiveIntegerField(default=50, help_text='Energy cost to use')
     cooldown_ticks = models.PositiveIntegerField(default=60, help_text='Cooldown in ticks after use')
 
     # Instant effects

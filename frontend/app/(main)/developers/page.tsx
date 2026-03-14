@@ -371,7 +371,7 @@ export default function DevelopersPage() {
     if (!token) return;
     try {
       const data = await getDeveloperApps(token);
-      setApps(data);
+      setApps(data.items);
     } catch {
       toast.error("Nie udalo sie zaladowac aplikacji.");
     } finally {

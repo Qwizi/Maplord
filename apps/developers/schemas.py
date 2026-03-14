@@ -2,6 +2,7 @@ import uuid
 from typing import Optional, List
 from datetime import datetime
 from ninja import Schema
+from pydantic import model_validator
 
 
 # === Developer App Schemas ===
@@ -116,6 +117,30 @@ class PublicLeaderboardEntrySchema(Schema):
     username: str
     elo_rating: int
     avatar: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+    @model_validator(mode='before')
+    @classmethod
+    def _map_from_user(cls, data):
+        # When populated from a Django User ORM instance, map id -> user_id
+        # and resolve the avatar ImageField to a URL string.
+        if hasattr(data, 'id'):
+            avatar_field = getattr(data, 'avatar', None)
+            avatar_url: Optional[str] = None
+            if avatar_field:
+                try:
+                    avatar_url = str(avatar_field.url)
+                except Exception:
+                    pass
+            return {
+                'user_id': data.id,
+                'username': data.username,
+                'elo_rating': data.elo_rating,
+                'avatar': avatar_url,
+            }
+        return data
 
 
 class PublicMatchPlayerSchema(Schema):

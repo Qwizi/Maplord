@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from ninja import Schema
 
 from apps.inventory.schemas import ItemOutSchema
@@ -37,7 +38,7 @@ class CraftingLogOutSchema(Schema):
     result_item: ItemOutSchema
     result_quantity: int
     gold_spent: int
-    created_at: str
+    created_at: datetime
 
     class Config:
         from_attributes = True

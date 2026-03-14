@@ -13,6 +13,7 @@ from apps.developers.schemas import (
     PublicMatchOutSchema,
     PublicPlayerStatsSchema,
 )
+from apps.pagination import paginate_qs
 from apps.game.models import GameStateSnapshot, MatchResult, PlayerResult
 from apps.game_config.models import AbilityType, BuildingType, GameMode, GameSettings, MapConfig, UnitType
 from apps.game_config.schemas import FullConfigOutSchema
@@ -25,57 +26,22 @@ User = get_user_model()
 class PublicAPIController:
 
     @route.get('/leaderboard/', response=dict)
-    def get_leaderboard(self, request, page: int = 1, per_page: int = 20):
+    def get_leaderboard(self, request, limit: int = 50, offset: int = 0):
         """Paginated leaderboard of non-bot active players ordered by ELO rating."""
         if not check_scope(request, 'leaderboard:read'):
             raise HttpError(403, 'Insufficient scope: leaderboard:read')
 
-        per_page = min(per_page, 100)
-        queryset = User.objects.filter(is_bot=False, is_active=True).order_by('-elo_rating')
-
-        total = queryset.count()
-        users = queryset[(page - 1) * per_page: page * per_page]
-
-        items = [
-            PublicLeaderboardEntrySchema(
-                user_id=user.id,
-                username=user.username,
-                elo_rating=user.elo_rating,
-                avatar=str(user.avatar.url) if user.avatar else None,
-            )
-            for user in users
-        ]
-
-        return {
-            'items': [item.model_dump() for item in items],
-            'total': total,
-            'page': page,
-            'per_page': per_page,
-        }
+        qs = User.objects.filter(is_bot=False, is_active=True).order_by('-elo_rating')
+        return paginate_qs(qs, limit, offset, schema=PublicLeaderboardEntrySchema)
 
     @route.get('/matches/', response=dict)
-    def list_matches(self, request, page: int = 1, per_page: int = 20):
+    def list_matches(self, request, limit: int = 50, offset: int = 0):
         """Paginated list of finished non-tutorial matches."""
         if not check_scope(request, 'matches:read'):
             raise HttpError(403, 'Insufficient scope: matches:read')
 
-        per_page = min(per_page, 100)
-        queryset = Match.objects.filter(status='finished', is_tutorial=False).order_by('-created_at')
-
-        total = queryset.count()
-        matches = queryset[(page - 1) * per_page: page * per_page]
-
-        items = [
-            PublicMatchOutSchema.model_validate(match)
-            for match in matches
-        ]
-
-        return {
-            'items': [item.model_dump() for item in items],
-            'total': total,
-            'page': page,
-            'per_page': per_page,
-        }
+        qs = Match.objects.filter(status='finished', is_tutorial=False).order_by('-created_at')
+        return paginate_qs(qs, limit, offset, schema=PublicMatchOutSchema)
 
     @route.get('/matches/{match_id}/', response=Any)
     def get_match(self, request, match_id: str):

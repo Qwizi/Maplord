@@ -4,9 +4,13 @@ from ninja_extra import api_controller, route
 from ninja_jwt.authentication import JWTAuth
 from django.db import transaction
 from django.shortcuts import get_object_or_404
+from apps.pagination import paginate_qs
 
-from apps.inventory.models import Item, ItemCategory, ItemDrop, UserInventory, Wallet
+from apps.inventory.models import Deck, DeckItem, Item, ItemCategory, ItemDrop, UserInventory, Wallet
 from apps.inventory.schemas import (
+    DeckCreateSchema,
+    DeckOutSchema,
+    DeckUpdateSchema,
     InventoryItemOutSchema,
     ItemCategoryOutSchema,
     ItemDropOutSchema,
@@ -61,26 +65,28 @@ class InventoryController:
             .prefetch_related('items')
         )
 
-    @route.get('/my/', response=list[InventoryItemOutSchema], auth=JWTAuth())
-    def my_inventory(self, request):
+    @route.get('/my/', response=dict, auth=JWTAuth())
+    def my_inventory(self, request, limit: int = 50, offset: int = 0):
         """Get current user's inventory."""
-        return list(
+        qs = (
             UserInventory.objects.filter(user=request.user)
             .select_related('item', 'item__category')
         )
+        return paginate_qs(qs, limit, offset, schema=InventoryItemOutSchema)
 
     @route.get('/wallet/', response=WalletOutSchema, auth=JWTAuth())
     def my_wallet(self, request):
         """Get current user's gold wallet."""
         return get_or_create_wallet(request.user)
 
-    @route.get('/drops/', response=list[ItemDropOutSchema], auth=JWTAuth())
-    def my_drops(self, request):
+    @route.get('/drops/', response=dict, auth=JWTAuth())
+    def my_drops(self, request, limit: int = 50, offset: int = 0):
         """Get recent item drops for current user."""
-        return list(
+        qs = (
             ItemDrop.objects.filter(user=request.user)
-            .select_related('item', 'item__category')[:50]
+            .select_related('item', 'item__category')
         )
+        return paginate_qs(qs, limit, offset, schema=ItemDropOutSchema)
 
     @route.post('/open-crate/', auth=JWTAuth())
     def open_crate(self, request, payload: OpenCrateInSchema):
@@ -89,20 +95,20 @@ class InventoryController:
         key = get_object_or_404(Item, slug=payload.key_item_slug, item_type=Item.ItemType.KEY)
 
         if key.opens_crate_id != crate.id:
-            return self.create_response(request, {'error': 'This key does not open this crate'}, status=400)
+            return self.create_response({'error': 'This key does not open this crate'}, status_code=400)
 
         with transaction.atomic():
             if not remove_item_from_inventory(request.user, crate, 1):
-                return self.create_response(request, {'error': 'You do not have this crate'}, status=400)
+                return self.create_response({'error': 'You do not have this crate'}, status_code=400)
             if not remove_item_from_inventory(request.user, key, 1):
                 # Return the crate
                 add_item_to_inventory(request.user, crate, 1)
-                return self.create_response(request, {'error': 'You do not have this key'}, status=400)
+                return self.create_response({'error': 'You do not have this key'}, status_code=400)
 
             # Roll loot from crate_loot_table
             loot_table = crate.crate_loot_table or []
             if not loot_table:
-                return self.create_response(request, {'error': 'Crate has no loot table'}, status=400)
+                return self.create_response({'error': 'Crate has no loot table'}, status_code=400)
 
             drops = _roll_crate_loot(loot_table)
             result_drops = []
@@ -150,3 +156,141 @@ def _roll_crate_loot(loot_table, num_rolls=3):
     for slug, qty in results:
         merged[slug] = merged.get(slug, 0) + qty
     return list(merged.items())
+
+
+# Item types permitted inside a deck
+_DECK_ALLOWED_TYPES = {
+    Item.ItemType.BLUEPRINT_BUILDING,
+    Item.ItemType.BLUEPRINT_UNIT,
+    Item.ItemType.TACTICAL_PACKAGE,
+    Item.ItemType.BOOST,
+}
+
+
+@api_controller('/inventory/decks', tags=['Decks'])
+class DeckController:
+
+    @route.get('/', response=dict, auth=JWTAuth())
+    def list_decks(self, request, limit: int = 50, offset: int = 0):
+        """List current user's decks with their items."""
+        qs = (
+            Deck.objects.filter(user=request.user)
+            .prefetch_related('items__item', 'items__item__category')
+        )
+        return paginate_qs(qs, limit, offset, schema=DeckOutSchema)
+
+    @route.post('/', response=DeckOutSchema, auth=JWTAuth())
+    def create_deck(self, request, payload: DeckCreateSchema):
+        """Create a new deck for the current user."""
+        deck = Deck.objects.create(user=request.user, name=payload.name)
+        return deck
+
+    @route.get('/{deck_id}/', response=DeckOutSchema, auth=JWTAuth())
+    def get_deck(self, request, deck_id: str):
+        """Retrieve a single deck with its items."""
+        deck = get_object_or_404(
+            Deck.objects.prefetch_related('items__item', 'items__item__category'),
+            id=deck_id, user=request.user,
+        )
+        return deck
+
+    @route.put('/{deck_id}/', response=DeckOutSchema, auth=JWTAuth())
+    def update_deck(self, request, deck_id: str, payload: DeckUpdateSchema):
+        """Update a deck's name and/or item list.
+
+        Validation:
+        - Each item_slug must exist and be of type blueprint_building,
+          blueprint_unit, ability_scroll, or boost.
+        - User must have enough items in inventory to cover ALL decks combined
+          (not just this one).
+        """
+        deck = get_object_or_404(Deck, id=deck_id, user=request.user)
+
+        with transaction.atomic():
+            if payload.name is not None:
+                deck.name = payload.name
+                deck.save(update_fields=['name', 'updated_at'])
+
+            if payload.items is not None:
+                # Validate each slot
+                validated_items: list[tuple] = []
+                for slot in payload.items:
+                    try:
+                        item = Item.objects.get(slug=slot.item_slug, is_active=True)
+                    except Item.DoesNotExist:
+                        return self.create_response(
+                            {'error': f'Item not found: {slot.item_slug}'},
+                            status_code=400,
+                        )
+                    if item.item_type not in _DECK_ALLOWED_TYPES:
+                        return self.create_response(
+                            {'error': f'Item type "{item.item_type}" is not allowed in a deck: {slot.item_slug}'},
+                            status_code=400,
+                        )
+                    validated_items.append((item, slot.quantity))
+
+                # Check inventory coverage across all decks
+                # For each item, sum quantities required by ALL decks (replacing this deck's old requirement)
+                new_deck_requirements: dict = {}
+                for item, qty in validated_items:
+                    new_deck_requirements[item.id] = new_deck_requirements.get(item.id, 0) + qty
+
+                # Sum requirements from OTHER decks for the same user
+                other_requirements: dict = {}
+                for di in DeckItem.objects.filter(
+                    deck__user=request.user
+                ).exclude(deck_id=deck_id).select_related('item'):
+                    other_requirements[di.item_id] = other_requirements.get(di.item_id, 0) + di.quantity
+
+                # Build combined requirement and validate against inventory
+                all_item_ids = set(new_deck_requirements) | set(other_requirements)
+                for item_id in all_item_ids:
+                    total_required = (
+                        new_deck_requirements.get(item_id, 0)
+                        + other_requirements.get(item_id, 0)
+                    )
+                    owned = UserInventory.objects.filter(
+                        user=request.user, item_id=item_id
+                    ).values_list('quantity', flat=True).first() or 0
+                    if owned < total_required:
+                        try:
+                            item_name = Item.objects.get(id=item_id).name
+                        except Item.DoesNotExist:
+                            item_name = str(item_id)
+                        return self.create_response(
+                            {
+                                'error': (
+                                    f'Insufficient inventory for "{item_name}": '
+                                    f'need {total_required} across all decks, have {owned}'
+                                )
+                            },
+                            status_code=400,
+                        )
+
+                # Replace deck items
+                DeckItem.objects.filter(deck=deck).delete()
+                for item, qty in validated_items:
+                    DeckItem.objects.create(deck=deck, item=item, quantity=qty)
+
+        return (
+            Deck.objects.prefetch_related('items__item', 'items__item__category')
+            .get(id=deck.id)
+        )
+
+    @route.delete('/{deck_id}/', auth=JWTAuth())
+    def delete_deck(self, request, deck_id: str):
+        """Delete a deck."""
+        deck = get_object_or_404(Deck, id=deck_id, user=request.user)
+        deck.delete()
+        return {'ok': True}
+
+    @route.post('/{deck_id}/set-default/', response=DeckOutSchema, auth=JWTAuth())
+    def set_default_deck(self, request, deck_id: str):
+        """Set this deck as the user's default deck."""
+        deck = get_object_or_404(
+            Deck.objects.prefetch_related('items__item', 'items__item__category'),
+            id=deck_id, user=request.user,
+        )
+        deck.is_default = True
+        deck.save()  # triggers the unique-default enforcement in Deck.save()
+        return deck

@@ -12,12 +12,12 @@ pub struct GameSettings {
     pub base_unit_generation_rate: f64,
     #[serde(default = "default_capital_generation_bonus")]
     pub capital_generation_bonus: f64,
-    #[serde(default = "default_starting_currency")]
-    pub starting_currency: i64,
-    #[serde(default = "default_base_currency_per_tick")]
-    pub base_currency_per_tick: f64,
-    #[serde(default = "default_region_currency_per_tick")]
-    pub region_currency_per_tick: f64,
+    #[serde(default = "default_starting_energy")]
+    pub starting_energy: i64,
+    #[serde(default = "default_base_energy_per_tick")]
+    pub base_energy_per_tick: f64,
+    #[serde(default = "default_region_energy_per_tick")]
+    pub region_energy_per_tick: f64,
     #[serde(default)]
     pub attacker_advantage: f64,
     #[serde(default = "default_defender_advantage")]
@@ -48,9 +48,9 @@ fn default_tick_interval() -> u64 { 1000 }
 fn default_capital_selection_time() -> u64 { 30 }
 fn default_base_unit_generation_rate() -> f64 { 1.0 }
 fn default_capital_generation_bonus() -> f64 { 2.0 }
-fn default_starting_currency() -> i64 { 120 }
-fn default_base_currency_per_tick() -> f64 { 2.0 }
-fn default_region_currency_per_tick() -> f64 { 0.35 }
+fn default_starting_energy() -> i64 { 120 }
+fn default_base_energy_per_tick() -> f64 { 2.0 }
+fn default_region_energy_per_tick() -> f64 { 0.35 }
 fn default_defender_advantage() -> f64 { 0.1 }
 fn default_combat_randomness() -> f64 { 0.2 }
 fn default_starting_units() -> i64 { 10 }
@@ -63,7 +63,7 @@ pub struct BuildingConfig {
     #[serde(default)]
     pub cost: i64,
     #[serde(default)]
-    pub currency_cost: i64,
+    pub energy_cost: i64,
     #[serde(default = "default_build_time")]
     pub build_time_ticks: i64,
     #[serde(default = "default_max_per_region")]
@@ -75,7 +75,7 @@ pub struct BuildingConfig {
     #[serde(default)]
     pub unit_generation_bonus: f64,
     #[serde(default)]
-    pub currency_generation_bonus: f64,
+    pub energy_generation_bonus: f64,
     #[serde(default)]
     pub requires_coastal: bool,
     #[serde(default)]
@@ -137,7 +137,7 @@ pub struct AbilityConfig {
     #[serde(default)]
     pub range: i64,
     #[serde(default)]
-    pub currency_cost: i64,
+    pub energy_cost: i64,
     #[serde(default = "default_cooldown")]
     pub cooldown_ticks: i64,
     #[serde(default)]
@@ -150,6 +150,30 @@ pub struct AbilityConfig {
 
 fn default_target_type() -> String { "enemy".into() }
 fn default_cooldown() -> i64 { 60 }
+
+/// Temporary in-match boost activated during gameplay, expires after N ticks.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActiveMatchBoost {
+    pub slug: String,
+    #[serde(default)]
+    pub effect_type: String,
+    #[serde(default)]
+    pub value: f64,
+    #[serde(default)]
+    pub ticks_remaining: i64,
+    #[serde(default)]
+    pub total_ticks: i64,
+}
+
+/// A pre-match boost applied to a player for the entire match (from deck).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActiveBoost {
+    /// Slug identifying the boost type.
+    pub slug: String,
+    /// Boost parameters (e.g. `{"effect_type": "energy_bonus", "value": 0.2}`).
+    #[serde(default)]
+    pub params: serde_json::Value,
+}
 
 /// Active persistent effect during a match.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -175,7 +199,7 @@ fn default_i64_one() -> i64 { 1 }
 fn default_movement_type() -> String { "land".into() }
 
 /// Player state stored in Redis.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Player {
     pub user_id: String,
     #[serde(default)]
@@ -197,9 +221,9 @@ pub struct Player {
     #[serde(default)]
     pub capital_region_id: Option<String>,
     #[serde(default)]
-    pub currency: i64,
+    pub energy: i64,
     #[serde(default)]
-    pub currency_accum: f64,
+    pub energy_accum: f64,
     #[serde(default)]
     pub ability_cooldowns: HashMap<String, i64>,
     #[serde(default)]
@@ -216,6 +240,30 @@ pub struct Player {
     /// Cumulative buildings constructed during the match.
     #[serde(default)]
     pub total_buildings_built: u32,
+    /// Building slugs unlocked by blueprints (from deck).
+    /// When non-empty, only these building types (plus always-available ones) may be built.
+    #[serde(default)]
+    pub unlocked_buildings: Vec<String>,
+    /// Unit slugs unlocked by blueprints (from deck).
+    /// When non-empty, only these unit types (plus units with no `produced_by_slug`) are producible.
+    #[serde(default)]
+    pub unlocked_units: Vec<String>,
+    /// Ability scrolls carried into the match: slug → remaining uses.
+    /// When non-empty the scroll system is active and uses are consumed on each cast.
+    #[serde(default)]
+    pub ability_scrolls: HashMap<String, i64>,
+    /// Pre-match boosts active for the entire match.
+    #[serde(default)]
+    pub active_boosts: Vec<ActiveBoost>,
+    /// Temporary in-match boosts (activated during gameplay, expire after N ticks).
+    #[serde(default)]
+    pub active_match_boosts: Vec<ActiveMatchBoost>,
+    /// Ability levels from deck: ability_slug → level (1-3). Higher = stronger.
+    #[serde(default)]
+    pub ability_levels: HashMap<String, i64>,
+    /// Building max levels from deck: building_slug → max level (1-3).
+    #[serde(default)]
+    pub building_levels: HashMap<String, i64>,
 }
 
 fn default_true() -> bool { true }
@@ -248,7 +296,7 @@ pub struct Region {
     #[serde(default)]
     pub unit_generation_bonus: f64,
     #[serde(default)]
-    pub currency_generation_bonus: f64,
+    pub energy_generation_bonus: f64,
     #[serde(default)]
     pub is_coastal: bool,
     #[serde(default)]
@@ -260,7 +308,7 @@ pub struct Region {
 }
 
 /// Action from a player.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Action {
     pub action_type: String,
     #[serde(default)]
@@ -279,6 +327,10 @@ pub struct Action {
     pub building_type: Option<String>,
     #[serde(default)]
     pub ability_type: Option<String>,
+    /// Boost parameters forwarded by the gateway when action_type == "activate_boost".
+    /// Expected keys: "effect_type" (String), "value" (f64), "duration_ticks" (i64).
+    #[serde(default)]
+    pub boost_params: Option<serde_json::Value>,
 }
 
 /// Building queue item.
@@ -335,7 +387,7 @@ pub enum Event {
         building_type: String,
         player_id: String,
         ticks_remaining: i64,
-        currency_cost: i64,
+        energy_cost: i64,
     },
     #[serde(rename = "unit_production_complete")]
     UnitProductionComplete {
@@ -359,7 +411,7 @@ pub enum Event {
         unit_type: String,
         quantity: i64,
         ticks_remaining: i64,
-        currency_cost: i64,
+        energy_cost: i64,
         manpower_cost: i64,
     },
     #[serde(rename = "troops_sent")]
@@ -454,5 +506,17 @@ pub enum Event {
         region_id: Option<String>,
         building_type: Option<String>,
         unit_type: Option<String>,
+    },
+    #[serde(rename = "boost_activated")]
+    BoostActivated {
+        player_id: String,
+        boost_slug: String,
+        effect_type: String,
+        duration_ticks: i64,
+    },
+    #[serde(rename = "boost_expired")]
+    BoostExpired {
+        player_id: String,
+        boost_slug: String,
     },
 }

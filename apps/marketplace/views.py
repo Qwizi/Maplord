@@ -6,6 +6,7 @@ from django.db.models import Q
 from django.utils import timezone
 from ninja_extra import api_controller, route
 from ninja_jwt.authentication import JWTAuth
+from apps.pagination import paginate_qs
 
 from apps.inventory.models import Item, UserInventory, Wallet
 from apps.inventory.views import add_item_to_inventory, get_or_create_wallet, remove_item_from_inventory
@@ -29,8 +30,8 @@ class MarketplaceController:
         """Get marketplace configuration."""
         return MarketConfig.get()
 
-    @route.get('/listings/', response=list[MarketListingOutSchema], auth=None)
-    def list_active(self, request, item_slug: str = None, listing_type: str = None):
+    @route.get('/listings/', response=dict, auth=None)
+    def list_active(self, request, item_slug: str = None, listing_type: str = None, limit: int = 50, offset: int = 0):
         """List active marketplace listings, optionally filtered."""
         qs = MarketListing.objects.filter(status=MarketListing.Status.ACTIVE).select_related('seller', 'item', 'item__category')
 
@@ -39,29 +40,29 @@ class MarketplaceController:
         if listing_type in ('sell', 'buy'):
             qs = qs.filter(listing_type=listing_type)
 
-        # Sell orders: cheapest first. Buy orders: highest first.
-        qs = qs.order_by('listing_type', 'price_per_unit')
-        return list(qs[:100])
+        return paginate_qs(qs.order_by('listing_type', 'price_per_unit'), limit, offset, schema=MarketListingOutSchema)
 
-    @route.get('/my-listings/', response=list[MarketListingOutSchema], auth=JWTAuth())
-    def my_listings(self, request):
+    @route.get('/my-listings/', response=dict, auth=JWTAuth())
+    def my_listings(self, request, limit: int = 50, offset: int = 0):
         """Get current user's listings."""
-        return list(
+        qs = (
             MarketListing.objects.filter(seller=request.user)
             .exclude(status=MarketListing.Status.FULFILLED)
             .select_related('item', 'item__category', 'seller')
-            .order_by('-created_at')[:50]
+            .order_by('-created_at')
         )
+        return paginate_qs(qs, limit, offset, schema=MarketListingOutSchema)
 
-    @route.get('/history/', response=list[MarketTransactionOutSchema], auth=JWTAuth())
-    def my_history(self, request):
+    @route.get('/history/', response=dict, auth=JWTAuth())
+    def my_history(self, request, limit: int = 50, offset: int = 0):
         """Get current user's transaction history."""
-        return list(
+        qs = (
             MarketTransaction.objects.filter(
                 Q(buyer=request.user) | Q(seller=request.user)
             )
-            .select_related('buyer', 'seller', 'item', 'item__category')[:50]
+            .select_related('buyer', 'seller', 'item', 'item__category')
         )
+        return paginate_qs(qs, limit, offset, schema=MarketTransactionOutSchema)
 
     @route.post('/create-listing/', response=MarketListingOutSchema, auth=JWTAuth())
     def create_listing(self, request, payload: CreateListingInSchema):
@@ -71,17 +72,17 @@ class MarketplaceController:
             seller=request.user, status=MarketListing.Status.ACTIVE,
         ).count()
         if active_count >= config.max_active_listings_per_user:
-            return self.create_response(request, {'error': 'Too many active listings'}, status=400)
+            return self.create_response({'error': 'Too many active listings'}, status_code=400)
 
         item = Item.objects.filter(slug=payload.item_slug, is_active=True, is_tradeable=True).first()
         if not item:
-            return self.create_response(request, {'error': 'Item not found or not tradeable'}, status=404)
+            return self.create_response({'error': 'Item not found or not tradeable'}, status_code=404)
 
         if payload.listing_type not in ('sell', 'buy'):
-            return self.create_response(request, {'error': 'Invalid listing type'}, status=400)
+            return self.create_response({'error': 'Invalid listing type'}, status_code=400)
 
         if payload.quantity < 1 or payload.price_per_unit < 1:
-            return self.create_response(request, {'error': 'Quantity and price must be positive'}, status=400)
+            return self.create_response({'error': 'Quantity and price must be positive'}, status_code=400)
 
         with transaction.atomic():
             wallet = get_or_create_wallet(request.user)
@@ -89,12 +90,12 @@ class MarketplaceController:
             if payload.listing_type == 'sell':
                 # Must have the items in inventory
                 if not remove_item_from_inventory(request.user, item, payload.quantity):
-                    return self.create_response(request, {'error': 'Insufficient items'}, status=400)
+                    return self.create_response({'error': 'Insufficient items'}, status_code=400)
             else:
                 # Buy order: escrow gold
                 total_cost = payload.price_per_unit * payload.quantity
                 if wallet.gold < total_cost:
-                    return self.create_response(request, {'error': 'Insufficient gold'}, status=400)
+                    return self.create_response({'error': 'Insufficient gold'}, status_code=400)
                 wallet.gold -= total_cost
                 wallet.total_spent += total_cost
                 wallet.save(update_fields=['gold', 'total_spent'])
@@ -131,14 +132,14 @@ class MarketplaceController:
                 .first()
             )
             if not listing:
-                return self.create_response(request, {'error': 'Listing not found or not available'}, status=404)
+                return self.create_response({'error': 'Listing not found or not available'}, status_code=404)
 
             if listing.seller_id == request.user.id:
-                return self.create_response(request, {'error': 'Cannot buy your own listing'}, status=400)
+                return self.create_response({'error': 'Cannot buy your own listing'}, status_code=400)
 
             qty = min(payload.quantity, listing.quantity_remaining)
             if qty < 1:
-                return self.create_response(request, {'error': 'No items remaining'}, status=400)
+                return self.create_response({'error': 'No items remaining'}, status_code=400)
 
             total_price = listing.price_per_unit * qty
             fee = int(total_price * config.transaction_fee_percent / 100)
@@ -146,7 +147,7 @@ class MarketplaceController:
 
             buyer_wallet = get_or_create_wallet(request.user)
             if buyer_wallet.gold < total_price:
-                return self.create_response(request, {'error': 'Insufficient gold'}, status=400)
+                return self.create_response({'error': 'Insufficient gold'}, status_code=400)
 
             # Transfer gold
             buyer_wallet.gold -= total_price
@@ -193,7 +194,7 @@ class MarketplaceController:
                 .first()
             )
             if not listing:
-                return self.create_response(request, {'error': 'Listing not found'}, status=404)
+                return self.create_response({'error': 'Listing not found'}, status_code=404)
 
             listing.status = MarketListing.Status.CANCELLED
             listing.save(update_fields=['status'])

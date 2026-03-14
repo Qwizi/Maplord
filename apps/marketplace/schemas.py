@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from typing import Optional
 from ninja import Schema
 
@@ -15,8 +16,8 @@ class MarketListingOutSchema(Schema):
     price_per_unit: int
     status: str
     is_bot_listing: bool
-    created_at: str
-    expires_at: Optional[str] = None
+    created_at: datetime
+    expires_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -47,7 +48,7 @@ class MarketTransactionOutSchema(Schema):
     price_per_unit: int
     total_price: int
     fee: int
-    created_at: str
+    created_at: datetime
 
     class Config:
         from_attributes = True

@@ -7,6 +7,7 @@ from ninja.errors import HttpError
 from ninja_extra import api_controller, route
 from ninja_extra.permissions import IsAuthenticated
 from ninja_jwt.authentication import JWTAuth
+from apps.pagination import paginate_qs
 
 from apps.developers.models import (
     VALID_EVENTS,
@@ -72,12 +73,11 @@ class DeveloperController:
             client_secret=raw_secret,
         )
 
-    @route.get('/apps/', response=List[DeveloperAppOutSchema])
-    def list_apps(self, request):
+    @route.get('/apps/', response=dict)
+    def list_apps(self, request, limit: int = 50, offset: int = 0):
         """List all active developer apps owned by the authenticated user."""
-        return list(
-            DeveloperApp.objects.filter(owner=request.auth, is_active=True).order_by('-created_at')
-        )
+        qs = DeveloperApp.objects.filter(owner=request.auth, is_active=True).order_by('-created_at')
+        return paginate_qs(qs, limit, offset, schema=DeveloperAppOutSchema)
 
     @route.get('/apps/{app_id}/', response=DeveloperAppOutSchema)
     def get_app(self, request, app_id: uuid.UUID):
@@ -139,11 +139,11 @@ class DeveloperController:
             key=raw_key,
         )
 
-    @route.get('/apps/{app_id}/keys/', response=List[APIKeyOutSchema])
-    def list_api_keys(self, request, app_id: uuid.UUID):
+    @route.get('/apps/{app_id}/keys/', response=dict)
+    def list_api_keys(self, request, app_id: uuid.UUID, limit: int = 50, offset: int = 0):
         """List all API keys for a developer app."""
         app = self._get_app(request, app_id)
-        return list(app.api_keys.order_by('-created_at'))
+        return paginate_qs(app.api_keys.order_by('-created_at'), limit, offset, schema=APIKeyOutSchema)
 
     @route.delete('/apps/{app_id}/keys/{key_id}/')
     def deactivate_api_key(self, request, app_id: uuid.UUID, key_id: uuid.UUID):
@@ -177,11 +177,11 @@ class DeveloperController:
         )
         return webhook
 
-    @route.get('/apps/{app_id}/webhooks/', response=List[WebhookOutSchema])
-    def list_webhooks(self, request, app_id: uuid.UUID):
+    @route.get('/apps/{app_id}/webhooks/', response=dict)
+    def list_webhooks(self, request, app_id: uuid.UUID, limit: int = 50, offset: int = 0):
         """List all webhooks for a developer app."""
         app = self._get_app(request, app_id)
-        return list(app.webhooks.order_by('-created_at'))
+        return paginate_qs(app.webhooks.order_by('-created_at'), limit, offset, schema=WebhookOutSchema)
 
     @route.patch('/apps/{app_id}/webhooks/{webhook_id}/', response=WebhookOutSchema)
     def update_webhook(self, request, app_id: uuid.UUID, webhook_id: uuid.UUID, payload: WebhookUpdateSchema):
@@ -196,7 +196,6 @@ class DeveloperController:
             invalid_events = [e for e in payload.events if e not in VALID_EVENTS]
             if invalid_events:
                 return self.create_response(
-                    request,
                     {'detail': f'Invalid events: {", ".join(invalid_events)}'},
                     status_code=400,
                 )
@@ -255,15 +254,15 @@ class DeveloperController:
                 message=f'Failed to queue test delivery: {exc}',
             )
 
-    @route.get('/apps/{app_id}/webhooks/{webhook_id}/deliveries/', response=List[WebhookDeliveryOutSchema])
-    def list_webhook_deliveries(self, request, app_id: uuid.UUID, webhook_id: uuid.UUID):
-        """List the last 50 deliveries for a webhook."""
+    @route.get('/apps/{app_id}/webhooks/{webhook_id}/deliveries/', response=dict)
+    def list_webhook_deliveries(self, request, app_id: uuid.UUID, webhook_id: uuid.UUID, limit: int = 50, offset: int = 0):
+        """List deliveries for a webhook."""
         app = self._get_app(request, app_id)
         try:
             webhook = app.webhooks.get(id=webhook_id)
         except Webhook.DoesNotExist:
             raise HttpError(404, 'Not found')
-        return list(webhook.deliveries.order_by('-created_at')[:50])
+        return paginate_qs(webhook.deliveries.order_by('-created_at'), limit, offset, schema=WebhookDeliveryOutSchema)
 
     # -------------------------------------------------------------------------
     # Usage stats

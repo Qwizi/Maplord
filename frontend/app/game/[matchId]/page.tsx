@@ -194,11 +194,11 @@ export default function GamePage({
   // In tutorial, override ability/building costs to match the snapshot values
   const effectiveAbilities = useMemo(() => {
     if (!isTutorial) return abilitiesConfig;
-    return abilitiesConfig.map((a) => ({ ...a, currency_cost: 10, cooldown_ticks: 5 }));
+    return abilitiesConfig.map((a) => ({ ...a, energy_cost: 10, cooldown_ticks: 5 }));
   }, [isTutorial, abilitiesConfig]);
   const effectiveBuildings = useMemo(() => {
     if (!isTutorial) return buildings;
-    return buildings.map((b) => ({ ...b, cost: 0, currency_cost: 10, build_time_ticks: 3 }));
+    return buildings.map((b) => ({ ...b, cost: 0, energy_cost: 10, build_time_ticks: 3 }));
   }, [isTutorial, buildings]);
 
   // Building slug -> asset key for asset-based symbol markers on the map.
@@ -495,8 +495,8 @@ export default function GamePage({
   const tickIntervalMs = parseInt(gameState?.meta?.tick_interval_ms || "1000", 10);
 
   // My stats
-  const { myRegionCount, myUnitCount, myCurrency } = useMemo(() => {
-    if (!gameState) return { myRegionCount: 0, myUnitCount: 0, myCurrency: 0 };
+  const { myRegionCount, myUnitCount, myEnergy } = useMemo(() => {
+    if (!gameState) return { myRegionCount: 0, myUnitCount: 0, myEnergy: 0 };
     let rc = 0;
     let uc = 0;
     for (const r of Object.values(gameState.regions)) {
@@ -508,7 +508,7 @@ export default function GamePage({
     return {
       myRegionCount: rc,
       myUnitCount: uc,
-      myCurrency: gameState.players[myUserId]?.currency ?? 0,
+      myEnergy: gameState.players[myUserId]?.energy ?? 0,
     };
   }, [gameState, myUserId]);
 
@@ -1356,7 +1356,7 @@ export default function GamePage({
         myUserId={myUserId}
         myRegionCount={myRegionCount}
         myUnitCount={myUnitCount}
-        myCurrency={myCurrency}
+        myEnergy={myEnergy}
       />
 
       {/* Build queue progress */}
@@ -1394,13 +1394,15 @@ export default function GamePage({
             region={sourceRegionData}
             players={players}
             myUserId={myUserId}
-            myCurrency={myCurrency}
+            myEnergy={myEnergy}
             buildings={effectiveBuildings}
             buildingQueue={buildingsQueue}
             units={unitsConfig}
             onBuild={handleBuild}
             onProduceUnit={handleProduceUnit}
             onClose={handleCancelAction}
+            unlockedBuildings={gameState?.players[myUserId]?.unlocked_buildings}
+            unlockedUnits={gameState?.players[myUserId]?.unlocked_units}
           />
         </div>
       )}
@@ -1409,12 +1411,14 @@ export default function GamePage({
       {status === "in_progress" && effectiveAbilities.length > 0 && (
         <AbilityBar
           abilities={effectiveAbilities}
-          myCurrency={myCurrency}
+          myEnergy={myEnergy}
           abilityCooldowns={gameState?.players[myUserId]?.ability_cooldowns ?? {}}
           currentTick={currentTick}
           selectedAbility={selectedAbility}
           onSelectAbility={handleSelectAbility}
           allowedAbility={tutorial.isActive ? (tutorial.currentStep?.allowedAbility ?? null) : undefined}
+          abilityScrolls={gameState?.players[myUserId]?.ability_scrolls}
+          abilityLevels={gameState?.players[myUserId]?.ability_levels}
         />
       )}
 
@@ -1440,12 +1444,14 @@ export default function GamePage({
         <MobileBuildSheet
           region={sourceRegionData}
           regionId={selectedRegion}
-          myCurrency={myCurrency}
+          myEnergy={myEnergy}
           buildings={effectiveBuildings}
           buildingQueue={buildingsQueue}
           units={unitsConfig}
           onBuild={handleBuild}
           onProduceUnit={handleProduceUnit}
+          unlockedBuildings={gameState?.players[myUserId]?.unlocked_buildings}
+          unlockedUnits={gameState?.players[myUserId]?.unlocked_units}
         />
       )}
     </div>

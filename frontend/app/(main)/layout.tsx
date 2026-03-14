@@ -1,12 +1,31 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Backpack, Code, Hammer, LogOut, Medal, Store, Swords, Trophy } from "lucide-react";
+import {
+  Backpack,
+  ChevronDown,
+  Code,
+  Coins,
+  Hammer,
+  Layers,
+  LogOut,
+  Medal,
+  Store,
+  Swords,
+  Trophy,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/useAuth";
+import { getMyWallet, type WalletOut } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 function NavLink({
@@ -37,9 +56,88 @@ function NavLink({
   );
 }
 
+function NavDropdown({
+  label,
+  icon,
+  active,
+  children,
+}: {
+  label: string;
+  icon: ReactNode;
+  active: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        className={cn(
+          "flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-colors outline-none",
+          active
+            ? "border border-cyan-300/25 bg-cyan-400/10 text-cyan-100"
+            : "text-slate-300 hover:bg-white/[0.06] hover:text-zinc-100"
+        )}
+      >
+        {icon}
+        <span className="hidden sm:inline">{label}</span>
+        <ChevronDown className="hidden h-3 w-3 opacity-60 sm:block" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        className="min-w-[160px] border border-white/10 bg-slate-950/95 p-1 backdrop-blur-xl"
+        sideOffset={6}
+      >
+        {children}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function NavDropdownItem({
+  href,
+  icon,
+  label,
+  active,
+}: {
+  href: string;
+  icon: ReactNode;
+  label: string;
+  active: boolean;
+}) {
+  return (
+    <DropdownMenuItem
+      className={cn(
+        "cursor-pointer rounded-md px-3 py-2 text-sm",
+        active
+          ? "bg-cyan-400/10 text-cyan-100"
+          : "text-slate-300 hover:bg-white/[0.06] hover:text-zinc-100"
+      )}
+    >
+      <Link href={href} className="flex w-full items-center gap-2">
+        {icon}
+        {label}
+      </Link>
+    </DropdownMenuItem>
+  );
+}
+
 export default function MainLayout({ children }: { children: ReactNode }) {
-  const { user, logout } = useAuth();
+  const { user, logout, token } = useAuth();
   const pathname = usePathname();
+  const [wallet, setWallet] = useState<WalletOut | null>(null);
+
+  useEffect(() => {
+    if (!token) return;
+    getMyWallet(token)
+      .then(setWallet)
+      .catch(() => {
+        // Wallet not available — silently ignore
+      });
+  }, [token]);
+
+  const gameRoutes = ["/dashboard", "/leaderboard"];
+  const economyRoutes = ["/inventory", "/marketplace", "/crafting", "/decks"];
+
+  const isGameActive = gameRoutes.some((r) => pathname === r);
+  const isEconomyActive = economyRoutes.some((r) => pathname.startsWith(r));
 
   return (
     <div className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,#1a2740_0%,#09111d_48%,#04070d_100%)] text-zinc-100">
@@ -79,36 +177,59 @@ export default function MainLayout({ children }: { children: ReactNode }) {
 
           {/* Nav */}
           <nav className="flex items-center gap-1">
-            <NavLink
-              active={pathname === "/dashboard"}
-              label="Dashboard"
-              href="/dashboard"
+            {/* Gra dropdown */}
+            <NavDropdown
+              label="Gra"
               icon={<Swords className="h-4 w-4" />}
-            />
-            <NavLink
-              active={pathname === "/leaderboard"}
-              label="Ranking"
-              href="/leaderboard"
-              icon={<Medal className="h-4 w-4" />}
-            />
-            <NavLink
-              active={pathname === "/inventory"}
-              label="Ekwipunek"
-              href="/inventory"
-              icon={<Backpack className="h-4 w-4" />}
-            />
-            <NavLink
-              active={pathname === "/marketplace"}
-              label="Rynek"
-              href="/marketplace"
-              icon={<Store className="h-4 w-4" />}
-            />
-            <NavLink
-              active={pathname === "/crafting"}
-              label="Crafting"
-              href="/crafting"
-              icon={<Hammer className="h-4 w-4" />}
-            />
+              active={isGameActive}
+            >
+              <NavDropdownItem
+                href="/dashboard"
+                icon={<Swords className="h-3.5 w-3.5" />}
+                label="Dashboard"
+                active={pathname === "/dashboard"}
+              />
+              <NavDropdownItem
+                href="/leaderboard"
+                icon={<Medal className="h-3.5 w-3.5" />}
+                label="Ranking"
+                active={pathname === "/leaderboard"}
+              />
+            </NavDropdown>
+
+            {/* Ekonomia dropdown */}
+            <NavDropdown
+              label="Ekonomia"
+              icon={<Coins className="h-4 w-4" />}
+              active={isEconomyActive}
+            >
+              <NavDropdownItem
+                href="/inventory"
+                icon={<Backpack className="h-3.5 w-3.5" />}
+                label="Ekwipunek"
+                active={pathname === "/inventory"}
+              />
+              <NavDropdownItem
+                href="/decks"
+                icon={<Layers className="h-3.5 w-3.5" />}
+                label="Talia"
+                active={pathname === "/decks"}
+              />
+              <NavDropdownItem
+                href="/marketplace"
+                icon={<Store className="h-3.5 w-3.5" />}
+                label="Rynek"
+                active={pathname === "/marketplace"}
+              />
+              <NavDropdownItem
+                href="/crafting"
+                icon={<Hammer className="h-3.5 w-3.5" />}
+                label="Crafting"
+                active={pathname === "/crafting"}
+              />
+            </NavDropdown>
+
+            {/* Deweloperzy — single link */}
             <NavLink
               active={pathname.startsWith("/developers")}
               label="Deweloperzy"
@@ -131,6 +252,12 @@ export default function MainLayout({ children }: { children: ReactNode }) {
                   <Trophy className="h-3 w-3" />
                   {user.elo_rating}
                 </div>
+                {wallet !== null && (
+                  <div className="flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-300 border border-amber-400/15">
+                    <Coins className="h-3 w-3" />
+                    {wallet.gold.toLocaleString()}
+                  </div>
+                )}
               </div>
               <Button
                 variant="ghost"

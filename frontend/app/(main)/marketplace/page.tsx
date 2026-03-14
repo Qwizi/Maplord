@@ -73,7 +73,7 @@ export default function MarketplacePage() {
   const loadData = useCallback(async () => {
     if (!token) return;
     try {
-      const [ls, ml, hist, wal, inv, cats] = await Promise.all([
+      const [lsRes, mlRes, histRes, wal, invRes, cats] = await Promise.all([
         getMarketListings(),
         getMyListings(token),
         getMyTradeHistory(token),
@@ -81,11 +81,11 @@ export default function MarketplacePage() {
         getMyInventory(token),
         getItemCategories(),
       ]);
-      setListings(ls);
-      setMyListings(ml);
-      setHistory(hist);
+      setListings(lsRes.items);
+      setMyListings(mlRes.items);
+      setHistory(histRes.items);
       setWallet(wal);
-      setInventory(inv);
+      setInventory(invRes.items);
       setCategories(cats);
     } catch {
       toast.error("Nie udało się załadować rynku");

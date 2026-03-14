@@ -355,8 +355,8 @@ export default function ReplayPage() {
                       <div className="font-display text-sm text-zinc-100">{p.totalUnits}</div>
                     </div>
                     <div>
-                      <div className="text-slate-500">Waluta</div>
-                      <div className="font-display text-sm text-amber-200">{p.currency}</div>
+                      <div className="text-slate-500">Energia</div>
+                      <div className="font-display text-sm text-cyan-200">{p.energy}</div>
                     </div>
                   </div>
                 </div>

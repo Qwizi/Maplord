@@ -7,19 +7,24 @@ import type { BuildingType, UnitType } from "@/lib/api";
 import { getActionAsset, getBuildingAsset, getUnitAsset } from "@/lib/gameAssets";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Lock } from "lucide-react";
 
 interface RegionPanelProps {
   regionId: string;
   region: GameRegion;
   players: Record<string, GamePlayer>;
   myUserId: string;
-  myCurrency: number;
+  myEnergy: number;
   buildings: BuildingType[];
   buildingQueue: BuildingQueueItem[];
   units: UnitType[];
   onBuild: (buildingType: string) => void;
   onProduceUnit: (unitType: string) => void;
   onClose: () => void;
+  /** When non-empty, buildings not in this list show a lock icon and are disabled */
+  unlockedBuildings?: string[];
+  /** When non-empty, units not in this list (and with produced_by_slug) show a lock icon and are disabled */
+  unlockedUnits?: string[];
 }
 
 export default memo(function RegionPanel({
@@ -27,14 +32,18 @@ export default memo(function RegionPanel({
   region,
   players,
   myUserId,
-  myCurrency,
+  myEnergy,
   buildings,
   buildingQueue,
   units,
   onBuild,
   onProduceUnit,
   onClose,
+  unlockedBuildings,
+  unlockedUnits,
 }: RegionPanelProps) {
+  const hasBuildingLocks = unlockedBuildings != null && unlockedBuildings.length > 0;
+  const hasUnitLocks = unlockedUnits != null && unlockedUnits.length > 0;
   const isOwned = region.owner_id === myUserId;
   const owner = region.owner_id ? players[region.owner_id] : null;
   const buildingCounts = useMemo(() => region.buildings ?? {}, [region.buildings]);
@@ -64,7 +73,7 @@ export default memo(function RegionPanel({
           (buildingCounts[building.slug] ?? 0) + (queuedBuildingCounts[building.slug] ?? 0) <
           building.max_per_region
       )
-      .sort((a, b) => a.order - b.order || a.currency_cost - b.currency_cost || a.name.localeCompare(b.name));
+      .sort((a, b) => a.order - b.order || a.energy_cost - b.energy_cost || a.name.localeCompare(b.name));
     const produced = [...units]
       .filter((unit) => Boolean(unit.produced_by_slug))
       .filter((unit) => (buildingCounts[unit.produced_by_slug ?? ""] ?? 0) > 0)
@@ -168,17 +177,11 @@ export default memo(function RegionPanel({
             </div>
           </div>
           <div className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
-            <span className="block text-xs uppercase tracking-[0.16em] text-zinc-500">Waluta</span>
+            <span className="block text-xs uppercase tracking-[0.16em] text-zinc-500">Energia</span>
             <div className="mt-2 flex min-w-0 items-center gap-2">
-              <Image
-                src="/assets/common/coin_w200.webp"
-                alt=""
-                width={24}
-                height={24}
-                className="h-6 w-6 object-contain"
-              />
+              <span className="flex h-6 w-6 items-center justify-center text-cyan-400">⚡</span>
               <span className="truncate font-display text-2xl text-zinc-50">
-                {isOwned ? myCurrency : "?"}
+                {isOwned ? myEnergy : "?"}
               </span>
             </div>
           </div>
@@ -346,18 +349,12 @@ export default memo(function RegionPanel({
           </div>
         )}
 
-        {(region.currency_generation_bonus ?? 0) > 0 && (
+        {(region.energy_generation_bonus ?? 0) > 0 && (
           <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
-            <span className="min-w-0 text-zinc-400">Dochód regionu</span>
-            <span className="whitespace-nowrap flex items-center gap-1 text-amber-300">
-              <Image
-                src="/assets/common/coin_w200.webp"
-                alt=""
-                width={14}
-                height={14}
-                className="h-3.5 w-3.5 object-contain"
-              />
-              +{(region.currency_generation_bonus ?? 0).toFixed(1)}/tick
+            <span className="min-w-0 text-zinc-400">Energia regionu</span>
+            <span className="whitespace-nowrap flex items-center gap-1 text-cyan-300">
+              <span className="text-[13px]">⚡</span>
+              +{(region.energy_generation_bonus ?? 0).toFixed(1)}/tick
             </span>
           </div>
         )}
@@ -382,54 +379,62 @@ export default memo(function RegionPanel({
             Rozbudowa infrastruktury
           </h4>
           <div className="mt-3 space-y-2">
-            {compactBuildOptions.map((building) => (
-              <button
-                key={building.id}
-                onClick={() => onBuild(building.slug)}
-                disabled={myCurrency < building.currency_cost}
-                className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-[22px] border border-amber-400/10 bg-amber-500/10 px-3 py-3 text-left text-sm transition-colors hover:bg-amber-500/15 disabled:opacity-40"
-              >
-                <span className="flex min-w-0 items-center gap-3">
-                  {getBuildingAsset(building.asset_key || building.slug) && (
-                    <Image
-                      src={getBuildingAsset(building.asset_key || building.slug)!}
-                      alt={building.name}
-                      width={32}
-                      height={32}
-                      className="h-8 w-8 shrink-0 object-contain"
-                    />
-                  )}
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-medium text-zinc-50">{building.name}</span>
-                    <span className="mt-1 block text-[11px] leading-4 text-zinc-400">
-                      Limit {(buildingCounts[building.slug] ?? 0) + (queuedBuildingCounts[building.slug] ?? 0)}/{building.max_per_region}
+            {compactBuildOptions.map((building) => {
+              const isBuildingLocked = hasBuildingLocks && !unlockedBuildings!.includes(building.slug);
+              return (
+                <button
+                  key={building.id}
+                  onClick={() => !isBuildingLocked && onBuild(building.slug)}
+                  disabled={myEnergy < building.energy_cost || isBuildingLocked}
+                  className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-[22px] border border-amber-400/10 bg-amber-500/10 px-3 py-3 text-left text-sm transition-colors hover:bg-amber-500/15 disabled:opacity-40"
+                >
+                  <span className="flex min-w-0 items-center gap-3">
+                    {getBuildingAsset(building.asset_key || building.slug) && (
+                      <Image
+                        src={getBuildingAsset(building.asset_key || building.slug)!}
+                        alt={building.name}
+                        width={32}
+                        height={32}
+                        className="h-8 w-8 shrink-0 object-contain"
+                      />
+                    )}
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-1.5 truncate font-medium text-zinc-50">
+                        {isBuildingLocked && <Lock className="h-3 w-3 shrink-0 text-zinc-500" />}
+                        {building.name}
+                      </span>
+                      <span className="mt-1 block text-[11px] leading-4 text-zinc-400">
+                        {isBuildingLocked
+                          ? "Wymaga blueprintu z talii"
+                          : `Limit ${(buildingCounts[building.slug] ?? 0) + (queuedBuildingCounts[building.slug] ?? 0)}/${building.max_per_region}`}
+                      </span>
                     </span>
                   </span>
-                </span>
-                <div className="text-right text-[11px] text-zinc-400">
-                  <span className="flex items-center justify-end gap-1">
-                    <Image
-                      src="/assets/common/coin_w200.webp"
-                      alt=""
-                      width={14}
-                      height={14}
-                      className="h-3.5 w-3.5 object-contain"
-                    />
-                    {building.currency_cost}
-                  </span>
-                  <span className="mt-1 flex items-center justify-end gap-1">
-                    <Image
-                      src="/assets/icons/time_icon.png"
-                      alt=""
-                      width={14}
-                      height={14}
-                      className="h-3.5 w-3.5 object-contain opacity-70"
-                    />
-                    {building.build_time_ticks} tick
-                  </span>
-                </div>
-              </button>
-            ))}
+                  <div className="text-right text-[11px] text-zinc-400">
+                    {isBuildingLocked ? (
+                      <Lock className="ml-auto h-4 w-4 text-zinc-600" />
+                    ) : (
+                      <>
+                        <span className="flex items-center justify-end gap-1">
+                          <span className="text-[13px] text-cyan-400">⚡</span>
+                          {building.energy_cost}
+                        </span>
+                        <span className="mt-1 flex items-center justify-end gap-1">
+                          <Image
+                            src="/assets/icons/time_icon.png"
+                            alt=""
+                            width={14}
+                            height={14}
+                            className="h-3.5 w-3.5 object-contain opacity-70"
+                          />
+                          {building.build_time_ticks} tick
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
           </div>
           {buildOptions.length > compactBuildOptions.length && (
             <div className="mt-2 text-[11px] text-zinc-500">
@@ -452,42 +457,50 @@ export default memo(function RegionPanel({
                 Produkcja jednostek specjalnych
               </h4>
               <div className="mt-3 space-y-2">
-                {compactProducedUnits.map((unit) => (
-                  <button
-                    key={unit.id}
-                    onClick={() => onProduceUnit(unit.slug)}
-                    disabled={myCurrency < unit.production_cost}
-                    className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-[22px] border border-cyan-400/10 bg-cyan-500/10 px-3 py-3 text-left transition-colors hover:bg-cyan-500/15 disabled:opacity-40"
-                  >
-                    <div className="flex min-w-0 items-center gap-3">
-                      <Image
-                        src={getUnitAsset(unit.asset_key || unit.slug)}
-                        alt={unit.name}
-                        width={28}
-                        height={28}
-                        className="h-7 w-7 object-contain"
-                      />
-                      <div className="min-w-0">
-                        <div className="truncate font-medium text-zinc-50">{unit.name}</div>
-                        <div className="text-xs text-zinc-400">{unit.description}</div>
-                      </div>
-                    </div>
-                    <div className="whitespace-nowrap text-right text-xs text-zinc-400">
-                      <div className="flex items-center justify-end gap-1">
+                {compactProducedUnits.map((unit) => {
+                  const isUnitLocked = hasUnitLocks && Boolean(unit.produced_by_slug) && !unlockedUnits!.includes(unit.slug);
+                  return (
+                    <button
+                      key={unit.id}
+                      onClick={() => !isUnitLocked && onProduceUnit(unit.slug)}
+                      disabled={myEnergy < unit.production_cost || isUnitLocked}
+                      className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-[22px] border border-cyan-400/10 bg-cyan-500/10 px-3 py-3 text-left transition-colors hover:bg-cyan-500/15 disabled:opacity-40"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
                         <Image
-                          src="/assets/common/coin_w200.webp"
-                          alt=""
-                          width={14}
-                          height={14}
-                          className="h-3.5 w-3.5 object-contain"
+                          src={getUnitAsset(unit.asset_key || unit.slug)}
+                          alt={unit.name}
+                          width={28}
+                          height={28}
+                          className="h-7 w-7 object-contain"
                         />
-                        {unit.production_cost}
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 truncate font-medium text-zinc-50">
+                            {isUnitLocked && <Lock className="h-3 w-3 shrink-0 text-zinc-500" />}
+                            {unit.name}
+                          </div>
+                          <div className="text-xs text-zinc-400">
+                            {isUnitLocked ? "Wymaga blueprintu z talii" : unit.description}
+                          </div>
+                        </div>
                       </div>
-                      <div>Załoga: {unit.manpower_cost} piech.</div>
-                      <div>{unit.production_time_ticks} tick</div>
-                    </div>
-                  </button>
-                ))}
+                      <div className="whitespace-nowrap text-right text-xs text-zinc-400">
+                        {isUnitLocked ? (
+                          <Lock className="ml-auto h-4 w-4 text-zinc-600" />
+                        ) : (
+                          <>
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="text-[13px] text-cyan-400">⚡</span>
+                              {unit.production_cost}
+                            </div>
+                            <div>Załoga: {unit.manpower_cost} piech.</div>
+                            <div>{unit.production_time_ticks} tick</div>
+                          </>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
               {producedUnits.length > compactProducedUnits.length && (
                 <div className="mt-2 text-[11px] text-zinc-500">

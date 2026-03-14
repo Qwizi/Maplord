@@ -26,7 +26,7 @@ export default function LeaderboardPage() {
     }
 
     getLeaderboard(token)
-      .then(setEntries)
+      .then((res) => setEntries(res.items))
       .finally(() => setPageLoading(false));
   }, [loading, router, token, user]);
 

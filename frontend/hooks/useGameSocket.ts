@@ -40,7 +40,7 @@ export interface GameRegion {
   defense_bonus: number;
   vision_range?: number;
   unit_generation_bonus?: number;
-  currency_generation_bonus?: number;
+  energy_generation_bonus?: number;
 }
 
 export interface GamePlayer {
@@ -52,10 +52,14 @@ export interface GamePlayer {
   disconnect_deadline?: number | null;
   left_match_at?: number | null;
   capital_region_id: string | null;
-  currency: number;
+  energy: number;
   eliminated_reason?: string | null;
   eliminated_tick?: number | null;
   ability_cooldowns?: Record<string, number>;
+  ability_scrolls?: Record<string, number>;
+  ability_levels?: Record<string, number>;
+  unlocked_buildings?: string[];
+  unlocked_units?: string[];
   is_bot?: boolean;
   total_regions_conquered?: number;
   total_units_produced?: number;

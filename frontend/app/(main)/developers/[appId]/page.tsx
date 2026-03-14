@@ -298,7 +298,7 @@ function APIKeysTab({ appId, token }: APIKeysTabProps) {
   const loadKeys = useCallback(async () => {
     try {
       const data = await getAPIKeys(token, appId);
-      setKeys(data);
+      setKeys(data.items);
     } catch {
       toast.error("Nie udalo sie zaladowac kluczy API.");
     } finally {
@@ -760,7 +760,7 @@ function WebhookRow({
     setLoadingDeliveries(true);
     try {
       const data = await getWebhookDeliveries(token, appId, webhook.id);
-      setDeliveries(data);
+      setDeliveries(data.items);
     } catch {
       toast.error("Nie udalo sie zaladowac dostarczeń.");
     } finally {
@@ -980,7 +980,7 @@ function WebhooksTab({ appId, token }: WebhooksTabProps) {
   const loadWebhooks = useCallback(async () => {
     try {
       const data = await getWebhooks(token, appId);
-      setWebhooks(data);
+      setWebhooks(data.items);
     } catch {
       toast.error("Nie udalo sie zaladowac webhookow.");
     } finally {

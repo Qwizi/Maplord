@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { getMyMatches, getConfig, startTutorial, type Match, type GameModeListItem } from "@/lib/api";
+import { getMyMatches, getConfig, getMyDecks, startTutorial, type Match, type GameModeListItem, type DeckOut } from "@/lib/api";
 import Link from "next/link";
 import {
   Swords,
@@ -22,6 +22,7 @@ import {
   Crown,
   ChevronRight,
   GraduationCap,
+  Layers,
 } from "lucide-react";
 
 const MODE_ICONS: Record<string, typeof Users> = {
@@ -47,6 +48,8 @@ export default function DashboardPage() {
   const [recentMatches, setRecentMatches] = useState<Match[]>([]);
   const [gameModes, setGameModes] = useState<GameModeListItem[]>([]);
   const [selectedMode, setSelectedMode] = useState<string | null>(null);
+  const [decks, setDecks] = useState<DeckOut[]>([]);
+  const [selectedDeckId, setSelectedDeckId] = useState<string | null>(null);
   const [queueSeconds, setQueueSeconds] = useState(0);
   const [tutorialLoading, setTutorialLoading] = useState(false);
   const activeMatch = recentMatches.find(
@@ -67,7 +70,7 @@ export default function DashboardPage() {
       const loadDashboardState = () => {
         refreshUser().catch(() => {});
         getMyMatches(token)
-          .then(setRecentMatches)
+          .then((res) => setRecentMatches(res.items))
           .catch(() => {});
       };
 
@@ -88,6 +91,20 @@ export default function DashboardPage() {
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!token) return;
+    getMyDecks(token)
+      .then((res) => {
+        const fetchedDecks = res.items;
+        setDecks(fetchedDecks);
+        const defaultDeck = fetchedDecks.find((d) => d.is_default);
+        if (defaultDeck) {
+          setSelectedDeckId((prev) => prev ?? defaultDeck.id);
+        }
+      })
+      .catch(() => {});
+  }, [token]);
 
   useEffect(() => {
     if (!inQueue) return;
@@ -377,21 +394,62 @@ export default function DashboardPage() {
           </div>
         ) : (
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={fillBots}
-                  onChange={(e) => setFillBots(e.target.checked)}
-                  className="h-4 w-4 rounded border-white/20 bg-white/10 accent-cyan-400"
-                />
-                Wypelnij botami jezeli brak graczy
-              </label>
-              {fillBots && (
-                <p className="ml-6 mt-1 text-xs text-slate-500">
-                  Boty dolacza automatycznie po 30 sekundach w kolejce
-                </p>
-              )}
+            <div className="flex flex-col gap-3">
+              {/* Deck selector */}
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center gap-2">
+                  <Layers className="h-3.5 w-3.5 text-cyan-400" />
+                  <span className="text-xs uppercase tracking-[0.18em] text-slate-500">Talia</span>
+                </div>
+                {decks.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {decks.map((deck) => (
+                      <button
+                        key={deck.id}
+                        onClick={() => setSelectedDeckId(deck.id === selectedDeckId ? null : deck.id)}
+                        className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-all ${
+                          selectedDeckId === deck.id
+                            ? "border-cyan-400/40 bg-cyan-500/15 text-cyan-200"
+                            : "border-white/10 bg-white/[0.04] text-slate-400 hover:border-white/20 hover:text-slate-200"
+                        }`}
+                      >
+                        <Layers className="h-3 w-3" />
+                        {deck.name}
+                        {deck.is_default && (
+                          <span className="rounded bg-amber-500/20 px-1 text-[9px] text-amber-300">
+                            domyslna
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500">
+                    Brak deckow - graj bez bonusow{" "}
+                    <Link href="/decks" className="text-cyan-400 underline hover:text-cyan-300">
+                      Stworz talie
+                    </Link>
+                  </p>
+                )}
+              </div>
+
+              {/* Fill bots checkbox */}
+              <div>
+                <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={fillBots}
+                    onChange={(e) => setFillBots(e.target.checked)}
+                    className="h-4 w-4 rounded border-white/20 bg-white/10 accent-cyan-400"
+                  />
+                  Wypelnij botami jezeli brak graczy
+                </label>
+                {fillBots && (
+                  <p className="ml-6 mt-1 text-xs text-slate-500">
+                    Boty dolacza automatycznie po 30 sekundach w kolejce
+                  </p>
+                )}
+              </div>
             </div>
             <Button
               size="lg"

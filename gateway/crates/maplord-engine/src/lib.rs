@@ -114,7 +114,7 @@ impl GameEngine {
         // Process persistent effects (virus damage, etc.)
         events.extend(self.process_active_effects(regions, active_effects));
 
-        events.extend(self.generate_currency(players, regions));
+        events.extend(self.generate_energy(players, regions));
         events.extend(self.generate_units_with_effects(players, regions, active_effects));
 
         let (remaining_buildings, build_events) =
@@ -140,6 +140,8 @@ impl GameEngine {
                     current_tick,
                     active_effects,
                 ));
+            } else if action.action_type == "activate_boost" {
+                events.extend(self.process_activate_boost(action, players));
             } else {
                 events.extend(self.process_action(
                     action,
@@ -151,6 +153,9 @@ impl GameEngine {
                 ));
             }
         }
+
+        // Tick down in-match boosts and emit expiry events.
+        events.extend(self.tick_match_boosts(players));
 
         events.extend(self.check_conditions(players, regions));
 
@@ -164,13 +169,13 @@ impl GameEngine {
 
     // --- Currency generation ---
 
-    fn generate_currency(
+    fn generate_energy(
         &self,
         players: &mut HashMap<String, Player>,
         regions: &HashMap<String, Region>,
     ) -> Vec<Event> {
-        let base_currency = self.settings.base_currency_per_tick;
-        let region_currency = self.settings.region_currency_per_tick;
+        let base_energy = self.settings.base_energy_per_tick;
+        let region_energy = self.settings.region_energy_per_tick;
 
         let mut owned_regions_by_player: HashMap<&str, Vec<&Region>> = HashMap::new();
         for region in regions.values() {
@@ -186,14 +191,30 @@ impl GameEngine {
             let owned = owned_regions_by_player.get(player_id.as_str());
             let region_count = owned.map_or(0, |r| r.len());
             let passive_bonus: f64 = owned.map_or(0.0, |regions| {
-                regions.iter().map(|r| r.currency_generation_bonus).sum()
+                regions.iter().map(|r| r.energy_generation_bonus).sum()
             });
-            let income = base_currency + region_count as f64 * region_currency + passive_bonus;
-            player.currency_accum += income;
-            let whole = player.currency_accum as i64;
+            let mut income = base_energy + region_count as f64 * region_energy + passive_bonus;
+
+            // Apply active boost multipliers (deck system).
+            for boost in &player.active_boosts {
+                if boost.params.get("effect_type").and_then(|v| v.as_str()) == Some("energy_bonus") {
+                    let value = boost.params.get("value").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                    income *= 1.0 + value;
+                }
+            }
+
+            // Apply in-match activated boost multipliers.
+            for boost in &player.active_match_boosts {
+                if boost.effect_type == "energy_bonus" {
+                    income *= 1.0 + boost.value;
+                }
+            }
+
+            player.energy_accum += income;
+            let whole = player.energy_accum as i64;
             if whole > 0 {
-                player.currency += whole;
-                player.currency_accum -= whole as f64;
+                player.energy += whole;
+                player.energy_accum -= whole as f64;
             }
         }
 
@@ -331,6 +352,26 @@ impl GameEngine {
         let capital_bonus = self.settings.capital_generation_bonus;
         let default_unit_type = self.default_unit_type_slug();
 
+        // Pre-compute unit_bonus multipliers from active deck boosts and in-match boosts.
+        let mut unit_boost_by_player: HashMap<&str, f64> = HashMap::new();
+        for (player_id, player) in players.iter() {
+            let mut multiplier = 1.0f64;
+            for boost in &player.active_boosts {
+                if boost.params.get("effect_type").and_then(|v| v.as_str()) == Some("unit_bonus") {
+                    let value = boost.params.get("value").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                    multiplier *= 1.0 + value;
+                }
+            }
+            for boost in &player.active_match_boosts {
+                if boost.effect_type == "unit_bonus" {
+                    multiplier *= 1.0 + boost.value;
+                }
+            }
+            if (multiplier - 1.0).abs() > f64::EPSILON {
+                unit_boost_by_player.insert(player_id.as_str(), multiplier);
+            }
+        }
+
         let mut rate_group_accum: HashMap<(String, u64), f64> = HashMap::new();
         let mut region_rates: Vec<(String, f64)> = Vec::new();
 
@@ -349,6 +390,11 @@ impl GameEngine {
             // Apply virus production reduction
             if let Some(reduction) = virus_regions.get(rid) {
                 rate *= 1.0 - reduction;
+            }
+
+            // Apply unit_bonus boost from player's deck.
+            if let Some(&boost_mult) = unit_boost_by_player.get(owner.as_str()) {
+                rate *= boost_mult;
             }
 
             let rate_key = (rate * 10000.0).round() as u64;
@@ -493,6 +539,18 @@ impl GameEngine {
             None => return Vec::new(),
         };
 
+        // Abilities require a scroll in the player's deck. No scroll = no ability.
+        match player.ability_scrolls.get(ability_slug) {
+            Some(&uses) if uses > 0 => {}
+            _ => {
+                return vec![reject_action(
+                    player_id,
+                    "Brak zwoju dla tej zdolnosci",
+                    action,
+                )];
+            }
+        }
+
         // Check cooldown
         if let Some(&ready_tick) = player.ability_cooldowns.get(ability_slug) {
             if current_tick < ready_tick {
@@ -500,8 +558,8 @@ impl GameEngine {
             }
         }
 
-        // Check currency
-        if player.currency < ability_config.currency_cost {
+        // Check energy
+        if player.energy < ability_config.energy_cost {
             return vec![reject_action(player_id, "Za malo waluty na zdolnosc", action)];
         }
 
@@ -532,13 +590,26 @@ impl GameEngine {
             }
         }
 
-        // Deduct currency and set cooldown
+        // Deduct energy, set cooldown, and consume one scroll use if deck system is active.
         let player = players.get_mut(player_id.as_str()).unwrap();
-        player.currency -= ability_config.currency_cost;
+        player.energy -= ability_config.energy_cost;
         player.ability_cooldowns.insert(
             ability_slug.clone(),
             current_tick + ability_config.cooldown_ticks,
         );
+        if let Some(uses) = player.ability_scrolls.get_mut(ability_slug) {
+            *uses = (*uses - 1).max(0);
+        }
+
+        // Compute level scaling from deck ability_levels.
+        // Level 1 is the baseline; levels 2-3 increase damage/duration.
+        let ability_level = {
+            let player = players.get(player_id.as_str()).unwrap();
+            player.ability_levels.get(ability_slug).copied().unwrap_or(1)
+        };
+        let level_multiplier = 1.0 + 0.3 * (ability_level as f64 - 1.0);
+        let scaled_damage = (ability_config.damage as f64 * level_multiplier) as i64;
+        let scaled_duration = ability_config.effect_duration_ticks + (ability_level - 1) * 5;
 
         let mut events = vec![Event::AbilityUsed {
             player_id: player_id.clone(),
@@ -550,21 +621,27 @@ impl GameEngine {
         // Execute ability-specific logic
         match ability_slug.as_str() {
             "ab_province_nuke" => {
-                events.extend(self.execute_nuke(player_id, target_region_id, &ability_config, active_effects));
+                events.extend(self.execute_nuke(
+                    player_id,
+                    target_region_id,
+                    &ability_config,
+                    scaled_damage,
+                    active_effects,
+                ));
             }
             "ab_virus" => {
                 events.extend(self.execute_virus(
-                    player_id, target_region_id, &ability_config, regions, active_effects,
+                    player_id, target_region_id, &ability_config, scaled_duration, regions, active_effects,
                 ));
             }
             "ab_pr_submarine" => {
                 self.execute_submarine(
-                    player_id, target_region_id, &ability_config, regions, active_effects,
+                    player_id, target_region_id, &ability_config, scaled_duration, regions, active_effects,
                 );
             }
             "ab_shield" => {
                 self.execute_shield(
-                    player_id, target_region_id, &ability_config, active_effects,
+                    player_id, target_region_id, &ability_config, scaled_duration, active_effects,
                 );
             }
             "ab_conscription_point" => {
@@ -620,7 +697,8 @@ impl GameEngine {
         &self,
         player_id: &str,
         target_region_id: &str,
-        config: &AbilityConfig,
+        _config: &AbilityConfig,
+        scaled_damage: i64,
         active_effects: &mut Vec<ActiveEffect>,
     ) -> Vec<Event> {
         // Nuke is delayed — damage applied on impact (after flight time)
@@ -640,7 +718,7 @@ impl GameEngine {
             affected_region_ids: affected_neighbors,
             ticks_remaining: NUKE_FLIGHT_TICKS,
             total_ticks: NUKE_FLIGHT_TICKS,
-            params: serde_json::json!({ "damage": config.damage }),
+            params: serde_json::json!({ "damage": scaled_damage }),
         });
 
         Vec::new()
@@ -697,6 +775,7 @@ impl GameEngine {
         player_id: &str,
         target_region_id: &str,
         config: &AbilityConfig,
+        scaled_duration: i64,
         regions: &HashMap<String, Region>,
         active_effects: &mut Vec<ActiveEffect>,
     ) -> Vec<Event> {
@@ -733,8 +812,8 @@ impl GameEngine {
             source_player_id: player_id.to_string(),
             target_region_id: target_region_id.to_string(),
             affected_region_ids: affected,
-            ticks_remaining: config.effect_duration_ticks,
-            total_ticks: config.effect_duration_ticks,
+            ticks_remaining: scaled_duration,
+            total_ticks: scaled_duration,
             params: config.effect_params.clone(),
         });
 
@@ -745,7 +824,8 @@ impl GameEngine {
         &self,
         player_id: &str,
         target_region_id: &str,
-        config: &AbilityConfig,
+        _config: &AbilityConfig,
+        scaled_duration: i64,
         regions: &HashMap<String, Region>,
         active_effects: &mut Vec<ActiveEffect>,
     ) {
@@ -766,8 +846,8 @@ impl GameEngine {
             source_player_id: player_id.to_string(),
             target_region_id: target_region_id.to_string(),
             affected_region_ids: revealed,
-            ticks_remaining: config.effect_duration_ticks,
-            total_ticks: config.effect_duration_ticks,
+            ticks_remaining: scaled_duration,
+            total_ticks: scaled_duration,
             params: serde_json::json!({}),
         });
     }
@@ -776,7 +856,8 @@ impl GameEngine {
         &self,
         player_id: &str,
         target_region_id: &str,
-        config: &AbilityConfig,
+        _config: &AbilityConfig,
+        scaled_duration: i64,
         active_effects: &mut Vec<ActiveEffect>,
     ) {
         active_effects.push(ActiveEffect {
@@ -784,8 +865,8 @@ impl GameEngine {
             source_player_id: player_id.to_string(),
             target_region_id: target_region_id.to_string(),
             affected_region_ids: Vec::new(),
-            ticks_remaining: config.effect_duration_ticks,
-            total_ticks: config.effect_duration_ticks,
+            ticks_remaining: scaled_duration,
+            total_ticks: scaled_duration,
             params: serde_json::json!({}),
         });
     }
@@ -1179,6 +1260,17 @@ impl GameEngine {
             }
         };
 
+        // Deck system: when unlocked_buildings is non-empty only those slugs are permitted.
+        if !player.unlocked_buildings.is_empty()
+            && !player.unlocked_buildings.iter().any(|s| s == building_type)
+        {
+            return vec![reject_action(
+                player_id,
+                "Ten budynek nie jest odblokowany w twoim decku",
+                action,
+            )];
+        }
+
         if config.requires_coastal && !region.is_coastal {
             return vec![reject_action(
                 player_id,
@@ -1212,8 +1304,8 @@ impl GameEngine {
             )];
         }
 
-        let currency_cost = config.currency_cost;
-        if player.currency < currency_cost {
+        let energy_cost = config.energy_cost;
+        if player.energy < energy_cost {
             return vec![reject_action(
                 player_id,
                 "Za malo waluty na budowe",
@@ -1221,7 +1313,7 @@ impl GameEngine {
             )];
         }
 
-        player.currency -= currency_cost;
+        player.energy -= energy_cost;
         let build_time = config.build_time_ticks;
 
         buildings_queue.push(BuildingQueueItem {
@@ -1237,7 +1329,7 @@ impl GameEngine {
             building_type: building_type.clone(),
             player_id: player_id.clone(),
             ticks_remaining: build_time as i64,
-            currency_cost,
+            energy_cost,
         }]
     }
 
@@ -1274,6 +1366,21 @@ impl GameEngine {
         }
 
         let unit_config = self.get_unit_config(unit_type);
+
+        // Deck system: when unlocked_units is non-empty, units with a produced_by_slug (i.e.
+        // advanced units) must appear in the unlock list; units without produced_by_slug (basic
+        // infantry) are always available regardless of deck.
+        if !player.unlocked_units.is_empty()
+            && unit_config.produced_by_slug.is_some()
+            && !player.unlocked_units.iter().any(|s| s == unit_type)
+        {
+            return vec![reject_action(
+                player_id,
+                "Ten typ jednostki nie jest odblokowany w twoim decku",
+                action,
+            )];
+        }
+
         let produced_by_slug = match &unit_config.produced_by_slug {
             Some(slug) => slug.clone(),
             None => {
@@ -1302,7 +1409,7 @@ impl GameEngine {
         }
 
         let production_cost = unit_config.production_cost as i64;
-        if player.currency < production_cost {
+        if player.energy < production_cost {
             return vec![reject_action(
                 player_id,
                 "Za malo waluty na produkcje jednostki",
@@ -1333,7 +1440,7 @@ impl GameEngine {
             )];
         }
 
-        player.currency -= production_cost;
+        player.energy -= production_cost;
         let production_time = unit_config.production_time_ticks.max(1) as i64;
 
         unit_queue.push(UnitQueueItem {
@@ -1352,7 +1459,7 @@ impl GameEngine {
             unit_type: unit_type.clone(),
             quantity: 1,
             ticks_remaining: production_time,
-            currency_cost: production_cost,
+            energy_cost: production_cost,
             manpower_cost,
         }]
     }
@@ -1438,9 +1545,24 @@ impl GameEngine {
 
         let unit_config = self.get_unit_config(&item.unit_type);
         let attacker_bonus = self.settings.attacker_advantage;
-        let defender_bonus = self.settings.defender_advantage;
         let defense_building = target.defense_bonus;
         let randomness = self.settings.combat_randomness;
+
+        // Snapshot defending unit total and owner before any mutation.
+        let defender_total_before: i64 = target.units.values().sum();
+        let old_owner_id: Option<String> = target.owner_id.clone();
+
+        let mut defender_bonus = self.settings.defender_advantage;
+        // Apply in-match defense_bonus boosts for the defending player.
+        if let Some(ref defender_player_id) = old_owner_id {
+            if let Some(defender_player) = players.get(defender_player_id.as_str()) {
+                for boost in &defender_player.active_match_boosts {
+                    if boost.effect_type == "defense_bonus" {
+                        defender_bonus += boost.value;
+                    }
+                }
+            }
+        }
 
         let attacker_attack = unit_config.attack;
         let unit_scale = self.get_unit_scale(&item.unit_type);
@@ -1448,10 +1570,6 @@ impl GameEngine {
             item.units as f64 * unit_scale as f64 * attacker_attack * (1.0 + attacker_bonus);
         let defender_power =
             self.get_region_defender_power(target, defender_bonus + defense_building);
-
-        // Snapshot defending unit total before any mutation so we can compute losses.
-        let defender_total_before: i64 = target.units.values().sum();
-        let old_owner_id: Option<String> = target.owner_id.clone();
 
         let mut rng = rand::thread_rng();
         let attacker_roll =
@@ -1597,7 +1715,7 @@ impl GameEngine {
                     region.defense_bonus = 0.0;
                     region.vision_range = 0;
                     region.unit_generation_bonus = 0.0;
-                    region.currency_generation_bonus = 0.0;
+                    region.energy_generation_bonus = 0.0;
                 }
             }
         }
@@ -1617,13 +1735,127 @@ impl GameEngine {
         events
     }
 
+    // --- In-match boost activation ---
+
+    fn process_activate_boost(
+        &self,
+        action: &Action,
+        players: &mut HashMap<String, Player>,
+    ) -> Vec<Event> {
+        let player_id = match &action.player_id {
+            Some(id) => id,
+            None => return Vec::new(),
+        };
+        let slug = match &action.ability_type {
+            Some(s) => s.clone(),
+            None => return vec![reject_action(player_id, "Brak sluga boosta", action)],
+        };
+
+        let player = match players.get_mut(player_id.as_str()) {
+            Some(p) => p,
+            None => return Vec::new(),
+        };
+
+        // Consume one scroll use for this boost slug.
+        {
+            match player.ability_scrolls.get(&slug) {
+                Some(&uses) if uses > 0 => {
+                    *player.ability_scrolls.get_mut(&slug).unwrap() =
+                        (uses - 1).max(0);
+                }
+                _ => {
+                    return vec![reject_action(
+                        player_id,
+                        "Brak zwoju dla tego boosta",
+                        action,
+                    )];
+                }
+            }
+        }
+
+        // Parse boost params carried by the action (forwarded from gateway/Django).
+        let params = match &action.boost_params {
+            Some(p) => p.clone(),
+            None => {
+                return vec![reject_action(
+                    player_id,
+                    "Brak parametrow boosta",
+                    action,
+                )];
+            }
+        };
+
+        let effect_type = params
+            .get("effect_type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let value = params
+            .get("value")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        let duration_ticks = params
+            .get("duration_ticks")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(60);
+
+        // Check if this boost is already active — replace it (refresh duration).
+        if let Some(existing) = player
+            .active_match_boosts
+            .iter_mut()
+            .find(|b| b.slug == slug)
+        {
+            existing.effect_type = effect_type.clone();
+            existing.value = value;
+            existing.ticks_remaining = duration_ticks;
+            existing.total_ticks = duration_ticks;
+        } else {
+            player.active_match_boosts.push(ActiveMatchBoost {
+                slug: slug.clone(),
+                effect_type: effect_type.clone(),
+                value,
+                ticks_remaining: duration_ticks,
+                total_ticks: duration_ticks,
+            });
+        }
+
+        vec![Event::BoostActivated {
+            player_id: player_id.clone(),
+            boost_slug: slug,
+            effect_type,
+            duration_ticks,
+        }]
+    }
+
+    fn tick_match_boosts(&self, players: &mut HashMap<String, Player>) -> Vec<Event> {
+        let mut events = Vec::new();
+
+        for (player_id, player) in players.iter_mut() {
+            let mut i = 0;
+            while i < player.active_match_boosts.len() {
+                player.active_match_boosts[i].ticks_remaining -= 1;
+                if player.active_match_boosts[i].ticks_remaining <= 0 {
+                    let expired = player.active_match_boosts.remove(i);
+                    events.push(Event::BoostExpired {
+                        player_id: player_id.clone(),
+                        boost_slug: expired.slug,
+                    });
+                } else {
+                    i += 1;
+                }
+            }
+        }
+
+        events
+    }
+
     // --- Helper methods ---
 
     fn recompute_region_building_stats(&self, region: &mut Region) {
         let mut defense_bonus = 0.0;
         let mut vision_range = 0;
         let mut unit_generation_bonus = 0.0;
-        let mut currency_generation_bonus = 0.0;
+        let mut energy_generation_bonus = 0.0;
         let mut primary_slug: Option<String> = None;
         let mut primary_order: i64 = i64::MAX;
 
@@ -1636,7 +1868,7 @@ impl GameEngine {
                 defense_bonus += config.defense_bonus * count as f64;
                 vision_range += config.vision_range as i64 * count;
                 unit_generation_bonus += config.unit_generation_bonus * count as f64;
-                currency_generation_bonus += config.currency_generation_bonus * count as f64;
+                energy_generation_bonus += config.energy_generation_bonus * count as f64;
                 let order = config.order as i64;
                 if primary_slug.is_none() || order < primary_order {
                     primary_slug = Some(slug.clone());
@@ -1649,7 +1881,7 @@ impl GameEngine {
         region.defense_bonus = defense_bonus;
         region.vision_range = vision_range;
         region.unit_generation_bonus = unit_generation_bonus;
-        region.currency_generation_bonus = currency_generation_bonus;
+        region.energy_generation_bonus = energy_generation_bonus;
     }
 
     pub fn get_unit_config(&self, unit_type: &str) -> UnitConfig {

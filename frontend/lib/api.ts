@@ -46,6 +46,25 @@ export class APIError extends Error {
   }
 }
 
+export interface PaginatedResponse<T> {
+  items: T[];
+  count: number;
+}
+
+async function fetchPaginated<T>(
+  path: string,
+  options: FetchOptions & { limit?: number; offset?: number } = {}
+): Promise<PaginatedResponse<T>> {
+  const { limit, offset, ...rest } = options;
+  const params = new URLSearchParams();
+  if (limit !== undefined) params.set("limit", String(limit));
+  if (offset !== undefined) params.set("offset", String(offset));
+  const qs = params.toString();
+  const separator = path.includes("?") ? "&" : "?";
+  const url = qs ? `${path}${separator}${qs}` : path;
+  return fetchAPI<PaginatedResponse<T>>(url, rest);
+}
+
 // --- Auth ---
 
 export interface TokenPair {
@@ -105,8 +124,8 @@ export interface LeaderboardEntry {
   average_placement: number;
 }
 
-export async function getLeaderboard(token: string): Promise<LeaderboardEntry[]> {
-  return fetchAPI<LeaderboardEntry[]>("/auth/leaderboard", { token });
+export async function getLeaderboard(token: string, limit?: number, offset?: number): Promise<PaginatedResponse<LeaderboardEntry>> {
+  return fetchPaginated<LeaderboardEntry>("/auth/leaderboard", { token, limit, offset });
 }
 
 // --- Config ---
@@ -119,14 +138,14 @@ export interface BuildingType {
   description: string;
   icon: string;
   cost: number;
-  currency_cost: number;
+  energy_cost: number;
   build_time_ticks: number;
   max_per_region: number;
   requires_coastal: boolean;
   defense_bonus: number;
   vision_range: number;
   unit_generation_bonus: number;
-  currency_generation_bonus: number;
+  energy_generation_bonus: number;
   order: number;
 }
 
@@ -157,9 +176,9 @@ export interface GameSettings {
   tick_interval_ms: number;
   starting_units: number;
   base_unit_generation_rate: number;
-  starting_currency: number;
-  base_currency_per_tick: number;
-  region_currency_per_tick: number;
+  starting_energy: number;
+  base_energy_per_tick: number;
+  region_energy_per_tick: number;
 }
 
 export interface MapConfigItem {
@@ -186,9 +205,9 @@ export interface GameMode extends GameModeListItem {
   match_duration_limit_minutes: number;
   base_unit_generation_rate: number;
   capital_generation_bonus: number;
-  starting_currency: number;
-  base_currency_per_tick: number;
-  region_currency_per_tick: number;
+  starting_energy: number;
+  base_energy_per_tick: number;
+  region_energy_per_tick: number;
   attacker_advantage: number;
   defender_advantage: number;
   combat_randomness: number;
@@ -210,7 +229,7 @@ export interface AbilityType {
   sound_key: string;
   target_type: "enemy" | "own" | "any";
   range: number;
-  currency_cost: number;
+  energy_cost: number;
   cooldown_ticks: number;
   damage: number;
   effect_duration_ticks: number;
@@ -337,8 +356,8 @@ export interface MatchResult {
   player_results: PlayerResult[];
 }
 
-export async function getMyMatches(token: string): Promise<Match[]> {
-  return fetchAPI<Match[]>("/matches/", { token });
+export async function getMyMatches(token: string, limit?: number, offset?: number): Promise<PaginatedResponse<Match>> {
+  return fetchPaginated<Match>("/matches/", { token, limit, offset });
 }
 
 export async function getMatch(
@@ -530,8 +549,8 @@ export async function createDeveloperApp(
   });
 }
 
-export async function getDeveloperApps(token: string): Promise<DeveloperApp[]> {
-  return fetchAPI<DeveloperApp[]>("/developers/apps/", { token });
+export async function getDeveloperApps(token: string): Promise<PaginatedResponse<DeveloperApp>> {
+  return fetchPaginated<DeveloperApp>("/developers/apps/", { token });
 }
 
 export async function getDeveloperApp(
@@ -576,9 +595,11 @@ export async function createAPIKey(
 
 export async function getAPIKeys(
   token: string,
-  appId: string
-): Promise<APIKeyOut[]> {
-  return fetchAPI<APIKeyOut[]>(`/developers/apps/${appId}/keys/`, { token });
+  appId: string,
+  limit?: number,
+  offset?: number
+): Promise<PaginatedResponse<APIKeyOut>> {
+  return fetchPaginated<APIKeyOut>(`/developers/apps/${appId}/keys/`, { token, limit, offset });
 }
 
 export async function deleteAPIKey(
@@ -608,10 +629,14 @@ export async function createWebhook(
 
 export async function getWebhooks(
   token: string,
-  appId: string
-): Promise<WebhookOut[]> {
-  return fetchAPI<WebhookOut[]>(`/developers/apps/${appId}/webhooks/`, {
+  appId: string,
+  limit?: number,
+  offset?: number
+): Promise<PaginatedResponse<WebhookOut>> {
+  return fetchPaginated<WebhookOut>(`/developers/apps/${appId}/webhooks/`, {
     token,
+    limit,
+    offset,
   });
 }
 
@@ -656,11 +681,13 @@ export async function testWebhook(
 export async function getWebhookDeliveries(
   token: string,
   appId: string,
-  webhookId: string
-): Promise<WebhookDelivery[]> {
-  return fetchAPI<WebhookDelivery[]>(
+  webhookId: string,
+  limit?: number,
+  offset?: number
+): Promise<PaginatedResponse<WebhookDelivery>> {
+  return fetchPaginated<WebhookDelivery>(
     `/developers/apps/${appId}/webhooks/${webhookId}/deliveries/`,
-    { token }
+    { token, limit, offset }
   );
 }
 
@@ -700,6 +727,7 @@ export interface ItemOut {
   is_tradeable: boolean;
   is_consumable: boolean;
   base_value: number;
+  level: number;
 }
 
 export interface ItemCategoryOut {
@@ -734,16 +762,16 @@ export async function getItemCategories(): Promise<ItemCategoryOut[]> {
   return fetchAPI<ItemCategoryOut[]>("/inventory/items/");
 }
 
-export async function getMyInventory(token: string): Promise<InventoryItemOut[]> {
-  return fetchAPI<InventoryItemOut[]>("/inventory/my/", { token });
+export async function getMyInventory(token: string, limit?: number, offset?: number): Promise<PaginatedResponse<InventoryItemOut>> {
+  return fetchPaginated<InventoryItemOut>("/inventory/my/", { token, limit, offset });
 }
 
 export async function getMyWallet(token: string): Promise<WalletOut> {
   return fetchAPI<WalletOut>("/inventory/wallet/", { token });
 }
 
-export async function getMyDrops(token: string): Promise<ItemDropOut[]> {
-  return fetchAPI<ItemDropOut[]>("/inventory/drops/", { token });
+export async function getMyDrops(token: string, limit?: number, offset?: number): Promise<PaginatedResponse<ItemDropOut>> {
+  return fetchPaginated<ItemDropOut>("/inventory/drops/", { token, limit, offset });
 }
 
 export async function openCrate(
@@ -798,21 +826,25 @@ export async function getMarketConfig(): Promise<MarketConfigOut> {
 
 export async function getMarketListings(
   itemSlug?: string,
-  listingType?: string
-): Promise<MarketListingOut[]> {
+  listingType?: string,
+  limit?: number,
+  offset?: number
+): Promise<PaginatedResponse<MarketListingOut>> {
   const params = new URLSearchParams();
   if (itemSlug) params.set("item_slug", itemSlug);
   if (listingType) params.set("listing_type", listingType);
+  if (limit !== undefined) params.set("limit", String(limit));
+  if (offset !== undefined) params.set("offset", String(offset));
   const qs = params.toString() ? `?${params}` : "";
-  return fetchAPI<MarketListingOut[]>(`/marketplace/listings/${qs}`);
+  return fetchAPI<PaginatedResponse<MarketListingOut>>(`/marketplace/listings/${qs}`);
 }
 
-export async function getMyListings(token: string): Promise<MarketListingOut[]> {
-  return fetchAPI<MarketListingOut[]>("/marketplace/my-listings/", { token });
+export async function getMyListings(token: string, limit?: number, offset?: number): Promise<PaginatedResponse<MarketListingOut>> {
+  return fetchPaginated<MarketListingOut>("/marketplace/my-listings/", { token, limit, offset });
 }
 
-export async function getMyTradeHistory(token: string): Promise<MarketTransactionOut[]> {
-  return fetchAPI<MarketTransactionOut[]>("/marketplace/history/", { token });
+export async function getMyTradeHistory(token: string, limit?: number, offset?: number): Promise<PaginatedResponse<MarketTransactionOut>> {
+  return fetchPaginated<MarketTransactionOut>("/marketplace/history/", { token, limit, offset });
 }
 
 export async function createListing(
@@ -879,6 +911,68 @@ export async function craftItem(
     method: "POST",
     token,
     body: JSON.stringify({ recipe_slug: recipeSlug }),
+  });
+}
+
+// --- Decks ---
+
+export interface DeckItemOut {
+  item: ItemOut;
+  quantity: number;
+}
+
+export interface DeckOut {
+  id: string;
+  name: string;
+  is_default: boolean;
+  items: DeckItemOut[];
+}
+
+export async function getMyDecks(token: string, limit?: number, offset?: number): Promise<PaginatedResponse<DeckOut>> {
+  return fetchPaginated<DeckOut>("/inventory/decks/", { token, limit, offset });
+}
+
+export async function createDeck(
+  token: string,
+  data: { name: string }
+): Promise<DeckOut> {
+  return fetchAPI<DeckOut>("/inventory/decks/", {
+    method: "POST",
+    token,
+    body: JSON.stringify(data),
+  });
+}
+
+export async function getDeck(token: string, deckId: string): Promise<DeckOut> {
+  return fetchAPI<DeckOut>(`/inventory/decks/${deckId}/`, { token });
+}
+
+export async function updateDeck(
+  token: string,
+  deckId: string,
+  data: { name?: string; items?: { item_slug: string; quantity: number }[] }
+): Promise<DeckOut> {
+  return fetchAPI<DeckOut>(`/inventory/decks/${deckId}/`, {
+    method: "PUT",
+    token,
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteDeck(
+  token: string,
+  deckId: string
+): Promise<void> {
+  await fetchAPI(`/inventory/decks/${deckId}/`, { method: "DELETE", token });
+}
+
+export async function setDefaultDeck(
+  token: string,
+  deckId: string
+): Promise<{ ok: boolean }> {
+  return fetchAPI<{ ok: boolean }>(`/inventory/decks/${deckId}/set-default/`, {
+    method: "POST",
+    token,
   });
 }
 

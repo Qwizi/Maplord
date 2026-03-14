@@ -79,14 +79,14 @@ export default function InventoryPage() {
   const loadData = useCallback(async () => {
     if (!token) return;
     try {
-      const [inv, wal, dr] = await Promise.all([
+      const [invRes, wal, drRes] = await Promise.all([
         getMyInventory(token),
         getMyWallet(token),
         getMyDrops(token),
       ]);
-      setInventory(inv);
+      setInventory(invRes.items);
       setWallet(wal);
-      setDrops(dr);
+      setDrops(drRes.items);
     } catch {
       toast.error("Nie udało się załadować ekwipunku");
     } finally {

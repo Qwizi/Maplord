@@ -5,7 +5,7 @@ use axum::extract::{Path, State, WebSocketUpgrade};
 use axum::response::Response;
 use dashmap::DashMap;
 use maplord_ai::{BotBrain, BotStrategy, TutorialBotBrain};
-use maplord_engine::{Action, Event, GameEngine, GameSettings, Player, Region};
+use maplord_engine::{Action, ActiveBoost, Event, GameEngine, GameSettings, Player, Region};
 use maplord_state::{FullGameState, GameStateManager};
 use serde_json::json;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -1034,7 +1034,7 @@ async fn eliminate_player(
                 region.defense_bonus = 0.0;
                 region.vision_range = 0;
                 region.unit_generation_bonus = 0.0;
-                region.currency_generation_bonus = 0.0;
+                region.energy_generation_bonus = 0.0;
                 changed = true;
             }
         }
@@ -1192,7 +1192,7 @@ async fn initialize_game(
         .set_meta_field("neutral_region_units", &settings.neutral_region_units.to_string())
         .await?;
     state_mgr
-        .set_meta_field("starting_currency", &settings.starting_currency.to_string())
+        .set_meta_field("starting_energy", &settings.starting_energy.to_string())
         .await?;
     let capital_selection_time = settings.capital_selection_time_seconds;
     state_mgr
@@ -1229,14 +1229,25 @@ async fn initialize_game(
             eliminated_reason: None,
             eliminated_tick: None,
             capital_region_id: None,
-            currency: settings.starting_currency,
-            currency_accum: 0.0,
+            energy: settings.starting_energy,
+            energy_accum: 0.0,
             ability_cooldowns: HashMap::new(),
             is_bot: p.is_bot,
             total_units_produced: 0,
             total_units_lost: 0,
             total_regions_conquered: 0,
             total_buildings_built: 0,
+            // Deck fields — populated from deck_snapshot when the Django API provides them;
+            // default to empty so the engine stays backwards-compatible.
+            unlocked_buildings: p.unlocked_buildings.clone(),
+            unlocked_units: p.unlocked_units.clone(),
+            ability_scrolls: p.ability_scrolls.clone(),
+            active_boosts: p.active_boosts.iter()
+                .filter_map(|v| serde_json::from_value::<ActiveBoost>(v.clone()).ok())
+                .collect(),
+            active_match_boosts: Vec::new(),
+            ability_levels: p.ability_levels.clone(),
+            building_levels: p.building_levels.clone(),
         };
         players.insert(p.user_id.clone(), player);
     }
@@ -1283,7 +1294,7 @@ async fn initialize_game(
                 defense_bonus: 0.0,
                 vision_range: 0,
                 unit_generation_bonus: 0.0,
-                currency_generation_bonus: 0.0,
+                energy_generation_bonus: 0.0,
                 is_coastal: info.is_coastal,
                 sea_distances: if info.sea_distances.is_array() {
                     info.sea_distances

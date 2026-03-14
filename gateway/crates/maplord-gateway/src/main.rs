@@ -13,11 +13,86 @@ use maplord_matchmaking::MatchmakingManager;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
-use tracing::info;
+use tracing::{error, info};
 
 use crate::config::AppConfig;
 use crate::game::new_game_connections;
 use crate::state::AppState;
+
+async fn recover_active_matches(state: &AppState) {
+    info!("Checking for active matches to recover...");
+
+    let match_ids = match state.django.list_active_matches().await {
+        Ok(ids) => ids,
+        Err(e) => {
+            error!("Failed to fetch active matches from Django: {e}");
+            return;
+        }
+    };
+
+    if match_ids.is_empty() {
+        info!("No active matches to recover.");
+        return;
+    }
+
+    info!(
+        "Found {} active match(es), checking recovery...",
+        match_ids.len()
+    );
+
+    for match_id in &match_ids {
+        let meta_key = format!("game:{match_id}:meta");
+        let players_key = format!("game:{match_id}:players");
+
+        let mut conn = state.redis.clone();
+
+        let has_meta: bool = redis::cmd("EXISTS")
+            .arg(&meta_key)
+            .query_async(&mut conn)
+            .await
+            .unwrap_or(false);
+
+        let has_players: bool = redis::cmd("EXISTS")
+            .arg(&players_key)
+            .query_async(&mut conn)
+            .await
+            .unwrap_or(false);
+
+        if has_meta && has_players {
+            // State exists — clear stale locks so the game can resume when players reconnect.
+            let loop_lock = format!("game:{match_id}:loop_lock");
+            let init_lock = format!("game:{match_id}:init_lock");
+            let capital_timer_lock = format!("game:{match_id}:capital_timer_lock");
+            let capital_finalize_lock = format!("game:{match_id}:capital_finalize_lock");
+
+            let _: Result<(), _> = redis::cmd("DEL")
+                .arg(&loop_lock)
+                .arg(&init_lock)
+                .arg(&capital_timer_lock)
+                .arg(&capital_finalize_lock)
+                .query_async(&mut conn)
+                .await;
+
+            info!(
+                "Match {match_id}: Redis state found, cleared stale locks — ready to resume on reconnect"
+            );
+        } else {
+            // No Redis state — cancel the match in Django so it is not left dangling.
+            info!("Match {match_id}: No Redis state found, cancelling...");
+
+            if let Err(e) = state.django.update_match_status(match_id, "cancelled").await {
+                error!("Failed to cancel match {match_id}: {e}");
+            } else {
+                info!("Match {match_id}: Cancelled successfully");
+            }
+
+            // Trigger cleanup to remove any partial Redis data.
+            let _ = state.django.cleanup_match(match_id).await;
+        }
+    }
+
+    info!("Match recovery complete.");
+}
 
 #[tokio::main]
 async fn main() {
@@ -61,6 +136,8 @@ async fn main() {
         matchmaking,
         game_connections,
     };
+
+    recover_active_matches(&app_state).await;
 
     let app = Router::new()
         // Health check
