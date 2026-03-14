@@ -31,3 +31,4 @@ jsonwebtoken = "9"
 dotenvy = "0.15"
 dashmap = "6"
 futures = "0.3"
+livekit-api = { version = "0.4", default-features = false, features = ["access-token"] }

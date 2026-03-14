@@ -122,10 +122,20 @@ export interface GameEvent {
   [key: string]: unknown;
 }
 
+export interface MatchChatMessage {
+  user_id: string;
+  username: string;
+  content: string;
+  timestamp: number;
+}
+
 interface UseGameSocketReturn {
   connected: boolean;
   gameState: GameState | null;
   events: GameEvent[];
+  matchChatMessages: MatchChatMessage[];
+  voiceToken: string | null;
+  voiceUrl: string | null;
   selectCapital: (regionId: string) => void;
   attack: (sourceRegionId: string, targetRegionId: string, units: number, unitType?: string | null) => void;
   move: (sourceRegionId: string, targetRegionId: string, units: number, unitType?: string | null) => void;
@@ -135,12 +145,16 @@ interface UseGameSocketReturn {
   useAbility: (targetRegionId: string, abilityType: string) => void;
   leaveMatch: () => Promise<boolean>;
   send: (data: Record<string, unknown>) => void;
+  sendChat: (content: string) => void;
 }
 
 export function useGameSocket(matchId: string): UseGameSocketReturn {
   const [connected, setConnected] = useState(false);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [events, setEvents] = useState<GameEvent[]>([]);
+  const [matchChatMessages, setMatchChatMessages] = useState<MatchChatMessage[]>([]);
+  const [voiceToken, setVoiceToken] = useState<string | null>(null);
+  const [voiceUrl, setVoiceUrl] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const leaveResolverRef = useRef<((value: boolean) => void) | null>(null);
 
@@ -240,6 +254,26 @@ export function useGameSocket(matchId: string): UseGameSocketReturn {
           leaveResolverRef.current(true);
           leaveResolverRef.current = null;
         }
+        break;
+      case "chat_message":
+        setMatchChatMessages((prev) => [
+          ...prev.slice(-199),
+          {
+            user_id: msg.user_id as string,
+            username: msg.username as string,
+            content: msg.content as string,
+            timestamp: msg.timestamp as number,
+          },
+        ]);
+        break;
+      case "chat_history": {
+        const historyMsgs = (msg.messages as MatchChatMessage[]) || [];
+        setMatchChatMessages(historyMsgs);
+        break;
+      }
+      case "voice_token":
+        setVoiceToken(msg.token as string);
+        setVoiceUrl(msg.url as string);
         break;
     }
   }, []);
@@ -388,6 +422,15 @@ export function useGameSocket(matchId: string): UseGameSocketReturn {
     [send]
   );
 
+  const sendChat = useCallback(
+    (content: string) => {
+      const trimmed = content.trim();
+      if (!trimmed || trimmed.length > 500) return;
+      send({ action: "chat", content: trimmed });
+    },
+    [send]
+  );
+
   const leaveMatch = useCallback(() => {
     return new Promise<boolean>((resolve) => {
       if (wsRef.current?.readyState !== WebSocket.OPEN) {
@@ -411,6 +454,9 @@ export function useGameSocket(matchId: string): UseGameSocketReturn {
     connected,
     gameState,
     events,
+    matchChatMessages,
+    voiceToken,
+    voiceUrl,
     selectCapital,
     attack,
     move,
@@ -420,5 +466,6 @@ export function useGameSocket(matchId: string): UseGameSocketReturn {
     useAbility,
     leaveMatch,
     send,
+    sendChat,
   };
 }
