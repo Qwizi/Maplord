@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useChat } from "@/hooks/useChat";
@@ -10,22 +10,12 @@ import { MessageSquare, X } from "lucide-react";
 
 export default function ChatWidget() {
   const { user } = useAuth();
-  const { messages, connected, sendMessage } = useChat();
+  const { messages, connected, sendMessage, unreadCount, resetUnread } = useChat();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const [unread, setUnread] = useState(0);
-  const prevCountRef = useRef(messages.length);
 
   // Hide in game pages — game has its own match chat panel
   const isGamePage = pathname.startsWith("/game/");
-
-  // Track unread when panel is closed
-  useEffect(() => {
-    if (!open && messages.length > prevCountRef.current) {
-      setUnread((u) => u + (messages.length - prevCountRef.current));
-    }
-    prevCountRef.current = messages.length;
-  }, [messages.length, open]);
 
   if (!user || isGamePage) return null;
 
@@ -68,14 +58,14 @@ export default function ChatWidget() {
       <button
         onClick={() => {
           setOpen(!open);
-          if (!open) setUnread(0);
+          if (!open) resetUnread();
         }}
         className="relative flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-slate-950/80 text-slate-300 shadow-[0_10px_24px_rgba(0,0,0,0.3)] backdrop-blur-xl transition-colors hover:bg-white/[0.08] hover:text-zinc-100"
       >
         {open ? <X className="h-5 w-5" /> : <MessageSquare className="h-5 w-5" />}
-        {!open && unread > 0 && (
+        {!open && unreadCount > 0 && (
           <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-slate-950">
-            {unread > 99 ? "99+" : unread}
+            {unreadCount > 99 ? "99+" : unreadCount}
           </span>
         )}
       </button>

@@ -16,6 +16,8 @@ interface ChatContextType {
   messages: ChatMessage[];
   connected: boolean;
   sendMessage: (content: string) => void;
+  unreadCount: number;
+  resetUnread: () => void;
 }
 
 const ChatContext = createContext<ChatContextType | null>(null);
@@ -24,7 +26,34 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [connected, setConnected] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
+  const userIdRef = useRef<string | null>(null);
+  const initializedRef = useRef(false);
+
+  useEffect(() => {
+    userIdRef.current = user?.id ?? null;
+  }, [user?.id]);
+
+  // Update document title with unread count
+  useEffect(() => {
+    if (unreadCount > 0) {
+      document.title = `(${unreadCount}) MapLord`;
+    } else {
+      document.title = "MapLord";
+    }
+  }, [unreadCount]);
+
+  // Reset unread when tab becomes visible
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        setUnreadCount(0);
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, []);
 
   useEffect(() => {
     const token = getAccessToken();
@@ -33,6 +62,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     let disposed = false;
     let retryTimeout: ReturnType<typeof setTimeout> | null = null;
     let backoffDelay = 1000;
+    initializedRef.current = false;
 
     const connect = () => {
       const ws = createSocket(
@@ -41,8 +71,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         (msg) => {
           if (msg.type === "chat_history") {
             setMessages((msg.messages as ChatMessage[]) || []);
+            initializedRef.current = true;
           } else if (msg.type === "chat_message") {
             setMessages((prev) => [...prev.slice(-199), msg as unknown as ChatMessage]);
+            // Unread for messages from others (skip during initial load)
+            if (initializedRef.current && msg.user_id !== userIdRef.current) {
+              if (document.visibilityState === "hidden") {
+                setUnreadCount((c) => c + 1);
+              }
+            }
           }
         },
         () => {
@@ -87,8 +124,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const resetUnread = useCallback(() => setUnreadCount(0), []);
+
   return (
-    <ChatContext.Provider value={{ messages, connected, sendMessage }}>
+    <ChatContext.Provider value={{ messages, connected, sendMessage, unreadCount, resetUnread }}>
       {children}
     </ChatContext.Provider>
   );
