@@ -73,11 +73,26 @@ class UnitTypeInline(admin.TabularInline):
 
 @admin.register(BuildingType)
 class BuildingTypeAdmin(admin.ModelAdmin):
-    list_display = ('icon', 'name', 'slug', 'cost', 'build_time_ticks', 'requires_coastal', 'defense_bonus', 'is_active', 'order')
+    list_display = ('icon', 'name', 'slug', 'cost', 'build_time_ticks', 'requires_coastal', 'defense_bonus', 'max_level', 'is_active', 'order')
     list_filter = ('is_active', 'requires_coastal')
     search_fields = ('name', 'slug')
     prepopulated_fields = {'slug': ('name',)}
     inlines = [UnitTypeInline]
+    fieldsets = (
+        (None, {
+            'fields': ('name', 'slug', 'asset_key', 'description', 'icon', 'is_active', 'order'),
+        }),
+        ('Costs & Timing', {
+            'fields': ('cost', 'energy_cost', 'build_time_ticks', 'max_per_region', 'requires_coastal'),
+        }),
+        ('Passive Bonuses', {
+            'fields': ('defense_bonus', 'vision_range', 'unit_generation_bonus', 'energy_generation_bonus'),
+        }),
+        ('Poziomy (Level System)', {
+            'fields': ('max_level', 'level_stats'),
+            'classes': ('collapse',),
+        }),
+    )
 
 
 @admin.register(UnitType)
@@ -90,11 +105,29 @@ class UnitTypeAdmin(admin.ModelAdmin):
 
 @admin.register(AbilityType)
 class AbilityTypeAdmin(admin.ModelAdmin):
-    list_display = ('icon', 'name', 'slug', 'target_type', 'range', 'energy_cost', 'cooldown_ticks', 'damage', 'effect_duration_ticks', 'is_active', 'order')
+    list_display = ('icon', 'name', 'slug', 'target_type', 'range', 'energy_cost', 'cooldown_ticks', 'damage', 'effect_duration_ticks', 'max_level', 'is_active', 'order')
     list_filter = ('is_active', 'target_type')
     search_fields = ('name', 'slug')
     prepopulated_fields = {'slug': ('name',)}
     list_editable = ('is_active', 'order')
+    fieldsets = (
+        (None, {
+            'fields': ('name', 'slug', 'asset_key', 'description', 'icon', 'sound_key', 'is_active', 'order'),
+        }),
+        ('Targeting', {
+            'fields': ('target_type', 'range'),
+        }),
+        ('Costs & Timing', {
+            'fields': ('energy_cost', 'cooldown_ticks'),
+        }),
+        ('Effects', {
+            'fields': ('damage', 'effect_duration_ticks', 'effect_params'),
+        }),
+        ('Poziomy (Level System)', {
+            'fields': ('max_level', 'level_stats'),
+            'classes': ('collapse',),
+        }),
+    )
 
 
 @admin.register(MapConfig)

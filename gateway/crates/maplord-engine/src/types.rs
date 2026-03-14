@@ -88,10 +88,15 @@ pub struct BuildingConfig {
     pub order: i64,
     #[serde(default)]
     pub produced_unit_slug: Option<String>,
+    #[serde(default = "default_max_level")]
+    pub max_level: i64,
+    #[serde(default)]
+    pub level_stats: HashMap<String, serde_json::Value>,
 }
 
 fn default_build_time() -> i64 { 10 }
 fn default_max_per_region() -> i64 { 1 }
+fn default_max_level() -> i64 { 3 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct UnitConfig {
@@ -146,6 +151,10 @@ pub struct AbilityConfig {
     pub effect_duration_ticks: i64,
     #[serde(default)]
     pub effect_params: serde_json::Value,
+    #[serde(default = "default_max_level")]
+    pub max_level: i64,
+    #[serde(default)]
+    pub level_stats: HashMap<String, serde_json::Value>,
 }
 
 fn default_target_type() -> String { "enemy".into() }

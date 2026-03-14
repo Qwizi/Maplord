@@ -40,6 +40,8 @@ class BuildingTypeOutSchema(Schema):
     vision_range: int
     unit_generation_bonus: float
     energy_generation_bonus: float
+    max_level: int
+    level_stats: dict
     order: int
 
     class Config:
@@ -142,6 +144,8 @@ class AbilityTypeOutSchema(Schema):
     damage: int
     effect_duration_ticks: int
     effect_params: dict
+    max_level: int
+    level_stats: dict
     order: int
 
     class Config:

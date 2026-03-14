@@ -86,7 +86,16 @@ class BuildingType(models.Model):
     vision_range = models.PositiveIntegerField(default=0, help_text='Extra vision range in regions')
     unit_generation_bonus = models.FloatField(default=0.0, help_text='Extra units generated per tick')
     energy_generation_bonus = models.FloatField(default=0.0, help_text='Extra energy generated per tick by the region')
-    
+
+    # Level system
+    max_level = models.PositiveIntegerField(default=3, help_text='Maximum upgrade level (1-5)')
+    level_stats = models.JSONField(
+        default=dict, blank=True,
+        help_text='Per-level stat overrides. Keys are level numbers as strings. '
+                  'Example: {"1": {"defense_bonus": 0.1}, "2": {"defense_bonus": 0.16}, "3": {"defense_bonus": 0.22}}. '
+                  'Supported keys: defense_bonus, vision_range, unit_generation_bonus, energy_generation_bonus, energy_cost, build_time_ticks'
+    )
+
     is_active = models.BooleanField(default=True)
     order = models.PositiveIntegerField(default=0)
 
@@ -236,6 +245,15 @@ class AbilityType(models.Model):
     # Persistent effects
     effect_duration_ticks = models.PositiveIntegerField(default=0, help_text='Duration for persistent effects')
     effect_params = models.JSONField(default=dict, blank=True, help_text='Per-ability params: production_reduction, unit_kill_percent, spread_range, collect_percent')
+
+    # Level system
+    max_level = models.PositiveIntegerField(default=3, help_text='Maximum upgrade level (1-5)')
+    level_stats = models.JSONField(
+        default=dict, blank=True,
+        help_text='Per-level stat overrides. Keys are level numbers as strings. '
+                  'Example: {"1": {"damage": 50}, "2": {"damage": 65, "cooldown_ticks": 50}, "3": {"damage": 80, "effect_duration_ticks": 25}}. '
+                  'Supported keys: energy_cost, cooldown_ticks, damage, effect_duration_ticks, range, effect_params'
+    )
 
     is_active = models.BooleanField(default=True)
     order = models.PositiveIntegerField(default=0)

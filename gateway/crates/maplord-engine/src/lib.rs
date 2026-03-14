@@ -610,26 +610,30 @@ impl GameEngine {
             }
         }
 
+        // Read the ability level from the player's deck before mutably borrowing players.
+        let ability_level = {
+            let player = players.get(player_id.as_str()).unwrap();
+            player.ability_levels.get(ability_slug).copied().unwrap_or(1)
+        };
+
+        // Read level-specific stats from config, falling back to base config values.
+        let scaled_damage = get_level_stat_i64(&ability_config.level_stats, ability_level, "damage")
+            .unwrap_or(ability_config.damage);
+        let scaled_duration = get_level_stat_i64(&ability_config.level_stats, ability_level, "effect_duration_ticks")
+            .unwrap_or(ability_config.effect_duration_ticks);
+        let scaled_cooldown = get_level_stat_i64(&ability_config.level_stats, ability_level, "cooldown_ticks")
+            .unwrap_or(ability_config.cooldown_ticks);
+
         // Deduct energy, set cooldown, and consume one scroll use if deck system is active.
         let player = players.get_mut(player_id.as_str()).unwrap();
         player.energy -= ability_config.energy_cost;
         player.ability_cooldowns.insert(
             ability_slug.clone(),
-            current_tick + ability_config.cooldown_ticks,
+            current_tick + scaled_cooldown,
         );
         if let Some(uses) = player.ability_scrolls.get_mut(ability_slug) {
             *uses = (*uses - 1).max(0);
         }
-
-        // Compute level scaling from deck ability_levels.
-        // Level 1 is the baseline; levels 2-3 increase damage/duration.
-        let ability_level = {
-            let player = players.get(player_id.as_str()).unwrap();
-            player.ability_levels.get(ability_slug).copied().unwrap_or(1)
-        };
-        let level_multiplier = 1.0 + 0.3 * (ability_level as f64 - 1.0);
-        let scaled_damage = (ability_config.damage as f64 * level_multiplier) as i64;
-        let scaled_duration = ability_config.effect_duration_ticks + (ability_level - 1) * 5;
 
         let mut events = vec![Event::AbilityUsed {
             player_id: player_id.clone(),
@@ -1301,7 +1305,9 @@ impl GameEngine {
 
         let current_count = region.buildings.get(building_type).copied().unwrap_or(0);
         let current_level = region.building_levels.get(building_type).copied().unwrap_or(1);
-        let max_allowed_level = player.building_levels.get(building_type).copied().unwrap_or(1);
+        let deck_max = player.building_levels.get(building_type).copied().unwrap_or(1);
+        let config_max = config.max_level;
+        let max_allowed_level = deck_max.min(config_max);
 
         // A queued upgrade for the same building type already in flight counts as a pending level change.
         let upgrade_queued = buildings_queue
@@ -1928,39 +1934,44 @@ impl GameEngine {
     // --- Helper methods ---
 
     fn recompute_region_building_stats(&self, region: &mut Region) {
-        let mut defense_bonus = 0.0;
-        let mut vision_range = 0;
-        let mut unit_generation_bonus = 0.0;
-        let mut energy_generation_bonus = 0.0;
+        region.defense_bonus = 0.0;
+        region.vision_range = 0;
+        region.unit_generation_bonus = 0.0;
+        region.energy_generation_bonus = 0.0;
+
         let mut primary_slug: Option<String> = None;
         let mut primary_order: i64 = i64::MAX;
 
-        for (slug, raw_count) in &region.buildings {
-            let count = *raw_count;
+        for (slug, &count) in &region.buildings.clone() {
             if count <= 0 {
                 continue;
             }
-            if let Some(config) = self.settings.building_types.get(slug) {
-                // Apply level multiplier to bonus stats; vision_range is not scaled.
-                let level = region.building_levels.get(slug).copied().unwrap_or(1);
-                let mult = building_level_multiplier(level);
-                defense_bonus += config.defense_bonus * mult * count as f64;
-                vision_range += config.vision_range as i64 * count;
-                unit_generation_bonus += config.unit_generation_bonus * mult * count as f64;
-                energy_generation_bonus += config.energy_generation_bonus * mult * count as f64;
-                let order = config.order as i64;
-                if primary_slug.is_none() || order < primary_order {
-                    primary_slug = Some(slug.clone());
-                    primary_order = order;
-                }
+            let Some(config) = self.settings.building_types.get(slug) else { continue };
+            let level = region.building_levels.get(slug).copied().unwrap_or(1);
+
+            // Use level_stats if available; otherwise fall back to base config values.
+            let defense = get_level_stat(&config.level_stats, level, "defense_bonus")
+                .unwrap_or(config.defense_bonus);
+            let vision = get_level_stat_i64(&config.level_stats, level, "vision_range")
+                .unwrap_or(config.vision_range);
+            let unit_gen = get_level_stat(&config.level_stats, level, "unit_generation_bonus")
+                .unwrap_or(config.unit_generation_bonus);
+            let energy_gen = get_level_stat(&config.level_stats, level, "energy_generation_bonus")
+                .unwrap_or(config.energy_generation_bonus);
+
+            region.defense_bonus += defense * count as f64;
+            region.vision_range += vision * count;
+            region.unit_generation_bonus += unit_gen * count as f64;
+            region.energy_generation_bonus += energy_gen * count as f64;
+
+            let order = config.order;
+            if primary_slug.is_none() || order < primary_order {
+                primary_slug = Some(slug.clone());
+                primary_order = order;
             }
         }
 
         region.building_type = primary_slug;
-        region.defense_bonus = defense_bonus;
-        region.vision_range = vision_range;
-        region.unit_generation_bonus = unit_generation_bonus;
-        region.energy_generation_bonus = energy_generation_bonus;
     }
 
     pub fn get_unit_config(&self, unit_type: &str) -> UnitConfig {
@@ -2303,14 +2314,22 @@ fn has_active_shield(region_id: &str, active_effects: &[ActiveEffect]) -> bool {
     })
 }
 
-/// Returns the stat multiplier for a building at the given level.
-/// Level 1: 1.0×, Level 2: 1.5×, Level 3: 2.0×.
-fn building_level_multiplier(level: i64) -> f64 {
-    match level {
-        2 => 1.5,
-        3 => 2.0,
-        _ => 1.0,
-    }
+/// Look up a floating-point stat for a given level from a level_stats map.
+/// Returns `None` when the level key or the stat key is absent.
+fn get_level_stat(level_stats: &HashMap<String, serde_json::Value>, level: i64, key: &str) -> Option<f64> {
+    level_stats
+        .get(&level.to_string())
+        .and_then(|v| v.get(key))
+        .and_then(|v| v.as_f64())
+}
+
+/// Look up an integer stat for a given level from a level_stats map.
+/// Returns `None` when the level key or the stat key is absent.
+fn get_level_stat_i64(level_stats: &HashMap<String, serde_json::Value>, level: i64, key: &str) -> Option<i64> {
+    level_stats
+        .get(&level.to_string())
+        .and_then(|v| v.get(key))
+        .and_then(|v| v.as_i64())
 }
 
 fn reject_action(player_id: &str, message: &str, action: &Action) -> Event {

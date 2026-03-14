@@ -333,6 +333,8 @@ class MatchmakingInternalController(ControllerBase):
                 'name': bt.name,
                 'asset_key': bt.asset_key,
                 'order': bt.order,
+                'max_level': bt.max_level,
+                'level_stats': bt.level_stats or {},
                 'produced_unit_slug': (
                     bt.unit_types.filter(is_active=True)
                     .order_by('order')
@@ -374,6 +376,8 @@ class MatchmakingInternalController(ControllerBase):
                 'damage': int(at.damage),
                 'effect_duration_ticks': int(at.effect_duration_ticks),
                 'effect_params': at.effect_params or {},
+                'max_level': at.max_level,
+                'level_stats': at.level_stats or {},
             }
             for at in AbilityType.objects.filter(is_active=True)
         }
