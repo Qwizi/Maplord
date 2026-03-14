@@ -67,7 +67,7 @@ services:
       GATEWAY_PORT: "8080"
       RUST_LOG: info,maplord_gateway=info
       LIVEKIT_URL: ws://livekit:7880
-      LIVEKIT_PUBLIC_URL: wss://${DOMAIN:?DOMAIN is required}/livekit/
+      LIVEKIT_PUBLIC_URL: wss://${DOMAIN:?DOMAIN is required}/livekit
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:?LIVEKIT_API_KEY is required}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?LIVEKIT_API_SECRET is required}
     depends_on:
@@ -128,13 +128,11 @@ services:
     restart: unless-stopped
     environment:
       LIVEKIT_KEYS: "${LIVEKIT_API_KEY:?LIVEKIT_API_KEY is required}: ${LIVEKIT_API_SECRET:?LIVEKIT_API_SECRET is required}"
-    command: >
-      --bind 0.0.0.0
-      --port 7880
-      --rtc.port-range-start 7882
-      --rtc.port-range-end 7892
-      --rtc.use-external-ip
+      UDP_PORT: "7882-7892"
+      NODE_IP: ""
+    command: --bind 0.0.0.0
     ports:
+      - "7880:7880"
       - "7882-7892:7882-7892/udp"
     mem_limit: 256m
 
