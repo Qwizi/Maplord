@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
-interface ChatMessage {
+export interface ChatMessage {
   user_id: string;
   username: string;
   content: string;
@@ -15,38 +15,38 @@ interface MessageListProps {
 }
 
 export function MessageList({ messages, currentUserId }: MessageListProps) {
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = containerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [messages.length]);
 
   if (messages.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-muted-foreground text-xs">
-        No messages yet
+      <div className="flex flex-1 items-center justify-center text-[11px] text-slate-500">
+        Brak wiadomosci
       </div>
     );
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-2 space-y-1">
+    <div ref={containerRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-0.5 scrollbar-thin scrollbar-thumb-white/10">
       {messages.map((msg, i) => {
         const isOwn = msg.user_id === currentUserId;
         const time = new Date(msg.timestamp * 1000);
         const timeStr = time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
         return (
-          <div key={`${msg.timestamp}-${i}`} className="text-xs">
-            <span className="text-muted-foreground">[{timeStr}]</span>{" "}
-            <span className={isOwn ? "text-primary font-semibold" : "font-semibold"}>
-              {msg.username}:
+          <div key={`${msg.timestamp}-${i}`} className="text-[11px] leading-relaxed">
+            <span className="text-slate-500">{timeStr}</span>{" "}
+            <span className={isOwn ? "font-semibold text-amber-200" : "font-semibold text-zinc-300"}>
+              {msg.username}
             </span>{" "}
-            <span className="break-words">{msg.content}</span>
+            <span className="break-words text-slate-300">{msg.content}</span>
           </div>
         );
       })}
-      <div ref={bottomRef} />
     </div>
   );
 }

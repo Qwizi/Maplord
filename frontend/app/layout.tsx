@@ -5,7 +5,6 @@ import "./globals.css";
 import { AuthProvider } from "@/hooks/useAuth";
 import { Toaster } from "@/components/ui/sonner";
 import { ChatProvider } from "@/hooks/useChat";
-import { MatchChatProvider } from "@/contexts/MatchContext";
 import ChatWidget from "@/components/chat/ChatWidget";
 
 const uiSans = localFont({
@@ -70,11 +69,9 @@ export default function RootLayout({
       >
         <AuthProvider>
           <ChatProvider>
-            <MatchChatProvider>
-              {children}
-              <ChatWidget />
-              <Toaster />
-            </MatchChatProvider>
+            {children}
+            <ChatWidget />
+            <Toaster />
           </ChatProvider>
         </AuthProvider>
       </body>
