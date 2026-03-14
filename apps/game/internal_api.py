@@ -37,6 +37,10 @@ class AliveUpdateRequest(Schema):
     is_alive: bool
 
 
+class CancelMatchRequest(Schema):
+    match_id: str
+
+
 # --- Controller ---
 
 
@@ -211,6 +215,24 @@ class GameInternalController(ControllerBase):
         if not updated:
             return self.create_response({'error': 'MatchPlayer not found'}, status_code=404)
         return {'ok': True}
+
+    @route.post('/game/cancel-match/')
+    def cancel_active_match(self, request, body: CancelMatchRequest):
+        """Admin-initiated cancellation of an active match. Sets Redis cancel flag."""
+        if not check_internal_secret(request):
+            return self.create_response({'error': 'Unauthorized'}, status_code=403)
+
+        import redis
+        from django.conf import settings
+        from apps.matchmaking.models import Match
+
+        match_id = body.match_id
+        r = redis.Redis.from_url(settings.REDIS_URL)
+        r.set(f"game:{match_id}:cancel_requested", "1", ex=300)
+
+        Match.objects.filter(id=match_id).update(status='cancelled')
+
+        return {'ok': True, 'match_id': match_id}
 
     @route.get('/game/active-matches/')
     def list_active_matches(self, request):

@@ -622,6 +622,40 @@ async fn game_loop(
         tokio::time::sleep_until(next_tick_at).await;
         let tick_start = tokio::time::Instant::now();
 
+        // Check if match was cancelled by admin
+        {
+            let cancel_key = format!("game:{}:cancel_requested", match_id);
+            let mut conn = state_mgr.redis();
+            let cancelled: bool = redis::cmd("GET")
+                .arg(&cancel_key)
+                .query_async::<Option<String>>(&mut conn)
+                .await
+                .unwrap_or(None)
+                .is_some();
+
+            if cancelled {
+                info!("Match {match_id} cancelled by admin");
+                let _: () = redis::cmd("DEL")
+                    .arg(&cancel_key)
+                    .query_async(&mut conn)
+                    .await
+                    .unwrap_or(());
+
+                let cancel_msg = json!({
+                    "type": "error",
+                    "message": "Mecz został anulowany przez administratora.",
+                    "fatal": true,
+                });
+                broadcast_to_match(match_id, &cancel_msg, &state.game_connections);
+
+                let _ = state_mgr.set_meta_field("status", "cancelled").await;
+                let _ = state.django.update_match_status(match_id, "cancelled").await;
+                let _ = state.django.cleanup_match(match_id).await;
+
+                return Ok(());
+            }
+        }
+
         // Read tick multiplier for tutorial fast-forward
         if is_tutorial {
             if let Ok(m) = state_mgr.get_meta().await {
