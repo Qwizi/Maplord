@@ -8,7 +8,12 @@ typedef VoidCallback = void Function();
 class WsService {
   String _wsBase;
 
-  WsService({String? wsBase}) : _wsBase = wsBase ?? 'ws://10.0.2.2/ws';
+  static const String defaultWsBase = String.fromEnvironment(
+    'WS_BASE_URL',
+    defaultValue: 'wss://maplord.qwizi.ovh/ws',
+  );
+
+  WsService({String? wsBase}) : _wsBase = wsBase ?? defaultWsBase;
 
   String get wsBase => _wsBase;
   void setWsBase(String url) { _wsBase = url; }

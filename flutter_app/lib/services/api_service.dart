@@ -23,7 +23,12 @@ class ApiService {
   // Base URL - should be configured per environment
   String _baseUrl;
 
-  ApiService({String? baseUrl}) : _baseUrl = baseUrl ?? 'http://10.0.2.2/api/v1';  // Android emulator -> host
+  static const String defaultBaseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'https://maplord.qwizi.ovh/api/v1',
+  );
+
+  ApiService({String? baseUrl}) : _baseUrl = baseUrl ?? defaultBaseUrl;
 
   void setBaseUrl(String url) { _baseUrl = url; }
   String get baseUrl => _baseUrl;
