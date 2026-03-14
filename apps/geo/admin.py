@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.contrib.gis.admin import GISModelAdmin
 from django.db.models import Count
+from unfold.admin import ModelAdmin
 from apps.geo.models import Country, Region
 
 
@@ -12,8 +13,9 @@ class RegionInline(admin.TabularInline):
 
 
 @admin.register(Country)
-class CountryAdmin(GISModelAdmin):
+class CountryAdmin(ModelAdmin, GISModelAdmin):
     list_display = ('name', 'code', 'region_count')
+    list_fullwidth = True
     search_fields = ('name', 'code')
     inlines = [RegionInline]
 
@@ -26,9 +28,11 @@ class CountryAdmin(GISModelAdmin):
 
 
 @admin.register(Region)
-class RegionAdmin(GISModelAdmin):
+class RegionAdmin(ModelAdmin, GISModelAdmin):
     list_display = ('name', 'country', 'map_source_id', 'is_coastal', 'population_weight', 'neighbor_count')
     list_filter = ('country', 'is_coastal')
+    list_filter_submit = True
+    list_fullwidth = True
     search_fields = ('name', 'country__name')
     readonly_fields = ('centroid', 'sea_distances')
     filter_horizontal = ('neighbors',)

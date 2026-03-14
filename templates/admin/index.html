@@ -1,0 +1,70 @@
+{% extends "admin/index.html" %}
+{% load i18n unfold %}
+
+{% block content %}
+{% component "unfold/components/container.html" %}
+
+  {# ------------------------------------------------------------------ #}
+  {# Row 1 — KPI cards                                                   #}
+  {# ------------------------------------------------------------------ #}
+  <div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
+
+    {% component "unfold/components/card.html" with icon="person" %}
+      <p class="text-xs font-medium uppercase tracking-wide text-base-500 dark:text-base-400 mb-1">{% trans "Total Users" %}</p>
+      <p class="text-3xl font-bold text-primary-600 dark:text-primary-400">{{ kpi_users }}</p>
+    {% endcomponent %}
+
+    {% component "unfold/components/card.html" with icon="swords" %}
+      <p class="text-xs font-medium uppercase tracking-wide text-base-500 dark:text-base-400 mb-1">{% trans "Active Matches" %}</p>
+      <p class="text-3xl font-bold text-primary-600 dark:text-primary-400">{{ kpi_active_matches }}</p>
+    {% endcomponent %}
+
+    {% component "unfold/components/card.html" with icon="today" %}
+      <p class="text-xs font-medium uppercase tracking-wide text-base-500 dark:text-base-400 mb-1">{% trans "Matches Today" %}</p>
+      <p class="text-3xl font-bold text-primary-600 dark:text-primary-400">{{ kpi_matches_today }}</p>
+    {% endcomponent %}
+
+    {% component "unfold/components/card.html" with icon="queue" %}
+      <p class="text-xs font-medium uppercase tracking-wide text-base-500 dark:text-base-400 mb-1">{% trans "Queue Size" %}</p>
+      <p class="text-3xl font-bold text-primary-600 dark:text-primary-400">{{ kpi_queue_size }}</p>
+    {% endcomponent %}
+
+    {% component "unfold/components/card.html" with icon="account_balance_wallet" %}
+      <p class="text-xs font-medium uppercase tracking-wide text-base-500 dark:text-base-400 mb-1">{% trans "Total Gold" %}</p>
+      <p class="text-3xl font-bold text-primary-600 dark:text-primary-400">{{ kpi_total_gold }}</p>
+    {% endcomponent %}
+
+    {% component "unfold/components/card.html" with icon="sell" %}
+      <p class="text-xs font-medium uppercase tracking-wide text-base-500 dark:text-base-400 mb-1">{% trans "Active Listings" %}</p>
+      <p class="text-3xl font-bold text-primary-600 dark:text-primary-400">{{ kpi_active_listings }}</p>
+    {% endcomponent %}
+
+  </div>
+
+  {# ------------------------------------------------------------------ #}
+  {# Row 2 — Charts                                                      #}
+  {# ------------------------------------------------------------------ #}
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+
+    {% component "unfold/components/card.html" with title=_("Matches per day (last 7 days)") %}
+      {% component "unfold/components/chart/bar.html" with component_class="MatchesChartComponent" %}{% endcomponent %}
+    {% endcomponent %}
+
+    {% component "unfold/components/card.html" with title=_("User registrations per day (last 7 days)") %}
+      {% component "unfold/components/chart/line.html" with component_class="UserRegistrationsChartComponent" %}{% endcomponent %}
+    {% endcomponent %}
+
+  </div>
+
+  {# ------------------------------------------------------------------ #}
+  {# Row 3 — Default app list (keep standard Django admin app list)      #}
+  {# ------------------------------------------------------------------ #}
+  <div class="flex flex-col lg:flex-row lg:gap-8">
+    <div class="grow">
+      {% include "unfold/helpers/app_list_default.html" %}
+    </div>
+    {% include "unfold/helpers/history.html" %}
+  </div>
+
+{% endcomponent %}
+{% endblock %}

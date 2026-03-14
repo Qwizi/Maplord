@@ -10,6 +10,8 @@ ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,backend', c
 CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='', cast=Csv())
 
 INSTALLED_APPS = [
+    'unfold',
+    'unfold.contrib.filters',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -52,7 +54,7 @@ ROOT_URLCONF = 'config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -93,7 +95,8 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = '/static/'
-STATIC_ROOT = BASE_DIR / 'static'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_DIRS = [BASE_DIR / 'assets']
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
@@ -160,6 +163,268 @@ NINJA_JWT = {
 # CORS
 # Internal API secret for Rust gateway
 INTERNAL_SECRET = config('INTERNAL_SECRET', default='dev-internal-secret')
+
+
+# Unfold Admin
+UNFOLD = {
+    "SITE_TITLE": "MapLord Admin",
+    "SITE_HEADER": "MapLord",
+    "SITE_SYMBOL": "map",
+    "SHOW_HISTORY": True,
+    "SHOW_VIEW_ON_SITE": True,
+    "ENVIRONMENT": "config.unfold_callbacks.environment_callback",
+    "DASHBOARD_CALLBACK": "apps.dashboard.dashboard_callback",
+    "STYLES": [
+        lambda request: __import__("django.templatetags.static", fromlist=["static"]).static("admin/css/unfold-custom.css"),
+    ],
+    "COLORS": {
+        "primary": {
+            "50": "oklch(97.7% 0.014 308.299)",
+            "100": "oklch(95.5% 0.028 308.299)",
+            "200": "oklch(90.5% 0.058 308.299)",
+            "300": "oklch(84.0% 0.102 308.299)",
+            "400": "oklch(74.7% 0.167 308.299)",
+            "500": "oklch(65.5% 0.228 303.9)",
+            "600": "oklch(62.7% 0.265 303.9)",
+            "700": "oklch(54.5% 0.245 303.9)",
+            "800": "oklch(47.0% 0.208 303.9)",
+            "900": "oklch(40.0% 0.170 303.9)",
+            "950": "oklch(30.0% 0.130 303.9)",
+        },
+    },
+    "SIDEBAR": {
+        "show_search": True,
+        "show_all_applications": True,
+        "navigation": [
+            {
+                "title": "Users",
+                "separator": True,
+                "items": [
+                    {
+                        "title": "Users",
+                        "icon": "person",
+                        "link": "/admin/accounts/user/",
+                    },
+                ],
+            },
+            {
+                "title": "Game Config",
+                "separator": True,
+                "items": [
+                    {
+                        "title": "Game Settings",
+                        "icon": "settings",
+                        "link": "/admin/game_config/gamesettings/",
+                    },
+                    {
+                        "title": "Game Modes",
+                        "icon": "sports_esports",
+                        "link": "/admin/game_config/gamemode/",
+                    },
+                    {
+                        "title": "Building Types",
+                        "icon": "domain",
+                        "link": "/admin/game_config/buildingtype/",
+                    },
+                    {
+                        "title": "Unit Types",
+                        "icon": "military_tech",
+                        "link": "/admin/game_config/unittype/",
+                    },
+                    {
+                        "title": "Ability Types",
+                        "icon": "bolt",
+                        "link": "/admin/game_config/abilitytype/",
+                    },
+                    {
+                        "title": "Map Configs",
+                        "icon": "public",
+                        "link": "/admin/game_config/mapconfig/",
+                    },
+                ],
+            },
+            {
+                "title": "Geo",
+                "separator": True,
+                "items": [
+                    {
+                        "title": "Countries",
+                        "icon": "flag",
+                        "link": "/admin/geo/country/",
+                    },
+                    {
+                        "title": "Regions",
+                        "icon": "location_on",
+                        "link": "/admin/geo/region/",
+                    },
+                ],
+            },
+            {
+                "title": "Matchmaking",
+                "separator": True,
+                "items": [
+                    {
+                        "title": "Matches",
+                        "icon": "swords",
+                        "link": "/admin/matchmaking/match/",
+                    },
+                    {
+                        "title": "Match Players",
+                        "icon": "groups",
+                        "link": "/admin/matchmaking/matchplayer/",
+                    },
+                    {
+                        "title": "Match Queue",
+                        "icon": "queue",
+                        "link": "/admin/matchmaking/matchqueue/",
+                    },
+                ],
+            },
+            {
+                "title": "Game",
+                "separator": True,
+                "items": [
+                    {
+                        "title": "Snapshots",
+                        "icon": "camera",
+                        "link": "/admin/game/gamestatesnapshot/",
+                    },
+                    {
+                        "title": "Match Results",
+                        "icon": "leaderboard",
+                        "link": "/admin/game/matchresult/",
+                    },
+                    {
+                        "title": "Player Results",
+                        "icon": "emoji_events",
+                        "link": "/admin/game/playerresult/",
+                    },
+                ],
+            },
+            {
+                "title": "Chat",
+                "separator": True,
+                "items": [
+                    {
+                        "title": "Chat Messages",
+                        "icon": "chat",
+                        "link": "/admin/chat/chatmessage/",
+                    },
+                    {
+                        "title": "Match Chat",
+                        "icon": "forum",
+                        "link": "/admin/chat/matchchatmessage/",
+                    },
+                ],
+            },
+            {
+                "title": "Economy",
+                "separator": True,
+                "items": [
+                    {
+                        "title": "Item Categories",
+                        "icon": "category",
+                        "link": "/admin/inventory/itemcategory/",
+                    },
+                    {
+                        "title": "Items",
+                        "icon": "inventory_2",
+                        "link": "/admin/inventory/item/",
+                    },
+                    {
+                        "title": "User Inventory",
+                        "icon": "backpack",
+                        "link": "/admin/inventory/userinventory/",
+                    },
+                    {
+                        "title": "Item Drops",
+                        "icon": "redeem",
+                        "link": "/admin/inventory/itemdrop/",
+                    },
+                    {
+                        "title": "Wallets",
+                        "icon": "account_balance_wallet",
+                        "link": "/admin/inventory/wallet/",
+                    },
+                ],
+            },
+            {
+                "title": "Shop",
+                "separator": True,
+                "items": [
+                    {
+                        "title": "Categories",
+                        "icon": "storefront",
+                        "link": "/admin/shop/shopcategory/",
+                    },
+                    {
+                        "title": "Items",
+                        "icon": "shopping_cart",
+                        "link": "/admin/shop/shopitem/",
+                    },
+                ],
+            },
+            {
+                "title": "Marketplace",
+                "separator": True,
+                "items": [
+                    {
+                        "title": "Listings",
+                        "icon": "sell",
+                        "link": "/admin/marketplace/marketlisting/",
+                    },
+                    {
+                        "title": "Transactions",
+                        "icon": "receipt_long",
+                        "link": "/admin/marketplace/markettransaction/",
+                    },
+                    {
+                        "title": "Market Config",
+                        "icon": "tune",
+                        "link": "/admin/marketplace/marketconfig/",
+                    },
+                ],
+            },
+            {
+                "title": "Crafting",
+                "separator": True,
+                "items": [
+                    {
+                        "title": "Recipes",
+                        "icon": "auto_fix_high",
+                        "link": "/admin/crafting/recipe/",
+                    },
+                    {
+                        "title": "Crafting Log",
+                        "icon": "history",
+                        "link": "/admin/crafting/craftinglog/",
+                    },
+                ],
+            },
+            {
+                "title": "Developers",
+                "separator": True,
+                "items": [
+                    {
+                        "title": "Apps",
+                        "icon": "apps",
+                        "link": "/admin/developers/developerapp/",
+                    },
+                    {
+                        "title": "API Keys",
+                        "icon": "key",
+                        "link": "/admin/developers/apikey/",
+                    },
+                    {
+                        "title": "Webhooks",
+                        "icon": "webhook",
+                        "link": "/admin/developers/webhook/",
+                    },
+                ],
+            },
+        ],
+    },
+}
 
 CORS_ALLOW_ALL_ORIGINS = DEBUG
 CORS_ALLOWED_ORIGINS = config(
