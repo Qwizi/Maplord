@@ -33,6 +33,7 @@ class ItemOutSchema(Schema):
     is_consumable: bool
     base_value: int
     level: int
+    blueprint_ref: str = ''
 
     class Config:
         from_attributes = True

@@ -68,6 +68,8 @@ export interface GamePlayer {
   total_units_lost?: number;
   total_buildings_built?: number;
   building_levels?: Record<string, number>;
+  active_boosts?: Array<{ slug: string; params: Record<string, unknown> }>;
+  active_match_boosts?: Array<{ slug: string; effect_type: string; value: number; ticks_remaining: number }>;
   cosmetics?: Record<string, unknown>;
 }
 

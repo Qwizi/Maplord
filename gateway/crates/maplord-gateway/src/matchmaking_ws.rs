@@ -131,6 +131,18 @@ async fn handle_matchmaking_socket(
                                     )
                                     .await;
                             }
+                            "instant_bot" => {
+                                matchmaking
+                                    .request_bot_fill(
+                                        game_mode_clone.as_deref(),
+                                    )
+                                    .await;
+                                matchmaking
+                                    .instant_bot_fill(
+                                        game_mode_clone.as_deref(),
+                                    )
+                                    .await;
+                            }
                             _ => {}
                         }
                     }

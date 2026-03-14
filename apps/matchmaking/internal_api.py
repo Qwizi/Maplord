@@ -51,24 +51,39 @@ def _consume_default_deck(user) -> dict:
         }
 
     with transaction.atomic():
-        for deck_item in deck.items.select_related('item').all():
+        # Use list() so we can safely delete deck items during iteration
+        for deck_item in list(deck.items.select_related('item').all()):
             item = deck_item.item
             qty = deck_item.quantity
 
-            # Tactical packages are permanent — they unlock abilities without being consumed.
-            if item.item_type == Item.ItemType.TACTICAL_PACKAGE:
-                # Verify user still owns at least 1 (don't consume)
-                if not UserInventory.objects.filter(user=user, item=item, quantity__gte=1).exists():
+            # Non-consumable items: verify ownership but do NOT remove from
+            # inventory or deck. They persist across matches.
+            if not item.is_consumable:
+                owns = UserInventory.objects.filter(
+                    user=user, item=item, quantity__gte=1,
+                ).exists()
+                if not owns:
                     continue
-                ability_slug = item.blueprint_ref or item.slug
-                ability_scrolls[ability_slug] = 999  # unlimited uses per match
-                # Track the highest level the player has for this ability
-                ability_levels[ability_slug] = max(
-                    ability_levels.get(ability_slug, 0), item.level
-                )
+
+                if item.item_type == Item.ItemType.TACTICAL_PACKAGE:
+                    ability_slug = item.blueprint_ref or item.slug
+                    ability_scrolls[ability_slug] = 999
+                    ability_levels[ability_slug] = max(
+                        ability_levels.get(ability_slug, 0), item.level
+                    )
+                elif item.item_type == Item.ItemType.BLUEPRINT_BUILDING:
+                    if item.blueprint_ref:
+                        if item.blueprint_ref not in unlocked_buildings:
+                            unlocked_buildings.append(item.blueprint_ref)
+                        building_levels[item.blueprint_ref] = max(
+                            building_levels.get(item.blueprint_ref, 0), item.level
+                        )
+                elif item.item_type == Item.ItemType.BLUEPRINT_UNIT:
+                    if item.blueprint_ref and item.blueprint_ref not in unlocked_units:
+                        unlocked_units.append(item.blueprint_ref)
                 continue
 
-            # Consume other item types from inventory
+            # Consumable items: remove from inventory AND deck on use.
             consumed = 0
             try:
                 inv = UserInventory.objects.select_for_update().get(
@@ -86,23 +101,16 @@ def _consume_default_deck(user) -> dict:
             if consumed == 0:
                 continue
 
-            # Classify into snapshot buckets
-            if item.item_type == Item.ItemType.BLUEPRINT_BUILDING:
-                if item.blueprint_ref:
-                    if item.blueprint_ref not in unlocked_buildings:
-                        unlocked_buildings.append(item.blueprint_ref)
-                    # Track the highest buildable level for this building
-                    building_levels[item.blueprint_ref] = max(
-                        building_levels.get(item.blueprint_ref, 0), item.level
-                    )
-            elif item.item_type == Item.ItemType.BLUEPRINT_UNIT:
-                if item.blueprint_ref and item.blueprint_ref not in unlocked_units:
-                    unlocked_units.append(item.blueprint_ref)
-            elif item.item_type == Item.ItemType.BOOST:
+            # Remove consumed item from deck
+            deck_item.delete()
+
+            # Classify consumed items into snapshot buckets
+            if item.item_type == Item.ItemType.BOOST:
                 active_boosts.append({
                     'slug': item.slug,
                     'params': {**(item.boost_params or {}), 'level': item.level},
                 })
+                ability_scrolls[item.slug] = 1
 
     return {
         'unlocked_buildings': unlocked_buildings,

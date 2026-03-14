@@ -133,13 +133,42 @@ impl GameEngine {
 
         for action in actions {
             if action.action_type == "use_ability" {
-                events.extend(self.process_ability(
-                    action,
-                    players,
-                    regions,
-                    current_tick,
-                    active_effects,
-                ));
+                // If the ability slug maps to a deck boost in the player's `active_boosts`,
+                // treat it as a boost activation rather than a targeted ability cast.
+                // The frontend sends `use_ability` for both abilities and boost items; we
+                // distinguish them here so the correct handler runs.
+                let is_boost = action.player_id.as_deref()
+                    .and_then(|pid| players.get(pid))
+                    .zip(action.ability_type.as_deref())
+                    .map(|(player, slug)| {
+                        player.active_boosts.iter().any(|b| b.slug == slug)
+                    })
+                    .unwrap_or(false);
+
+                if is_boost {
+                    // Build a synthetic `activate_boost` action that carries the boost params
+                    // sourced from the matching `ActiveBoost` entry in the player's deck.
+                    let boost_params = action.player_id.as_deref()
+                        .and_then(|pid| players.get(pid))
+                        .zip(action.ability_type.as_deref())
+                        .and_then(|(player, slug)| {
+                            player.active_boosts.iter().find(|b| b.slug == slug)
+                        })
+                        .map(|b| b.params.clone());
+
+                    let mut synth = action.clone();
+                    synth.action_type = "activate_boost".into();
+                    synth.boost_params = boost_params;
+                    events.extend(self.process_activate_boost(&synth, players));
+                } else {
+                    events.extend(self.process_ability(
+                        action,
+                        players,
+                        regions,
+                        current_tick,
+                        active_effects,
+                    ));
+                }
             } else if action.action_type == "activate_boost" {
                 events.extend(self.process_activate_boost(action, players));
             } else {
@@ -1647,9 +1676,20 @@ impl GameEngine {
         let old_owner_id: Option<String> = target.owner_id.clone();
 
         let mut defender_bonus = self.settings.defender_advantage;
-        // Apply in-match defense_bonus boosts for the defending player.
+        // Apply defense_bonus boosts for the defending player: both deck boosts
+        // (active_boosts) and temporary in-match boosts (active_match_boosts).
         if let Some(ref defender_player_id) = old_owner_id {
             if let Some(defender_player) = players.get(defender_player_id.as_str()) {
+                // Deck boosts — permanent for the match duration.
+                for boost in &defender_player.active_boosts {
+                    if boost.params.get("effect_type").and_then(|v| v.as_str())
+                        == Some("defense_bonus")
+                    {
+                        let value = boost.params.get("value").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                        defender_bonus += value;
+                    }
+                }
+                // In-match activated boosts — expire after N ticks.
                 for boost in &defender_player.active_match_boosts {
                     if boost.effect_type == "defense_bonus" {
                         defender_bonus += boost.value;
@@ -1658,10 +1698,30 @@ impl GameEngine {
             }
         }
 
+        // Apply attack_bonus boosts for the attacking player: both deck boosts
+        // (active_boosts) and temporary in-match boosts (active_match_boosts).
+        let mut attack_bonus_sum = 0.0f64;
+        if let Some(attacker_player) = players.get(&item.player_id) {
+            for boost in &attacker_player.active_boosts {
+                if boost.params.get("effect_type").and_then(|v| v.as_str())
+                    == Some("attack_bonus")
+                {
+                    let value = boost.params.get("value").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                    attack_bonus_sum += value;
+                }
+            }
+            for boost in &attacker_player.active_match_boosts {
+                if boost.effect_type == "attack_bonus" {
+                    attack_bonus_sum += boost.value;
+                }
+            }
+        }
+
         let attacker_attack = unit_config.attack;
         let unit_scale = self.get_unit_scale(&item.unit_type);
-        let attacker_power =
+        let mut attacker_power =
             item.units as f64 * unit_scale as f64 * attacker_attack * (1.0 + attacker_bonus);
+        attacker_power *= 1.0 + attack_bonus_sum;
         let defender_power =
             self.get_region_defender_power(target, defender_bonus + defense_building);
 

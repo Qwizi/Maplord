@@ -204,12 +204,26 @@ _DECK_ALLOWED_TYPES = {
 }
 
 
+def _cleanup_stale_deck_items(user, deck):
+    """Remove consumable items from a deck if the user no longer owns them."""
+    for di in list(deck.items.select_related('item').all()):
+        if di.item.is_consumable:
+            owns = UserInventory.objects.filter(
+                user=user, item=di.item, quantity__gte=1,
+            ).exists()
+            if not owns:
+                di.delete()
+
+
 @api_controller('/inventory/decks', tags=['Decks'])
 class DeckController:
 
     @route.get('/', response=dict, auth=JWTAuth())
     def list_decks(self, request, limit: int = 50, offset: int = 0):
         """List current user's decks with their items."""
+        # Auto-cleanup consumed items from all decks
+        for deck in Deck.objects.filter(user=request.user).prefetch_related('items__item'):
+            _cleanup_stale_deck_items(request.user, deck)
         qs = (
             Deck.objects.filter(user=request.user)
             .prefetch_related('items__item', 'items__item__category')
@@ -229,6 +243,7 @@ class DeckController:
             Deck.objects.prefetch_related('items__item', 'items__item__category'),
             id=deck_id, user=request.user,
         )
+        _cleanup_stale_deck_items(request.user, deck)
         return deck
 
     @route.put('/{deck_id}/', response=DeckOutSchema, auth=JWTAuth())
@@ -266,43 +281,66 @@ class DeckController:
                         )
                     validated_items.append((item, slot.quantity))
 
-                # Check inventory coverage across all decks
-                # For each item, sum quantities required by ALL decks (replacing this deck's old requirement)
-                new_deck_requirements: dict = {}
+                # Non-consumable items (blueprints, tactical packages) must be
+                # unique per deck — you can't add 3x pkg_shield. They also only
+                # need to exist in inventory (qty >= 1), not be "spent".
+                # Additionally, only one level per blueprint_ref is allowed
+                # (e.g. barracks lvl 1 OR lvl 2, not both).
                 for item, qty in validated_items:
-                    new_deck_requirements[item.id] = new_deck_requirements.get(item.id, 0) + qty
-
-                # Sum requirements from OTHER decks for the same user
-                other_requirements: dict = {}
-                for di in DeckItem.objects.filter(
-                    deck__user=request.user
-                ).exclude(deck_id=deck_id).select_related('item'):
-                    other_requirements[di.item_id] = other_requirements.get(di.item_id, 0) + di.quantity
-
-                # Build combined requirement and validate against inventory
-                all_item_ids = set(new_deck_requirements) | set(other_requirements)
-                for item_id in all_item_ids:
-                    total_required = (
-                        new_deck_requirements.get(item_id, 0)
-                        + other_requirements.get(item_id, 0)
-                    )
-                    owned = UserInventory.objects.filter(
-                        user=request.user, item_id=item_id
-                    ).values_list('quantity', flat=True).first() or 0
-                    if owned < total_required:
-                        try:
-                            item_name = Item.objects.get(id=item_id).name
-                        except Item.DoesNotExist:
-                            item_name = str(item_id)
+                    if not item.is_consumable and qty > 1:
                         return self.create_response(
-                            {
-                                'error': (
-                                    f'Insufficient inventory for "{item_name}": '
-                                    f'need {total_required} across all decks, have {owned}'
-                                )
-                            },
+                            {'error': f'Non-consumable item "{item.name}" can only appear once in a deck'},
                             status_code=400,
                         )
+
+                seen_refs: set = set()
+                for item, qty in validated_items:
+                    if item.blueprint_ref:
+                        if item.blueprint_ref in seen_refs:
+                            return self.create_response(
+                                {'error': f'Only one level of "{item.blueprint_ref}" is allowed per deck'},
+                                status_code=400,
+                            )
+                        seen_refs.add(item.blueprint_ref)
+
+                # Consumable items: check inventory coverage across all decks
+                new_deck_requirements: dict = {}
+                for item, qty in validated_items:
+                    if item.is_consumable:
+                        new_deck_requirements[item.id] = new_deck_requirements.get(item.id, 0) + qty
+
+                if new_deck_requirements:
+                    # Sum requirements from OTHER decks for the same user (consumables only)
+                    other_requirements: dict = {}
+                    for di in DeckItem.objects.filter(
+                        deck__user=request.user, item__is_consumable=True,
+                    ).exclude(deck_id=deck_id).select_related('item'):
+                        other_requirements[di.item_id] = other_requirements.get(di.item_id, 0) + di.quantity
+
+                    # Build combined requirement and validate against inventory
+                    all_item_ids = set(new_deck_requirements) | set(other_requirements)
+                    for item_id in all_item_ids:
+                        total_required = (
+                            new_deck_requirements.get(item_id, 0)
+                            + other_requirements.get(item_id, 0)
+                        )
+                        owned = UserInventory.objects.filter(
+                            user=request.user, item_id=item_id
+                        ).values_list('quantity', flat=True).first() or 0
+                        if owned < total_required:
+                            try:
+                                item_name = Item.objects.get(id=item_id).name
+                            except Item.DoesNotExist:
+                                item_name = str(item_id)
+                            return self.create_response(
+                                {
+                                    'error': (
+                                        f'Insufficient inventory for "{item_name}": '
+                                        f'need {total_required} across all decks, have {owned}'
+                                    )
+                                },
+                                status_code=400,
+                            )
 
                 # Replace deck items
                 DeckItem.objects.filter(deck=deck).delete()

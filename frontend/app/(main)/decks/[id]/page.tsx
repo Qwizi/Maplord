@@ -82,6 +82,7 @@ interface SlotItem {
   rarity: string;
   level: number;
   icon: string;
+  blueprint_ref: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -206,6 +207,7 @@ export default function DeckEditorPage() {
               rarity: di.item.rarity,
               level: di.item.level ?? 1,
               icon: di.item.icon || "",
+              blueprint_ref: di.item.blueprint_ref || "",
             });
           }
         }
@@ -233,6 +235,15 @@ export default function DeckEditorPage() {
     setDraftSlots((prev) => {
       const current = prev[type];
       if (current.length >= section.slots) return prev;
+      // Non-consumable items can only appear once per deck
+      if (!invItem.item.is_consumable && current.some((s) => s.item_slug === invItem.item.slug)) {
+        return prev;
+      }
+      // Only one level per blueprint_ref (e.g. barracks lvl 1 OR lvl 2, not both)
+      const ref = invItem.item.blueprint_ref;
+      if (ref && current.some((s) => s.blueprint_ref === ref)) {
+        return prev;
+      }
       return {
         ...prev,
         [type]: [
@@ -244,6 +255,7 @@ export default function DeckEditorPage() {
             rarity: invItem.item.rarity,
             level: invItem.item.level ?? 1,
             icon: invItem.item.icon || "",
+            blueprint_ref: ref || "",
           },
         ],
       };
@@ -471,8 +483,14 @@ export default function DeckEditorPage() {
               const owned = ownedQty(inv.item.slug);
               const sectionFull =
                 draftSlots[availableTab].length >= (currentSection?.slots ?? 0);
-              const exhausted = inDraftCount >= owned;
-              const disabled = sectionFull || exhausted;
+              // Non-consumable: max 1 per deck; consumable: limited by owned qty
+              const alreadyInDeck = !inv.item.is_consumable && inDraftCount >= 1;
+              // Only one level per blueprint_ref (e.g. can't have barracks lvl 1 AND lvl 2)
+              const refTaken = !!(inv.item.blueprint_ref && draftSlots[availableTab].some(
+                (s) => s.blueprint_ref === inv.item.blueprint_ref
+              ));
+              const exhausted = inv.item.is_consumable && inDraftCount >= owned;
+              const disabled = sectionFull || alreadyInDeck || refTaken || exhausted;
 
               return (
                 <button

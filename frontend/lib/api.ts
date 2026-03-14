@@ -748,6 +748,7 @@ export interface ItemOut {
   is_consumable: boolean;
   base_value: number;
   level: number;
+  blueprint_ref: string;
 }
 
 export interface ItemCategoryOut {

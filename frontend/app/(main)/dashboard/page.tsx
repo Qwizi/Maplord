@@ -17,6 +17,7 @@ import {
   type GameModeListItem,
   type DeckOut,
 } from "@/lib/api";
+import { loadAssetOverrides } from "@/lib/assetOverrides";
 import {
   Swords,
   Users,
@@ -49,7 +50,7 @@ export default function DashboardPage() {
   const { user, loading: authLoading, refreshUser, token } = useAuth();
   const {
     inQueue, playersInQueue, matchId, activeMatchId,
-    fillBots, setFillBots, joinQueue, leaveQueue,
+    fillBots, setFillBots, instantBot, setInstantBot, joinQueue, leaveQueue,
   } = useMatchmaking();
   const router = useRouter();
 
@@ -83,11 +84,13 @@ export default function DashboardPage() {
   }, [token, refreshUser]);
 
   useEffect(() => {
-    getConfig().then((cfg) => {
-      setGameModes(cfg.game_modes);
-      const def = cfg.game_modes.find((m) => m.is_default);
-      if (def) setSelectedMode((p) => p ?? def.slug);
-    }).catch(() => {});
+    Promise.all([getConfig(), loadAssetOverrides()])
+      .then(([cfg]) => {
+        setGameModes(cfg.game_modes);
+        const def = cfg.game_modes.find((m) => m.is_default);
+        if (def) setSelectedMode((p) => p ?? def.slug);
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -253,11 +256,37 @@ export default function DashboardPage() {
                     </Link>
                   )}
                 </div>
-                <label className="flex items-center gap-2 text-xs text-slate-400 hover:text-slate-200 transition-colors">
-                  <input type="checkbox" checked={fillBots} onChange={(e) => setFillBots(e.target.checked)} disabled={inQueue} className="h-3.5 w-3.5 rounded border-white/20 bg-white/10 accent-cyan-400" />
-                  <Bot className="h-3 w-3" />
-                  Wypełnij botami
-                </label>
+                {/* Bot mode 3-way slider: 0=no bots, 1=fill after timeout, 2=instant */}
+                <div className="flex items-center gap-2.5">
+                  <Bot className="h-3.5 w-3.5 text-slate-500" />
+                  <div className="flex gap-0.5">
+                    {([
+                      { value: 0, label: "Bez botów", color: "border-slate-500/30 bg-slate-500/10 text-slate-400" },
+                      { value: 1, label: "Dołącz boty", color: "border-cyan-400/30 bg-cyan-500/10 text-cyan-300" },
+                      { value: 2, label: "Instant bot", color: "border-amber-400/30 bg-amber-500/10 text-amber-300" },
+                    ] as const).map(({ value, label, color }) => {
+                      const botMode = instantBot ? 2 : fillBots ? 1 : 0;
+                      const active = botMode === value;
+                      return (
+                        <button
+                          key={value}
+                          disabled={inQueue}
+                          onClick={() => {
+                            setFillBots(value >= 1);
+                            setInstantBot(value === 2);
+                          }}
+                          className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-all ${
+                            active
+                              ? color
+                              : "border-white/[0.06] bg-white/[0.02] text-slate-500 hover:border-white/15 hover:text-slate-300"
+                          } ${inQueue ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
 
               {/* ── Przycisk szukaj / anuluj ── */}
