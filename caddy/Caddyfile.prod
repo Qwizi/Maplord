@@ -23,6 +23,17 @@
 		}
 	}
 
+	# LiveKit WebSocket — voice chat
+	handle /livekit/* {
+		uri strip_prefix /livekit
+		reverse_proxy livekit:7880 {
+			header_up X-Forwarded-Proto {scheme}
+			transport http {
+				versions 1.1
+			}
+		}
+	}
+
 	# Static files — aggressive caching (hashed filenames)
 	handle /static/* {
 		root * /srv
