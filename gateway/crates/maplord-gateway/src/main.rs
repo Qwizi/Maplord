@@ -4,6 +4,7 @@ mod config;
 mod game;
 mod matchmaking_ws;
 mod state;
+mod voice;
 
 use axum::{
     routing::get,

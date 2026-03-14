@@ -8,6 +8,10 @@ pub struct AppConfig {
     pub django_internal_url: String,
     pub internal_secret: String,
     pub gateway_port: u16,
+    pub livekit_url: String,
+    pub livekit_public_url: String,
+    pub livekit_api_key: String,
+    pub livekit_api_secret: String,
 }
 
 impl AppConfig {
@@ -32,6 +36,14 @@ impl AppConfig {
                 .unwrap_or_else(|_| "8080".into())
                 .parse()
                 .unwrap_or(8080),
+            livekit_url: std::env::var("LIVEKIT_URL")
+                .unwrap_or_else(|_| "ws://livekit:7880".into()),
+            livekit_public_url: std::env::var("LIVEKIT_PUBLIC_URL")
+                .unwrap_or_else(|_| "ws://localhost:7880".into()),
+            livekit_api_key: std::env::var("LIVEKIT_API_KEY")
+                .unwrap_or_else(|_| "devkey".into()),
+            livekit_api_secret: std::env::var("LIVEKIT_API_SECRET")
+                .unwrap_or_else(|_| "secret".into()),
         }
     }
 

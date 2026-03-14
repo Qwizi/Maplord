@@ -164,6 +164,37 @@ async fn handle_game_socket(socket: WebSocket, match_id: String, user_id: String
         });
     }
 
+    // Send LiveKit voice chat token
+    {
+        let config = state.config.clone();
+        let mid = match_id.clone();
+        let uid = user_id.clone();
+        let tx_voice = tx.clone();
+        let state_voice = state.clone();
+        tokio::spawn(async move {
+            let username = crate::chat::resolve_username(&state_voice, &uid).await;
+            match crate::voice::generate_voice_token(
+                &config.livekit_api_key,
+                &config.livekit_api_secret,
+                &mid,
+                &uid,
+                &username,
+            ) {
+                Ok(token) => {
+                    let msg = json!({
+                        "type": "voice_token",
+                        "token": token,
+                        "url": config.livekit_public_url,
+                    });
+                    let _ = tx_voice.send(Message::Text(msg.to_string().into()));
+                }
+                Err(e) => {
+                    tracing::error!("Failed to generate voice token for {uid}: {e}");
+                }
+            }
+        });
+    }
+
     use futures::SinkExt;
     use futures::StreamExt;
 

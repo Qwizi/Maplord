@@ -52,7 +52,7 @@ pub async fn ws_chat_handler(
     ws.on_upgrade(move |socket| handle_chat_socket(socket, user_id, state))
 }
 
-async fn resolve_username(state: &AppState, user_id: &str) -> String {
+pub async fn resolve_username(state: &AppState, user_id: &str) -> String {
     // Check cache first (TTL = 5 minutes)
     let cache_valid = state
         .username_cache

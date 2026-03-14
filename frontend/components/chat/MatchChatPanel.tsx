@@ -51,7 +51,7 @@ export default function MatchChatPanel({ messages, currentUserId, onSend }: Matc
   }, [messages.length, currentUserId, expanded]);
 
   return (
-    <div className="absolute bottom-14 left-2 z-20 sm:bottom-4 sm:left-4">
+    <div>
       <div className="flex w-64 flex-col overflow-hidden rounded-2xl border border-white/10 bg-slate-950/88 shadow-[0_10px_24px_rgba(0,0,0,0.22)] backdrop-blur-xl sm:w-72">
         {/* Header — always visible, toggles expand */}
         <button

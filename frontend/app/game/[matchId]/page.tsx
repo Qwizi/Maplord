@@ -31,6 +31,7 @@ import { useGameNotifications, GameNotificationOverlay } from "@/components/game
 import { useTutorial } from "@/hooks/useTutorial";
 import TutorialOverlay from "@/components/game/TutorialOverlay";
 import MatchChatPanel from "@/components/chat/MatchChatPanel";
+import VoicePanel from "@/components/chat/VoicePanel";
 
 function getUnitRules(units: UnitType[], unitSlug: string | null | undefined) {
   return (
@@ -88,6 +89,8 @@ export default function GamePage({
     gameState,
     events,
     matchChatMessages,
+    voiceToken,
+    voiceUrl,
     selectCapital,
     attack,
     move,
@@ -1459,13 +1462,16 @@ export default function GamePage({
         </div>
       )}
 
-      {/* Match chat panel */}
+      {/* Voice + Match chat panel */}
       {status !== "finished" && status !== "cancelled" && connected && (
-        <MatchChatPanel
-          messages={matchChatMessages}
-          currentUserId={myUserId}
-          onSend={sendChat}
-        />
+        <div className="absolute bottom-14 left-2 z-20 flex flex-col items-start gap-2 sm:bottom-4 sm:left-4">
+          <VoicePanel token={voiceToken} url={voiceUrl} players={players} />
+          <MatchChatPanel
+            messages={matchChatMessages}
+            currentUserId={myUserId}
+            onSend={sendChat}
+          />
+        </div>
       )}
 
       {/* Mobile build button – visible whenever own region is selected */}

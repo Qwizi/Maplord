@@ -134,6 +134,8 @@ interface UseGameSocketReturn {
   gameState: GameState | null;
   events: GameEvent[];
   matchChatMessages: MatchChatMessage[];
+  voiceToken: string | null;
+  voiceUrl: string | null;
   selectCapital: (regionId: string) => void;
   attack: (sourceRegionId: string, targetRegionId: string, units: number, unitType?: string | null) => void;
   move: (sourceRegionId: string, targetRegionId: string, units: number, unitType?: string | null) => void;
@@ -151,6 +153,8 @@ export function useGameSocket(matchId: string): UseGameSocketReturn {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [events, setEvents] = useState<GameEvent[]>([]);
   const [matchChatMessages, setMatchChatMessages] = useState<MatchChatMessage[]>([]);
+  const [voiceToken, setVoiceToken] = useState<string | null>(null);
+  const [voiceUrl, setVoiceUrl] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const leaveResolverRef = useRef<((value: boolean) => void) | null>(null);
 
@@ -267,6 +271,10 @@ export function useGameSocket(matchId: string): UseGameSocketReturn {
         setMatchChatMessages(historyMsgs);
         break;
       }
+      case "voice_token":
+        setVoiceToken(msg.token as string);
+        setVoiceUrl(msg.url as string);
+        break;
     }
   }, []);
 
@@ -447,6 +455,8 @@ export function useGameSocket(matchId: string): UseGameSocketReturn {
     gameState,
     events,
     matchChatMessages,
+    voiceToken,
+    voiceUrl,
     selectCapital,
     attack,
     move,
