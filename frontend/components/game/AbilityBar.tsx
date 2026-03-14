@@ -6,28 +6,36 @@ import type { AbilityType } from "@/lib/api";
 
 interface AbilityBarProps {
   abilities: AbilityType[];
-  myCurrency: number;
+  myEnergy: number;
   abilityCooldowns: Record<string, number>;
   currentTick: number;
   selectedAbility: string | null;
   onSelectAbility: (slug: string | null) => void;
   /** If set, only this ability slug is clickable (tutorial mode) */
   allowedAbility?: string | null;
+  /** If provided and non-empty, only abilities whose slug is in this map are shown; values are remaining uses */
+  abilityScrolls?: Record<string, number>;
+  /** Per-ability level from deck; used to show Lvl badge on each button */
+  abilityLevels?: Record<string, number>;
 }
 
 export default memo(function AbilityBar({
   abilities,
-  myCurrency,
+  myEnergy,
   abilityCooldowns,
   currentTick,
   selectedAbility,
   onSelectAbility,
   allowedAbility,
+  abilityScrolls,
+  abilityLevels,
 }: AbilityBarProps) {
-  const sorted = useMemo(
-    () => [...abilities].sort((a, b) => a.order - b.order),
-    [abilities]
-  );
+  const sorted = useMemo(() => {
+    const s = abilityScrolls;
+    const base = [...abilities].sort((a, b) => a.order - b.order);
+    if (!s) return [];
+    return base.filter((a) => (s[a.slug] ?? 0) > 0);
+  }, [abilities, abilityScrolls]);
 
   const handleClick = useCallback(
     (slug: string) => {
@@ -48,11 +56,13 @@ export default memo(function AbilityBar({
             ability={ability}
             abilityCooldowns={abilityCooldowns}
             currentTick={currentTick}
-            myCurrency={myCurrency}
+            myEnergy={myEnergy}
             isSelected={selectedAbility === ability.slug}
             onClick={handleClick}
             size="lg"
             locked={allowedAbility != null && allowedAbility !== ability.slug}
+            remainingUses={abilityScrolls?.[ability.slug]}
+            abilityLevel={abilityLevels?.[ability.slug]}
           />
         ))}
       </div>
@@ -65,11 +75,13 @@ export default memo(function AbilityBar({
             ability={ability}
             abilityCooldowns={abilityCooldowns}
             currentTick={currentTick}
-            myCurrency={myCurrency}
+            myEnergy={myEnergy}
             isSelected={selectedAbility === ability.slug}
             onClick={handleClick}
             size="sm"
             locked={allowedAbility != null && allowedAbility !== ability.slug}
+            remainingUses={abilityScrolls?.[ability.slug]}
+            abilityLevel={abilityLevels?.[ability.slug]}
           />
         ))}
       </div>
@@ -81,20 +93,26 @@ function AbilityButton({
   ability,
   abilityCooldowns,
   currentTick,
-  myCurrency,
+  myEnergy,
   isSelected,
   onClick,
   size,
   locked = false,
+  remainingUses,
+  abilityLevel,
 }: {
   ability: AbilityType;
   abilityCooldowns: Record<string, number>;
   currentTick: number;
-  myCurrency: number;
+  myEnergy: number;
   isSelected: boolean;
   onClick: (slug: string) => void;
   size: "sm" | "lg";
   locked?: boolean;
+  /** When defined, shows a remaining-uses badge in the corner */
+  remainingUses?: number;
+  /** Ability level from the player's deck; shows a Lvl badge below the cost */
+  abilityLevel?: number;
 }) {
   const cooldownReady = abilityCooldowns[ability.slug] ?? 0;
   const isOnCooldown = currentTick < cooldownReady;
@@ -103,7 +121,9 @@ function AbilityButton({
   const cooldownProgress = isOnCooldown && totalCooldown > 0
     ? cooldownRemaining / totalCooldown
     : 0;
-  const canAfford = myCurrency >= ability.currency_cost;
+  const level = abilityLevel ?? 1;
+  const levelEnergyCost = ability.level_stats?.[String(level)]?.energy_cost ?? ability.energy_cost;
+  const canAfford = myEnergy >= levelEnergyCost;
   const isDisabled = isOnCooldown || !canAfford || locked;
 
   const btnSize = size === "lg" ? "h-16 w-16 rounded-xl" : "h-11 w-11 rounded-lg";
@@ -114,7 +134,7 @@ function AbilityButton({
       <button
         onClick={() => onClick(ability.slug)}
         disabled={isDisabled}
-        title={`${ability.name} (${ability.currency_cost}$)${isOnCooldown ? ` - ${cooldownRemaining}s` : ""}`}
+        title={`${ability.name} (${levelEnergyCost}⚡)${isOnCooldown ? ` - ${cooldownRemaining}s` : ""}${remainingUses !== undefined ? ` · Pozostalo: ${remainingUses}` : ""}`}
         className={`relative flex items-center justify-center border-2 transition-all ${btnSize} ${
           isSelected
             ? "border-amber-400 bg-amber-500/25 shadow-[0_0_12px_rgba(251,191,36,0.3)]"
@@ -150,14 +170,36 @@ function AbilityButton({
             </span>
           </div>
         )}
+
+        {/* Remaining uses badge — top-right corner (hidden when unlimited / ≥100) */}
+        {remainingUses !== undefined && remainingUses < 100 && (
+          <span className={`absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full border border-white/20 bg-slate-800 font-bold tabular-nums leading-none text-cyan-300 ${
+            size === "lg" ? "text-[10px]" : "text-[8px]"
+          }`}>
+            {remainingUses}
+          </span>
+        )}
       </button>
 
       {/* Cost badge — below button, always visible */}
       <div className={`mt-0.5 text-center font-bold tabular-nums ${
         canAfford ? "text-amber-300" : "text-red-400"
       } ${size === "lg" ? "text-[11px]" : "text-[9px]"}`}>
-        {ability.currency_cost}$
+        {levelEnergyCost}⚡
       </div>
+
+      {/* Level badge — shown when ability level is known */}
+      {abilityLevel !== undefined && (
+        <div className={`text-center font-bold tabular-nums leading-none ${
+          abilityLevel >= 3
+            ? "text-amber-300"
+            : abilityLevel === 2
+              ? "text-cyan-300"
+              : "text-zinc-400"
+        } ${size === "lg" ? "text-[10px]" : "text-[8px]"}`}>
+          Lvl {abilityLevel}
+        </div>
+      )}
     </div>
   );
 }

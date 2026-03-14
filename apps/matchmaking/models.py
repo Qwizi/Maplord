@@ -52,6 +52,10 @@ class MatchPlayer(models.Model):
     )
     joined_at = models.DateTimeField(auto_now_add=True)
     eliminated_at = models.DateTimeField(null=True, blank=True)
+    deck_snapshot = models.JSONField(
+        default=dict, blank=True,
+        help_text='Snapshot of deck items consumed for this match',
+    )
 
     class Meta:
         unique_together = ('match', 'user')

@@ -5,7 +5,7 @@ use axum::extract::{Path, State, WebSocketUpgrade};
 use axum::response::Response;
 use dashmap::DashMap;
 use maplord_ai::{BotBrain, BotStrategy, TutorialBotBrain};
-use maplord_engine::{Action, Event, GameEngine, GameSettings, Player, Region};
+use maplord_engine::{Action, ActiveBoost, Event, GameEngine, GameSettings, Player, Region};
 use maplord_state::{FullGameState, GameStateManager};
 use serde_json::json;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -79,6 +79,31 @@ async fn handle_game_socket(socket: WebSocket, match_id: String, user_id: String
     // Ensure game is initialized
     if let Err(e) = ensure_game_initialized(&state_mgr, &match_id, &state).await {
         error!("Failed to initialize game {match_id}: {e}");
+
+        // Cancel the match and inform the player
+        let error_msg = format!("Błąd inicjalizacji meczu: {e}");
+        let _ = state.django.update_match_status(&match_id, "cancelled").await;
+        let _ = state.django.cleanup_match(&match_id).await;
+        info!("Match {match_id} cancelled due to init error");
+
+        use futures::SinkExt;
+        let _ = ws_sender
+            .send(Message::Text(
+                serde_json::json!({
+                    "type": "error",
+                    "message": error_msg,
+                    "fatal": true,
+                })
+                .to_string()
+                .into(),
+            ))
+            .await;
+        let _ = ws_sender
+            .send(Message::Close(Some(axum::extract::ws::CloseFrame {
+                code: 4002,
+                reason: "Match cancelled due to initialization error".into(),
+            })))
+            .await;
         return;
     }
 
@@ -597,6 +622,40 @@ async fn game_loop(
         tokio::time::sleep_until(next_tick_at).await;
         let tick_start = tokio::time::Instant::now();
 
+        // Check if match was cancelled by admin
+        {
+            let cancel_key = format!("game:{}:cancel_requested", match_id);
+            let mut conn = state_mgr.redis();
+            let cancelled: bool = redis::cmd("GET")
+                .arg(&cancel_key)
+                .query_async::<Option<String>>(&mut conn)
+                .await
+                .unwrap_or(None)
+                .is_some();
+
+            if cancelled {
+                info!("Match {match_id} cancelled by admin");
+                let _: () = redis::cmd("DEL")
+                    .arg(&cancel_key)
+                    .query_async(&mut conn)
+                    .await
+                    .unwrap_or(());
+
+                let cancel_msg = json!({
+                    "type": "error",
+                    "message": "Mecz został anulowany przez administratora.",
+                    "fatal": true,
+                });
+                broadcast_to_match(match_id, &cancel_msg, &state.game_connections);
+
+                let _ = state_mgr.set_meta_field("status", "cancelled").await;
+                let _ = state.django.update_match_status(match_id, "cancelled").await;
+                let _ = state.django.cleanup_match(match_id).await;
+
+                return Ok(());
+            }
+        }
+
         // Read tick multiplier for tutorial fast-forward
         if is_tutorial {
             if let Ok(m) = state_mgr.get_meta().await {
@@ -1029,12 +1088,12 @@ async fn eliminate_player(
                 region.unit_count = 0;
                 region.unit_type = None;
                 region.is_capital = false;
-                region.buildings.clear();
+                region.building_instances.clear();
                 region.building_type = None;
                 region.defense_bonus = 0.0;
                 region.vision_range = 0;
                 region.unit_generation_bonus = 0.0;
-                region.currency_generation_bonus = 0.0;
+                region.energy_generation_bonus = 0.0;
                 changed = true;
             }
         }
@@ -1192,7 +1251,7 @@ async fn initialize_game(
         .set_meta_field("neutral_region_units", &settings.neutral_region_units.to_string())
         .await?;
     state_mgr
-        .set_meta_field("starting_currency", &settings.starting_currency.to_string())
+        .set_meta_field("starting_energy", &settings.starting_energy.to_string())
         .await?;
     let capital_selection_time = settings.capital_selection_time_seconds;
     state_mgr
@@ -1229,14 +1288,25 @@ async fn initialize_game(
             eliminated_reason: None,
             eliminated_tick: None,
             capital_region_id: None,
-            currency: settings.starting_currency,
-            currency_accum: 0.0,
+            energy: settings.starting_energy,
+            energy_accum: 0.0,
             ability_cooldowns: HashMap::new(),
             is_bot: p.is_bot,
             total_units_produced: 0,
             total_units_lost: 0,
             total_regions_conquered: 0,
             total_buildings_built: 0,
+            // Deck fields — populated from deck_snapshot when the Django API provides them;
+            // default to empty so the engine stays backwards-compatible.
+            unlocked_buildings: p.unlocked_buildings.clone(),
+            unlocked_units: p.unlocked_units.clone(),
+            ability_scrolls: p.ability_scrolls.clone(),
+            active_boosts: p.active_boosts.iter()
+                .filter_map(|v| serde_json::from_value::<ActiveBoost>(v.clone()).ok())
+                .collect(),
+            active_match_boosts: Vec::new(),
+            ability_levels: p.ability_levels.clone(),
+            building_levels: p.building_levels.clone(),
         };
         players.insert(p.user_id.clone(), player);
     }
@@ -1279,11 +1349,11 @@ async fn initialize_game(
                 unit_type: Some(default_unit_type.clone()),
                 is_capital: false,
                 building_type: None,
-                buildings: HashMap::new(),
+                building_instances: Vec::new(),
                 defense_bonus: 0.0,
                 vision_range: 0,
                 unit_generation_bonus: 0.0,
-                currency_generation_bonus: 0.0,
+                energy_generation_bonus: 0.0,
                 is_coastal: info.is_coastal,
                 sea_distances: if info.sea_distances.is_array() {
                     info.sea_distances

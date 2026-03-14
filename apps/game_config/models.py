@@ -19,25 +19,25 @@ class GameSettings(models.Model):
     # Unit generation
     base_unit_generation_rate = models.FloatField(default=1.0, help_text='Units generated per tick per region')
     capital_generation_bonus = models.FloatField(default=2.0, help_text='Multiplier for capital region')
-    starting_currency = models.PositiveIntegerField(default=120, help_text='Starting strategic currency for each player')
-    base_currency_per_tick = models.FloatField(default=2.0, help_text='Base currency generated per tick for each player')
-    region_currency_per_tick = models.FloatField(default=0.35, help_text='Currency generated per owned region each tick')
-    
+    starting_energy = models.PositiveIntegerField(default=120, help_text='Starting energy for each player')
+    base_energy_per_tick = models.FloatField(default=2.0, help_text='Base energy generated per tick for each player')
+    region_energy_per_tick = models.FloatField(default=0.35, help_text='Energy generated per owned region each tick')
+
     # Combat
     attacker_advantage = models.FloatField(default=0.0, help_text='Bonus for attacker (e.g. 0.1 = 10%)')
     defender_advantage = models.FloatField(default=0.1, help_text='Bonus for defender (e.g. 0.1 = 10%)')
     combat_randomness = models.FloatField(default=0.2, help_text='Random factor in combat (0-1)')
-    
+
     # Starting conditions
     starting_units = models.PositiveIntegerField(default=10, help_text='Units in capital at start')
     starting_regions = models.PositiveIntegerField(default=1, help_text='Number of starting regions')
     neutral_region_units = models.PositiveIntegerField(
         default=3, help_text='Garrison units in unowned (neutral) regions'
     )
-    
+
     # ELO
     elo_k_factor = models.PositiveIntegerField(default=32, help_text='K-factor for ELO calculation')
-    
+
     class Meta:
         verbose_name = 'Game Settings'
         verbose_name_plural = 'Game Settings'
@@ -74,7 +74,7 @@ class BuildingType(models.Model):
     
     # Costs & timing
     cost = models.PositiveIntegerField(default=50, help_text='Unit cost to build')
-    currency_cost = models.PositiveIntegerField(default=50, help_text='Currency cost to build')
+    energy_cost = models.PositiveIntegerField(default=50, help_text='Energy cost to build')
     build_time_ticks = models.PositiveIntegerField(default=10, help_text='Ticks to complete building')
     
     # Constraints
@@ -85,8 +85,17 @@ class BuildingType(models.Model):
     defense_bonus = models.FloatField(default=0.0, help_text='Defense bonus for region (e.g. 0.2 = 20%)')
     vision_range = models.PositiveIntegerField(default=0, help_text='Extra vision range in regions')
     unit_generation_bonus = models.FloatField(default=0.0, help_text='Extra units generated per tick')
-    currency_generation_bonus = models.FloatField(default=0.0, help_text='Extra currency generated per tick by the region')
-    
+    energy_generation_bonus = models.FloatField(default=0.0, help_text='Extra energy generated per tick by the region')
+
+    # Level system
+    max_level = models.PositiveIntegerField(default=3, help_text='Maximum upgrade level (1-5)')
+    level_stats = models.JSONField(
+        default=dict, blank=True,
+        help_text='Per-level stat overrides. Keys are level numbers as strings. '
+                  'Example: {"1": {"defense_bonus": 0.1}, "2": {"defense_bonus": 0.16}, "3": {"defense_bonus": 0.22}}. '
+                  'Supported keys: defense_bonus, vision_range, unit_generation_bonus, energy_generation_bonus, energy_cost, build_time_ticks'
+    )
+
     is_active = models.BooleanField(default=True)
     order = models.PositiveIntegerField(default=0)
 
@@ -130,7 +139,16 @@ class UnitType(models.Model):
     
     # Type
     movement_type = models.CharField(max_length=10, choices=MovementType.choices, default=MovementType.LAND)
-    
+
+    # Level system
+    max_level = models.PositiveIntegerField(default=1, help_text='Maximum upgrade level')
+    level_stats = models.JSONField(
+        default=dict, blank=True,
+        help_text='Per-level stat overrides. Keys are level numbers as strings. '
+                  'Example: {"1": {"attack": 3.0, "defense": 2.5}, "2": {"attack": 4.0}}. '
+                  'Supported keys: attack, defense, speed, production_cost, production_time_ticks, manpower_cost'
+    )
+
     is_active = models.BooleanField(default=True)
     order = models.PositiveIntegerField(default=0)
 
@@ -164,9 +182,9 @@ class GameMode(models.Model):
     # Unit generation
     base_unit_generation_rate = models.FloatField(default=1.0, help_text='Units generated per tick per region')
     capital_generation_bonus = models.FloatField(default=2.0, help_text='Multiplier for capital region')
-    starting_currency = models.PositiveIntegerField(default=120, help_text='Starting strategic currency for each player')
-    base_currency_per_tick = models.FloatField(default=2.0, help_text='Base currency generated per tick for each player')
-    region_currency_per_tick = models.FloatField(default=0.35, help_text='Currency generated per owned region each tick')
+    starting_energy = models.PositiveIntegerField(default=120, help_text='Starting energy for each player')
+    base_energy_per_tick = models.FloatField(default=2.0, help_text='Base energy generated per tick for each player')
+    region_energy_per_tick = models.FloatField(default=0.35, help_text='Energy generated per owned region each tick')
 
     # Combat
     attacker_advantage = models.FloatField(default=0.0, help_text='Bonus for attacker (e.g. 0.1 = 10%)')
@@ -227,7 +245,7 @@ class AbilityType(models.Model):
     range = models.PositiveIntegerField(default=1, help_text='Max hops from owned regions to target')
 
     # Costs & timing
-    currency_cost = models.PositiveIntegerField(default=50, help_text='Currency cost to use')
+    energy_cost = models.PositiveIntegerField(default=50, help_text='Energy cost to use')
     cooldown_ticks = models.PositiveIntegerField(default=60, help_text='Cooldown in ticks after use')
 
     # Instant effects
@@ -236,6 +254,15 @@ class AbilityType(models.Model):
     # Persistent effects
     effect_duration_ticks = models.PositiveIntegerField(default=0, help_text='Duration for persistent effects')
     effect_params = models.JSONField(default=dict, blank=True, help_text='Per-ability params: production_reduction, unit_kill_percent, spread_range, collect_percent')
+
+    # Level system
+    max_level = models.PositiveIntegerField(default=3, help_text='Maximum upgrade level (1-5)')
+    level_stats = models.JSONField(
+        default=dict, blank=True,
+        help_text='Per-level stat overrides. Keys are level numbers as strings. '
+                  'Example: {"1": {"damage": 50}, "2": {"damage": 65, "cooldown_ticks": 50}, "3": {"damage": 80, "effect_duration_ticks": 25}}. '
+                  'Supported keys: energy_cost, cooldown_ticks, damage, effect_duration_ticks, range, effect_params'
+    )
 
     is_active = models.BooleanField(default=True)
     order = models.PositiveIntegerField(default=0)

@@ -194,11 +194,11 @@ export default function GamePage({
   // In tutorial, override ability/building costs to match the snapshot values
   const effectiveAbilities = useMemo(() => {
     if (!isTutorial) return abilitiesConfig;
-    return abilitiesConfig.map((a) => ({ ...a, currency_cost: 10, cooldown_ticks: 5 }));
+    return abilitiesConfig.map((a) => ({ ...a, energy_cost: 10, cooldown_ticks: 5 }));
   }, [isTutorial, abilitiesConfig]);
   const effectiveBuildings = useMemo(() => {
     if (!isTutorial) return buildings;
-    return buildings.map((b) => ({ ...b, cost: 0, currency_cost: 10, build_time_ticks: 3 }));
+    return buildings.map((b) => ({ ...b, cost: 0, energy_cost: 10, build_time_ticks: 3 }));
   }, [isTutorial, buildings]);
 
   // Building slug -> asset key for asset-based symbol markers on the map.
@@ -495,8 +495,8 @@ export default function GamePage({
   const tickIntervalMs = parseInt(gameState?.meta?.tick_interval_ms || "1000", 10);
 
   // My stats
-  const { myRegionCount, myUnitCount, myCurrency } = useMemo(() => {
-    if (!gameState) return { myRegionCount: 0, myUnitCount: 0, myCurrency: 0 };
+  const { myRegionCount, myUnitCount, myEnergy } = useMemo(() => {
+    if (!gameState) return { myRegionCount: 0, myUnitCount: 0, myEnergy: 0 };
     let rc = 0;
     let uc = 0;
     for (const r of Object.values(gameState.regions)) {
@@ -508,7 +508,7 @@ export default function GamePage({
     return {
       myRegionCount: rc,
       myUnitCount: uc,
-      myCurrency: gameState.players[myUserId]?.currency ?? 0,
+      myEnergy: gameState.players[myUserId]?.energy ?? 0,
     };
   }, [gameState, myUserId]);
 
@@ -1080,22 +1080,17 @@ export default function GamePage({
     );
   }
 
-  const visibleActionTargets = actionTargets.filter((regionId) => {
-    if (!highlightedNeighbors.includes(regionId)) return false;
-    return true;
-  });
-  const targets: TargetEntry[] = visibleActionTargets
-    .map((rid) => {
-      const r = regions[rid];
-      if (!r) return null;
-      return {
-        regionId: rid,
-        region: r,
-        name: r.name,
-        isAttack: r.owner_id !== myUserId,
-      } satisfies TargetEntry;
-    })
-    .filter(Boolean) as TargetEntry[];
+  const targets = useMemo<TargetEntry[]>(() => {
+    const visible = actionTargets.filter((rid) => highlightedNeighbors.includes(rid));
+    return visible
+      .map((rid) => {
+        const r = regions[rid];
+        if (!r) return null;
+        return { regionId: rid, region: r, name: r.name, isAttack: r.owner_id !== myUserId } satisfies TargetEntry;
+      })
+      .filter(Boolean) as TargetEntry[];
+  }, [actionTargets, highlightedNeighbors, regions, myUserId]);
+  const visibleActionTargets = useMemo(() => targets.map((t) => t.regionId), [targets]);
   const capitalSelectionEndsAt = Number(gameState?.meta?.capital_selection_ends_at || 0);
   const capitalSelectionRemaining = status === "selecting" && capitalSelectionEndsAt > 0
     ? Math.max(0, capitalSelectionEndsAt - Math.floor(nowMs / 1000))
@@ -1204,7 +1199,28 @@ export default function GamePage({
         )}
       </div>
 
-      {!connected && status !== "finished" && (
+      {/* Match cancelled overlay */}
+      {status === "cancelled" && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="flex max-w-sm flex-col items-center gap-4 rounded-2xl border border-red-400/30 bg-slate-950/95 p-8 text-center shadow-2xl backdrop-blur-xl">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-red-500/20">
+              <span className="text-2xl">⚠️</span>
+            </div>
+            <h2 className="font-display text-2xl text-zinc-50">Mecz anulowany</h2>
+            <p className="text-sm text-slate-400">
+              Ten mecz został anulowany z powodu błędu serwera lub rozłączenia graczy.
+            </p>
+            <button
+              onClick={() => router.push("/dashboard")}
+              className="mt-2 rounded-xl border border-cyan-400/30 bg-cyan-500/20 px-6 py-2.5 text-sm font-medium text-cyan-200 transition-all hover:bg-cyan-500/30"
+            >
+              Wróć do panelu
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!connected && status !== "finished" && status !== "cancelled" && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70">
           <div className="flex items-center gap-3 rounded-[24px] border border-white/10 bg-slate-950/88 px-6 py-4 backdrop-blur-xl">
             <Image
@@ -1356,7 +1372,7 @@ export default function GamePage({
         myUserId={myUserId}
         myRegionCount={myRegionCount}
         myUnitCount={myUnitCount}
-        myCurrency={myCurrency}
+        myEnergy={myEnergy}
       />
 
       {/* Build queue progress */}
@@ -1394,13 +1410,16 @@ export default function GamePage({
             region={sourceRegionData}
             players={players}
             myUserId={myUserId}
-            myCurrency={myCurrency}
+            myEnergy={myEnergy}
             buildings={effectiveBuildings}
             buildingQueue={buildingsQueue}
             units={unitsConfig}
             onBuild={handleBuild}
             onProduceUnit={handleProduceUnit}
             onClose={handleCancelAction}
+            unlockedBuildings={gameState?.players[myUserId]?.unlocked_buildings}
+            unlockedUnits={gameState?.players[myUserId]?.unlocked_units}
+            buildingLevels={gameState?.players[myUserId]?.building_levels}
           />
         </div>
       )}
@@ -1409,12 +1428,14 @@ export default function GamePage({
       {status === "in_progress" && effectiveAbilities.length > 0 && (
         <AbilityBar
           abilities={effectiveAbilities}
-          myCurrency={myCurrency}
+          myEnergy={myEnergy}
           abilityCooldowns={gameState?.players[myUserId]?.ability_cooldowns ?? {}}
           currentTick={currentTick}
           selectedAbility={selectedAbility}
           onSelectAbility={handleSelectAbility}
           allowedAbility={tutorial.isActive ? (tutorial.currentStep?.allowedAbility ?? null) : undefined}
+          abilityScrolls={gameState?.players[myUserId]?.ability_scrolls}
+          abilityLevels={gameState?.players[myUserId]?.ability_levels}
         />
       )}
 
@@ -1440,12 +1461,15 @@ export default function GamePage({
         <MobileBuildSheet
           region={sourceRegionData}
           regionId={selectedRegion}
-          myCurrency={myCurrency}
+          myEnergy={myEnergy}
           buildings={effectiveBuildings}
           buildingQueue={buildingsQueue}
           units={unitsConfig}
           onBuild={handleBuild}
           onProduceUnit={handleProduceUnit}
+          unlockedBuildings={gameState?.players[myUserId]?.unlocked_buildings}
+          unlockedUnits={gameState?.players[myUserId]?.unlocked_units}
+          buildingLevels={gameState?.players[myUserId]?.building_levels}
         />
       )}
     </div>

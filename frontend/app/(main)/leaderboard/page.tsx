@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
 import { Trophy, Medal, ChevronLeft, ChevronRight } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { getLeaderboard, type LeaderboardEntry } from "@/lib/api";
@@ -26,7 +27,7 @@ export default function LeaderboardPage() {
     }
 
     getLeaderboard(token)
-      .then(setEntries)
+      .then((res) => setEntries(res.items))
       .finally(() => setPageLoading(false));
   }, [loading, router, token, user]);
 
@@ -53,13 +54,11 @@ export default function LeaderboardPage() {
 
   return (
     <div className="space-y-6">
-        <div className="mb-6 flex items-center justify-between gap-3">
-          <div>
-            <div className="text-[11px] uppercase tracking-[0.24em] text-amber-200/70">
-              Leaderboard
-            </div>
-            <h1 className="mt-2 font-display text-3xl text-zinc-50">Ranking graczy</h1>
-            <p className="mt-2 text-sm text-slate-400">
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1">
+            <p className="text-[11px] uppercase tracking-[0.24em] text-slate-400">Ranking</p>
+            <h1 className="font-display text-3xl text-zinc-50">Tabela liderów</h1>
+            <p className="mt-1 text-sm text-slate-400">
               Ranking uwzględnia ELO, wygrane, win rate i średni placement.
             </p>
           </div>
@@ -69,8 +68,8 @@ export default function LeaderboardPage() {
         </div>
 
         {myPlacement > 0 && user && (
-          <div className="rounded-[24px] border border-cyan-300/25 bg-cyan-400/10 px-4 py-3 backdrop-blur-xl">
-            <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-200/70">
+          <div className="rounded-2xl border border-cyan-300/25 bg-cyan-400/10 px-4 py-3 backdrop-blur-xl">
+            <div className="text-[11px] uppercase tracking-[0.24em] text-slate-400 font-medium">
               Twoja pozycja
             </div>
             <div className="mt-1 flex items-center justify-between gap-3">
@@ -97,10 +96,10 @@ export default function LeaderboardPage() {
             return (
               <div
                 key={entry.id}
-                className={`grid grid-cols-[52px_minmax(0,1fr)_auto] items-center gap-3 rounded-[24px] border p-4 backdrop-blur-xl ${
+                className={`grid grid-cols-[52px_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border p-4 backdrop-blur-xl transition-colors ${
                   isMe
-                    ? "border-cyan-300/25 bg-cyan-400/10"
-                    : "border-white/10 bg-slate-950/60"
+                    ? "border-cyan-300/25 bg-cyan-400/10 hover:border-cyan-300/40 hover:bg-cyan-400/15"
+                    : "border-white/10 bg-slate-950/60 hover:border-white/20 hover:bg-white/[0.06]"
                 }`}
               >
                 <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] font-display text-lg text-zinc-50">
@@ -108,14 +107,19 @@ export default function LeaderboardPage() {
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="truncate font-medium text-zinc-50">{entry.username}</span>
+                    <Link
+                      href={`/profile/${entry.id}`}
+                      className="truncate font-medium text-zinc-50 hover:text-cyan-300 transition-colors"
+                    >
+                      {entry.username}
+                    </Link>
                     {isMe && (
                       <Badge className="border-0 bg-cyan-400/15 text-cyan-200 hover:bg-cyan-400/15">
                         Ty
                       </Badge>
                     )}
                   </div>
-                  <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-400">
+                  <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-300">
                     <span>{entry.matches_played} meczów</span>
                     <span>{entry.wins} wygranych</span>
                     <span>{Math.round(entry.win_rate * 100)}% win rate</span>
@@ -127,7 +131,7 @@ export default function LeaderboardPage() {
                     <Trophy className="h-4 w-4" />
                     <span className="font-display text-2xl">{entry.elo_rating}</span>
                   </div>
-                  <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                  <div className="text-[11px] uppercase tracking-[0.24em] text-slate-400 font-medium">
                     ELO
                   </div>
                 </div>
@@ -136,8 +140,8 @@ export default function LeaderboardPage() {
           })}
         </div>
 
-        <div className="flex items-center justify-between rounded-[24px] border border-white/10 bg-slate-950/55 px-4 py-3 backdrop-blur-xl">
-          <div className="text-sm text-slate-400">
+        <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-slate-950/55 px-4 py-3 backdrop-blur-xl">
+          <div className="text-sm text-slate-300">
             Strona {safePage} z {totalPages}
           </div>
           <div className="flex items-center gap-2">
@@ -146,7 +150,7 @@ export default function LeaderboardPage() {
               size="sm"
               disabled={safePage <= 1}
               onClick={() => setPageOverride(Math.max(1, safePage - 1))}
-              className="rounded-full border-white/10 bg-white/[0.03]"
+              className="rounded-full border-white/10 bg-white/[0.03] hover:border-white/25 hover:bg-white/[0.10] hover:text-zinc-100"
             >
               <ChevronLeft className="mr-1 h-4 w-4" />
               Poprzednia
@@ -156,7 +160,7 @@ export default function LeaderboardPage() {
               size="sm"
               disabled={safePage >= totalPages}
               onClick={() => setPageOverride(Math.min(totalPages, safePage + 1))}
-              className="rounded-full border-white/10 bg-white/[0.03]"
+              className="rounded-full border-white/10 bg-white/[0.03] hover:border-white/25 hover:bg-white/[0.10] hover:text-zinc-100"
             >
               Następna
               <ChevronRight className="ml-1 h-4 w-4" />

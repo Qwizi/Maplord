@@ -73,13 +73,13 @@ export default function CraftingPage() {
   const loadData = useCallback(async () => {
     if (!token) return;
     try {
-      const [rec, inv, wal] = await Promise.all([
+      const [rec, invRes, wal] = await Promise.all([
         getRecipes(),
         getMyInventory(token),
         getMyWallet(token),
       ]);
       setRecipes(rec);
-      setInventory(inv);
+      setInventory(invRes.items);
       setWallet(wal);
     } catch {
       toast.error("Nie udało się załadować receptur");
@@ -128,6 +128,12 @@ export default function CraftingPage() {
 
   return (
     <div className="space-y-6">
+      {/* ── Page header ─────────────────────────────────────────────────────── */}
+      <div className="space-y-1">
+        <p className="text-[11px] uppercase tracking-[0.24em] text-slate-400">Kuźnia</p>
+        <h1 className="font-display text-3xl text-zinc-50">Warsztat rzemieślniczy</h1>
+      </div>
+
       {/* Wallet bar */}
       {wallet && (
         <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/55 px-6 py-3 backdrop-blur-xl">
@@ -137,7 +143,7 @@ export default function CraftingPage() {
         </div>
       )}
 
-      <div className="rounded-[24px] border border-white/10 bg-slate-950/55 p-6 backdrop-blur-xl">
+      <div className="rounded-2xl border border-white/10 bg-slate-950/55 p-6 backdrop-blur-xl">
         <div className="mb-4 flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04]">
             <Hammer className="h-5 w-5 text-cyan-300" />
@@ -157,7 +163,7 @@ export default function CraftingPage() {
               className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                 filter === t.value
                   ? "border border-cyan-300/25 bg-cyan-400/10 text-cyan-100"
-                  : "border border-white/10 text-slate-400 hover:bg-white/[0.06]"
+                  : "border border-white/10 text-slate-400 hover:bg-white/[0.10] hover:border-white/20 hover:text-slate-100"
               }`}
             >
               {t.label}
@@ -211,7 +217,7 @@ export default function CraftingPage() {
                       const enough = owned >= ing.quantity;
                       return (
                         <div key={ing.item.slug} className="flex items-center gap-1.5">
-                          {idx > 0 && <span className="text-slate-600">+</span>}
+                          {idx > 0 && <span className="text-slate-500">+</span>}
                           <div
                             className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs ${
                               enough
@@ -235,7 +241,7 @@ export default function CraftingPage() {
 
                     {recipe.gold_cost > 0 && (
                       <>
-                        <span className="text-slate-600">+</span>
+                        <span className="text-slate-500">+</span>
                         <div
                           className={`flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs ${
                             wallet && wallet.gold >= recipe.gold_cost
@@ -249,7 +255,7 @@ export default function CraftingPage() {
                       </>
                     )}
 
-                    <ArrowRight className="mx-1 h-4 w-4 text-slate-500" />
+                    <ArrowRight className="mx-1 h-4 w-4 text-slate-400" />
                     <div className={`rounded-lg border px-2.5 py-1.5 text-xs font-bold ${RARITY_COLORS[recipe.result_item.rarity]} ${RARITY_TEXT[recipe.result_item.rarity]}`}>
                       {recipe.result_item.name}
                       {recipe.result_quantity > 1 && ` x${recipe.result_quantity}`}

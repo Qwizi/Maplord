@@ -96,6 +96,12 @@ class Command(BaseCommand):
         self.stdout.write("\nCreating bot users...")
         call_command("create_bots", stdout=self.stdout, stderr=self.stderr)
 
+        self.stdout.write("\nSeeding bot marketplace listings...")
+        call_command("seed_bot_marketplace", stdout=self.stdout, stderr=self.stderr)
+
+        self.stdout.write("\nProvisioning default items for all players...")
+        call_command("provision_player_defaults", stdout=self.stdout, stderr=self.stderr)
+
     def _load_settings(self, entry: dict):
         fields = dict(entry.get("fields") or {})
         GameSettings.objects.create(**fields)
@@ -193,8 +199,8 @@ class Command(BaseCommand):
                 "description": "Mecz na 3 graczy. Dyplomacja i sojusze.",
                 "max_players": 3,
                 "min_players": 3,
-                "starting_currency": 150,
-                "base_currency_per_tick": 2.5,
+                "starting_energy": 150,
+                "base_energy_per_tick": 2.5,
                 "neutral_region_units": 4,
                 "match_duration_limit_minutes": 45,
                 "elo_k_factor": 28,
@@ -207,9 +213,9 @@ class Command(BaseCommand):
                 "max_players": 4,
                 "min_players": 4,
                 "capital_selection_time_seconds": 45,
-                "starting_currency": 180,
-                "base_currency_per_tick": 3.0,
-                "region_currency_per_tick": 0.4,
+                "starting_energy": 180,
+                "base_energy_per_tick": 3.0,
+                "region_energy_per_tick": 0.4,
                 "starting_units": 12,
                 "neutral_region_units": 5,
                 "match_duration_limit_minutes": 60,
@@ -227,9 +233,9 @@ class Command(BaseCommand):
                 "match_duration_limit_minutes": 15,
                 "base_unit_generation_rate": 2.0,
                 "capital_generation_bonus": 3.0,
-                "starting_currency": 250,
-                "base_currency_per_tick": 5.0,
-                "region_currency_per_tick": 0.7,
+                "starting_energy": 250,
+                "base_energy_per_tick": 5.0,
+                "region_energy_per_tick": 0.7,
                 "attacker_advantage": 0.1,
                 "defender_advantage": 0.05,
                 "combat_randomness": 0.25,
@@ -258,13 +264,13 @@ class Command(BaseCommand):
                 "tick_interval_ms": 1000,
                 "capital_selection_time_seconds": 60,
                 "match_duration_limit_minutes": 30,
-                "starting_currency": 500,
+                "starting_energy": 500,
                 "starting_units": 20,
                 "neutral_region_units": 2,
                 "base_unit_generation_rate": 2.0,
                 "capital_generation_bonus": 4.0,
-                "base_currency_per_tick": 10.0,
-                "region_currency_per_tick": 2.0,
+                "base_energy_per_tick": 10.0,
+                "region_energy_per_tick": 2.0,
                 "combat_randomness": 0.1,
                 "elo_k_factor": 0,
                 "order": 99,
@@ -278,9 +284,9 @@ class Command(BaseCommand):
             "match_duration_limit_minutes": settings.match_duration_limit_minutes,
             "base_unit_generation_rate": settings.base_unit_generation_rate,
             "capital_generation_bonus": settings.capital_generation_bonus,
-            "starting_currency": settings.starting_currency,
-            "base_currency_per_tick": settings.base_currency_per_tick,
-            "region_currency_per_tick": settings.region_currency_per_tick,
+            "starting_energy": settings.starting_energy,
+            "base_energy_per_tick": settings.base_energy_per_tick,
+            "region_energy_per_tick": settings.region_energy_per_tick,
             "attacker_advantage": settings.attacker_advantage,
             "defender_advantage": settings.defender_advantage,
             "combat_randomness": settings.combat_randomness,

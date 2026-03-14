@@ -11,9 +11,9 @@ class GameSettingsOutSchema(Schema):
     match_duration_limit_minutes: int
     base_unit_generation_rate: float
     capital_generation_bonus: float
-    starting_currency: int
-    base_currency_per_tick: float
-    region_currency_per_tick: float
+    starting_energy: int
+    base_energy_per_tick: float
+    region_energy_per_tick: float
     attacker_advantage: float
     defender_advantage: float
     combat_randomness: float
@@ -32,14 +32,16 @@ class BuildingTypeOutSchema(Schema):
     description: str
     icon: str
     cost: int
-    currency_cost: int
+    energy_cost: int
     build_time_ticks: int
     max_per_region: int
     requires_coastal: bool
     defense_bonus: float
     vision_range: int
     unit_generation_bonus: float
-    currency_generation_bonus: float
+    energy_generation_bonus: float
+    max_level: int
+    level_stats: dict
     order: int
 
     class Config:
@@ -65,6 +67,8 @@ class UnitTypeOutSchema(Schema):
     production_time_ticks: int
     manpower_cost: int
     movement_type: str
+    max_level: int
+    level_stats: dict
     order: int
 
     class Config:
@@ -94,9 +98,9 @@ class GameModeOutSchema(Schema):
     match_duration_limit_minutes: int
     base_unit_generation_rate: float
     capital_generation_bonus: float
-    starting_currency: int
-    base_currency_per_tick: float
-    region_currency_per_tick: float
+    starting_energy: int
+    base_energy_per_tick: float
+    region_energy_per_tick: float
     attacker_advantage: float
     defender_advantage: float
     combat_randomness: float
@@ -137,11 +141,13 @@ class AbilityTypeOutSchema(Schema):
     sound_key: str
     target_type: str
     range: int
-    currency_cost: int
+    energy_cost: int
     cooldown_ticks: int
     damage: int
     effect_duration_ticks: int
     effect_params: dict
+    max_level: int
+    level_stats: dict
     order: int
 
     class Config:

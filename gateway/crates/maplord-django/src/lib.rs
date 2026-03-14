@@ -26,6 +26,24 @@ pub struct MatchPlayerInfo {
     pub color: String,
     #[serde(default)]
     pub is_bot: bool,
+    /// Building slugs unlocked by blueprints in the player's deck.
+    #[serde(default)]
+    pub unlocked_buildings: Vec<String>,
+    /// Unit slugs unlocked by blueprints in the player's deck.
+    #[serde(default)]
+    pub unlocked_units: Vec<String>,
+    /// Ability scrolls: slug → remaining uses.
+    #[serde(default)]
+    pub ability_scrolls: HashMap<String, i64>,
+    /// Pre-match boosts as raw JSON; deserialized to `ActiveBoost` in the gateway.
+    #[serde(default)]
+    pub active_boosts: Vec<serde_json::Value>,
+    /// Ability levels from deck: ability_slug → level (1-3).
+    #[serde(default)]
+    pub ability_levels: HashMap<String, i64>,
+    /// Building max levels from deck: building_slug → max level (1-3).
+    #[serde(default)]
+    pub building_levels: HashMap<String, i64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -121,6 +139,11 @@ pub struct CleanupRequest {
 pub struct LatestSnapshotResponse {
     pub tick: Option<u64>,
     pub state_data: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ActiveMatchesResult {
+    pub match_ids: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -423,6 +446,12 @@ impl DjangoClient {
             "/api/v1/internal/game/latest-snapshot/{match_id}/"
         ))
         .await
+    }
+
+    pub async fn list_active_matches(&self) -> Result<Vec<String>, DjangoError> {
+        let result: ActiveMatchesResult =
+            self.get("/api/v1/internal/game/active-matches/").await?;
+        Ok(result.match_ids)
     }
 }
 

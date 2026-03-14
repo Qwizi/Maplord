@@ -8,6 +8,112 @@ from apps.internal_auth import check_internal_secret
 logger = logging.getLogger(__name__)
 
 
+def _consume_default_deck(user) -> dict:
+    """Consume items from the user's default deck and return a deck_snapshot dict.
+
+    For each DeckItem in the default deck:
+    - Reduces quantity in UserInventory (capped at zero — items are silently skipped
+      if the user no longer has them, which can happen if inventory changed since
+      the deck was built).
+    - Classifies the item into the appropriate snapshot bucket:
+        blueprint_building -> unlocked_buildings, building_levels (slug -> max level)
+        blueprint_unit     -> unlocked_units
+        tactical_package   -> ability_scrolls (slug -> 999 uses), ability_levels (slug -> level)
+        boost              -> active_boosts (slug, params including level)
+
+    Tarcza (Shield) Lvl 1 is always available as a free ability regardless of deck.
+    Returns at minimum the free ability even if the user has no default deck.
+    """
+    from apps.inventory.models import Deck, Item, UserInventory
+    from django.db import transaction
+
+    # Free ability — always available
+    ability_scrolls: dict[str, int] = {'ab_shield': 999}
+    ability_levels: dict[str, int] = {'ab_shield': 1}
+
+    unlocked_buildings: list[str] = []
+    building_levels: dict[str, int] = {}
+    unlocked_units: list[str] = []
+    active_boosts: list[dict] = []
+
+    try:
+        deck = Deck.objects.prefetch_related(
+            'items__item'
+        ).get(user=user, is_default=True)
+    except Deck.DoesNotExist:
+        return {
+            'unlocked_buildings': unlocked_buildings,
+            'building_levels': building_levels,
+            'unlocked_units': unlocked_units,
+            'ability_scrolls': ability_scrolls,
+            'ability_levels': ability_levels,
+            'active_boosts': active_boosts,
+        }
+
+    with transaction.atomic():
+        for deck_item in deck.items.select_related('item').all():
+            item = deck_item.item
+            qty = deck_item.quantity
+
+            # Tactical packages are permanent — they unlock abilities without being consumed.
+            if item.item_type == Item.ItemType.TACTICAL_PACKAGE:
+                # Verify user still owns at least 1 (don't consume)
+                if not UserInventory.objects.filter(user=user, item=item, quantity__gte=1).exists():
+                    continue
+                ability_slug = item.blueprint_ref or item.slug
+                ability_scrolls[ability_slug] = 999  # unlimited uses per match
+                # Track the highest level the player has for this ability
+                ability_levels[ability_slug] = max(
+                    ability_levels.get(ability_slug, 0), item.level
+                )
+                continue
+
+            # Consume other item types from inventory
+            consumed = 0
+            try:
+                inv = UserInventory.objects.select_for_update().get(
+                    user=user, item=item
+                )
+                consumed = min(inv.quantity, qty)
+                inv.quantity -= consumed
+                if inv.quantity == 0:
+                    inv.delete()
+                else:
+                    inv.save(update_fields=['quantity'])
+            except UserInventory.DoesNotExist:
+                consumed = 0
+
+            if consumed == 0:
+                continue
+
+            # Classify into snapshot buckets
+            if item.item_type == Item.ItemType.BLUEPRINT_BUILDING:
+                if item.blueprint_ref:
+                    if item.blueprint_ref not in unlocked_buildings:
+                        unlocked_buildings.append(item.blueprint_ref)
+                    # Track the highest buildable level for this building
+                    building_levels[item.blueprint_ref] = max(
+                        building_levels.get(item.blueprint_ref, 0), item.level
+                    )
+            elif item.item_type == Item.ItemType.BLUEPRINT_UNIT:
+                if item.blueprint_ref and item.blueprint_ref not in unlocked_units:
+                    unlocked_units.append(item.blueprint_ref)
+            elif item.item_type == Item.ItemType.BOOST:
+                active_boosts.append({
+                    'slug': item.slug,
+                    'params': {**(item.boost_params or {}), 'level': item.level},
+                })
+
+    return {
+        'unlocked_buildings': unlocked_buildings,
+        'building_levels': building_levels,
+        'unlocked_units': unlocked_units,
+        'ability_scrolls': ability_scrolls,
+        'ability_levels': ability_levels,
+        'active_boosts': active_boosts,
+    }
+
+
 # --- Schemas ---
 
 
@@ -38,7 +144,7 @@ class MatchmakingInternalController(ControllerBase):
     @route.post('/queue/add/')
     def add_to_queue(self, request, body: QueueAddRequest):
         if not check_internal_secret(request):
-            return self.create_response(request, {'error': 'Unauthorized'}, status_code=403)
+            return self.create_response({'error': 'Unauthorized'}, status_code=403)
 
         from apps.accounts.models import User
         from apps.game_config.models import GameMode
@@ -47,7 +153,7 @@ class MatchmakingInternalController(ControllerBase):
         try:
             user = User.objects.get(id=body.user_id)
         except User.DoesNotExist:
-            return self.create_response(request, {'error': 'User not found'}, status_code=404)
+            return self.create_response({'error': 'User not found'}, status_code=404)
 
         game_mode = None
         if body.game_mode:
@@ -64,7 +170,7 @@ class MatchmakingInternalController(ControllerBase):
     @route.post('/queue/remove/')
     def remove_from_queue(self, request, body: QueueRemoveRequest):
         if not check_internal_secret(request):
-            return self.create_response(request, {'error': 'Unauthorized'}, status_code=403)
+            return self.create_response({'error': 'Unauthorized'}, status_code=403)
 
         from apps.matchmaking.models import MatchQueue
         MatchQueue.objects.filter(user_id=body.user_id).delete()
@@ -73,7 +179,7 @@ class MatchmakingInternalController(ControllerBase):
     @route.get('/queue/count/')
     def get_queue_count(self, request, game_mode: str | None = None):
         if not check_internal_secret(request):
-            return self.create_response(request, {'error': 'Unauthorized'}, status_code=403)
+            return self.create_response({'error': 'Unauthorized'}, status_code=403)
 
         from apps.game_config.models import GameMode
         from apps.matchmaking.models import MatchQueue
@@ -94,7 +200,7 @@ class MatchmakingInternalController(ControllerBase):
     @route.get('/active-match/{user_id}/')
     def get_active_match(self, request, user_id: str):
         if not check_internal_secret(request):
-            return self.create_response(request, {'error': 'Unauthorized'}, status_code=403)
+            return self.create_response({'error': 'Unauthorized'}, status_code=403)
 
         from apps.matchmaking.models import Match
 
@@ -114,7 +220,7 @@ class MatchmakingInternalController(ControllerBase):
     @route.post('/fill-with-bots/')
     def fill_with_bots(self, request, body: FillWithBotsRequest):
         if not check_internal_secret(request):
-            return self.create_response(request, {'error': 'Unauthorized'}, status_code=403)
+            return self.create_response({'error': 'Unauthorized'}, status_code=403)
 
         import logging
         import random
@@ -173,7 +279,7 @@ class MatchmakingInternalController(ControllerBase):
     @route.post('/try-match/')
     def try_match(self, request, body: TryMatchRequest):
         if not check_internal_secret(request):
-            return self.create_response(request, {'error': 'Unauthorized'}, status_code=403)
+            return self.create_response({'error': 'Unauthorized'}, status_code=403)
 
         from apps.game_config.models import GameMode
 
@@ -215,18 +321,20 @@ class MatchmakingInternalController(ControllerBase):
         building_types = {
             bt.slug: {
                 'cost': bt.cost,
-                'currency_cost': bt.currency_cost,
+                'energy_cost': bt.energy_cost,
                 'build_time_ticks': bt.build_time_ticks,
                 'max_per_region': bt.max_per_region,
                 'defense_bonus': bt.defense_bonus,
                 'vision_range': bt.vision_range,
                 'unit_generation_bonus': bt.unit_generation_bonus,
-                'currency_generation_bonus': bt.currency_generation_bonus,
+                'energy_generation_bonus': bt.energy_generation_bonus,
                 'requires_coastal': bt.requires_coastal,
                 'icon': bt.icon,
                 'name': bt.name,
                 'asset_key': bt.asset_key,
                 'order': bt.order,
+                'max_level': bt.max_level,
+                'level_stats': bt.level_stats or {},
                 'produced_unit_slug': (
                     bt.unit_types.filter(is_active=True)
                     .order_by('order')
@@ -252,6 +360,8 @@ class MatchmakingInternalController(ControllerBase):
                 'production_cost': int(ut.production_cost),
                 'production_time_ticks': int(ut.production_time_ticks),
                 'manpower_cost': int(ut.manpower_cost),
+                'max_level': ut.max_level,
+                'level_stats': ut.level_stats or {},
             }
             for ut in UnitType.objects.select_related('produced_by').filter(is_active=True)
         }
@@ -263,11 +373,13 @@ class MatchmakingInternalController(ControllerBase):
                 'sound_key': at.sound_key,
                 'target_type': at.target_type,
                 'range': int(at.range),
-                'currency_cost': int(at.currency_cost),
+                'energy_cost': int(at.energy_cost),
                 'cooldown_ticks': int(at.cooldown_ticks),
                 'damage': int(at.damage),
                 'effect_duration_ticks': int(at.effect_duration_ticks),
                 'effect_params': at.effect_params or {},
+                'max_level': at.max_level,
+                'level_stats': at.level_stats or {},
             }
             for at in AbilityType.objects.filter(is_active=True)
         }
@@ -293,9 +405,9 @@ class MatchmakingInternalController(ControllerBase):
                 'capital_selection_time_seconds': src.capital_selection_time_seconds,
                 'base_unit_generation_rate': src.base_unit_generation_rate,
                 'capital_generation_bonus': src.capital_generation_bonus,
-                'starting_currency': src.starting_currency,
-                'base_currency_per_tick': src.base_currency_per_tick,
-                'region_currency_per_tick': src.region_currency_per_tick,
+                'starting_energy': src.starting_energy,
+                'base_energy_per_tick': src.base_energy_per_tick,
+                'region_energy_per_tick': src.region_energy_per_tick,
                 'attacker_advantage': src.attacker_advantage,
                 'defender_advantage': src.defender_advantage,
                 'combat_randomness': src.combat_randomness,
@@ -317,10 +429,15 @@ class MatchmakingInternalController(ControllerBase):
         bot_ids = []
         entry_ids = []
         for i, entry in enumerate(queue_entries):
+            deck_snapshot = {}
+            if not entry.user.is_bot:
+                deck_snapshot = _consume_default_deck(entry.user)
+
             MatchPlayer.objects.create(
                 match=match,
                 user=entry.user,
                 color=colors[i % len(colors)],
+                deck_snapshot=deck_snapshot,
             )
             users.append(str(entry.user.id))
             if entry.user.is_bot:

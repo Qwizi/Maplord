@@ -3,6 +3,22 @@ from django.db.models import Count
 from apps.matchmaking.models import Match, MatchPlayer, MatchQueue
 
 
+@admin.action(description="Anuluj wybrane mecze (powiadom graczy)")
+def cancel_matches(modeladmin, request, queryset):
+    import redis
+    from django.conf import settings
+
+    redis_url = f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_GAME_DB}"
+    r = redis.Redis.from_url(redis_url)
+    count = 0
+    for match in queryset.filter(status__in=['selecting', 'in_progress']):
+        r.set(f"game:{match.id}:cancel_requested", "1", ex=300)
+        match.status = 'cancelled'
+        match.save(update_fields=['status'])
+        count += 1
+    modeladmin.message_user(request, f"Anulowano {count} meczy.")
+
+
 class MatchPlayerInline(admin.TabularInline):
     model = MatchPlayer
     extra = 0
@@ -16,6 +32,7 @@ class MatchAdmin(admin.ModelAdmin):
     search_fields = ('id',)
     readonly_fields = ('id', 'settings_snapshot', 'created_at')
     inlines = [MatchPlayerInline]
+    actions = [cancel_matches]
 
     def get_queryset(self, request):
         return super().get_queryset(request).annotate(player_count=Count('players'))

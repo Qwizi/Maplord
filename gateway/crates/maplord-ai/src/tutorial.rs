@@ -70,11 +70,13 @@ impl BotStrategy for TutorialBotBrain {
         if current_tick == 80 {
             if let Some(capital_id) = &player.capital_region_id {
                 if let Some(capital) = regions.get(capital_id) {
-                    let barracks_count =
-                        capital.buildings.get("barracks").copied().unwrap_or(0);
+                    let barracks_count = capital.building_instances
+                        .iter()
+                        .filter(|b| b.building_type == "barracks")
+                        .count();
                     if barracks_count < 1 {
                         if let Some(cfg) = settings.building_types.get("barracks") {
-                            if player.currency >= cfg.currency_cost {
+                            if player.energy >= cfg.energy_cost {
                                 actions.push(Action {
                                     action_type: "build".into(),
                                     player_id: Some(self.player_id.clone()),
@@ -85,6 +87,7 @@ impl BotStrategy for TutorialBotBrain {
                                     units: None,
                                     unit_type: None,
                                     ability_type: None,
+                                    ..Default::default()
                                 });
                             }
                         }
@@ -184,6 +187,7 @@ impl TutorialBotBrain {
             region_id: None,
             building_type: None,
             ability_type: None,
+            ..Default::default()
         })
     }
 
@@ -221,6 +225,7 @@ impl TutorialBotBrain {
                                     region_id: None,
                                     building_type: None,
                                     ability_type: None,
+                                    ..Default::default()
                                 });
                             }
                         }

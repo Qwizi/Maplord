@@ -1,7 +1,8 @@
 "use client";
 
-import { memo, useMemo } from "react";
+import { memo, useMemo, type ReactNode } from "react";
 import Image from "next/image";
+import { Zap } from "lucide-react";
 import type { GamePlayer } from "@/hooks/useGameSocket";
 import { Badge } from "@/components/ui/badge";
 
@@ -22,7 +23,7 @@ interface GameHUDProps {
   myUserId: string;
   myRegionCount: number;
   myUnitCount: number;
-  myCurrency: number;
+  myEnergy: number;
 }
 
 function formatClock(tick: number, tickIntervalMs: number) {
@@ -54,7 +55,7 @@ export default memo(function GameHUD({
   myUserId,
   myRegionCount,
   myUnitCount,
-  myCurrency,
+  myEnergy,
 }: GameHUDProps) {
   const aliveCount = useMemo(
     () => Object.values(players).filter((player) => player.is_alive).length,
@@ -75,9 +76,9 @@ export default memo(function GameHUD({
 
       <div className="grid grid-cols-3 gap-2">
         <CompactStat
-          icon="/assets/common/coin_w200.webp"
-          label="Waluta"
-          value={myCurrency}
+          icon={<Zap className="h-3.5 w-3.5 text-cyan-400" />}
+          label="Energia"
+          value={myEnergy}
         />
         <CompactStat
           icon="/assets/icons/storage_icon.webp"
@@ -133,20 +134,24 @@ const CompactStat = memo(function CompactStat({
   label,
   value,
 }: {
-  icon: string;
+  icon: string | ReactNode;
   label: string;
   value: number;
 }) {
   return (
     <div className="min-w-0 rounded-2xl border border-white/10 bg-slate-950/82 px-2.5 py-2 shadow-[0_10px_24px_rgba(0,0,0,0.22)] backdrop-blur-xl sm:px-3">
       <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.12em] text-slate-500">
-        <Image
-          src={icon}
-          alt=""
-          width={14}
-          height={14}
-          className="h-3.5 w-3.5 object-contain"
-        />
+        {typeof icon === "string" ? (
+          <Image
+            src={icon}
+            alt=""
+            width={14}
+            height={14}
+            className="h-3.5 w-3.5 object-contain"
+          />
+        ) : (
+          icon
+        )}
         <span className="truncate">{label}</span>
       </div>
       <div className="mt-1 truncate font-display text-lg leading-none text-zinc-50 sm:text-xl">

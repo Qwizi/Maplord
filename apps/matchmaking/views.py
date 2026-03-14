@@ -1,4 +1,3 @@
-from typing import List
 from ninja_extra import api_controller, route
 from ninja_extra.permissions import IsAuthenticated
 from ninja_jwt.authentication import JWTAuth
@@ -6,20 +5,22 @@ from ninja_jwt.authentication import JWTAuth
 from django.shortcuts import get_object_or_404
 from apps.matchmaking.models import Match
 from apps.matchmaking.schemas import MatchOutSchema
+from apps.pagination import paginate_qs
 
 
 @api_controller('/matches', tags=['Matches'])
 class MatchController:
 
-    @route.get('/', response=List[MatchOutSchema], auth=JWTAuth(), permissions=[IsAuthenticated])
-    def list_my_matches(self, request):
+    @route.get('/', response=dict, auth=JWTAuth(), permissions=[IsAuthenticated])
+    def list_my_matches(self, request, limit: int = 50, offset: int = 0):
         """List matches for the authenticated user (excludes tutorial matches)."""
-        return list(
+        qs = (
             Match.objects.filter(players__user=request.auth)
             .exclude(is_tutorial=True)
             .prefetch_related('players', 'players__user')
             .distinct()
         )
+        return paginate_qs(qs, limit, offset, schema=MatchOutSchema)
 
     @route.get('/{match_id}/', response=MatchOutSchema, auth=JWTAuth(), permissions=[IsAuthenticated])
     def get_match(self, request, match_id: str):
@@ -55,18 +56,20 @@ class TutorialController:
         building_types = {
             bt.slug: {
                 'cost': bt.cost,
-                'currency_cost': bt.currency_cost,
+                'energy_cost': bt.energy_cost,
                 'build_time_ticks': bt.build_time_ticks,
                 'max_per_region': bt.max_per_region,
                 'defense_bonus': bt.defense_bonus,
                 'vision_range': bt.vision_range,
                 'unit_generation_bonus': bt.unit_generation_bonus,
-                'currency_generation_bonus': bt.currency_generation_bonus,
+                'energy_generation_bonus': bt.energy_generation_bonus,
                 'requires_coastal': bt.requires_coastal,
                 'icon': bt.icon,
                 'name': bt.name,
                 'asset_key': bt.asset_key,
                 'order': bt.order,
+                'max_level': bt.max_level,
+                'level_stats': bt.level_stats or {},
                 'produced_unit_slug': (
                     bt.unit_types.filter(is_active=True)
                     .order_by('order')
@@ -92,6 +95,8 @@ class TutorialController:
                 'production_cost': int(ut.production_cost),
                 'production_time_ticks': int(ut.production_time_ticks),
                 'manpower_cost': int(ut.manpower_cost),
+                'max_level': ut.max_level,
+                'level_stats': ut.level_stats or {},
             }
             for ut in UnitType.objects.select_related('produced_by').filter(is_active=True)
         }
@@ -103,11 +108,13 @@ class TutorialController:
                 'sound_key': at.sound_key,
                 'target_type': at.target_type,
                 'range': int(at.range),
-                'currency_cost': int(at.currency_cost),
+                'energy_cost': int(at.energy_cost),
                 'cooldown_ticks': int(at.cooldown_ticks),
                 'damage': int(at.damage),
                 'effect_duration_ticks': int(at.effect_duration_ticks),
                 'effect_params': at.effect_params or {},
+                'max_level': at.max_level,
+                'level_stats': at.level_stats or {},
             }
             for at in AbilityType.objects.filter(is_active=True)
         }
@@ -123,14 +130,14 @@ class TutorialController:
         # Tutorial overrides — everything dirt cheap, fast build, short cooldowns
         for bt in building_types.values():
             bt['cost'] = 0
-            bt['currency_cost'] = 10
+            bt['energy_cost'] = 10
             bt['build_time_ticks'] = 3
         for ut in unit_types.values():
             if ut['production_cost'] > 0:
                 ut['production_cost'] = 5
                 ut['production_time_ticks'] = 2
         for at in ability_types.values():
-            at['currency_cost'] = 10  # All abilities cost 10
+            at['energy_cost'] = 10  # All abilities cost 10
             at['cooldown_ticks'] = 5  # 5 tick cooldown
 
         settings_snapshot = {
@@ -139,9 +146,9 @@ class TutorialController:
             'match_duration_limit_minutes': tutorial_mode.match_duration_limit_minutes,
             'base_unit_generation_rate': tutorial_mode.base_unit_generation_rate,
             'capital_generation_bonus': tutorial_mode.capital_generation_bonus,
-            'starting_currency': tutorial_mode.starting_currency,
-            'base_currency_per_tick': tutorial_mode.base_currency_per_tick,
-            'region_currency_per_tick': tutorial_mode.region_currency_per_tick,
+            'starting_energy': tutorial_mode.starting_energy,
+            'base_energy_per_tick': tutorial_mode.base_energy_per_tick,
+            'region_energy_per_tick': tutorial_mode.region_energy_per_tick,
             'attacker_advantage': tutorial_mode.attacker_advantage,
             'defender_advantage': tutorial_mode.defender_advantage,
             'combat_randomness': tutorial_mode.combat_randomness,

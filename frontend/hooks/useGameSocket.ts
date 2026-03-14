@@ -37,10 +37,12 @@ export interface GameRegion {
   is_capital: boolean;
   building_type: string | null;
   buildings?: Record<string, number>;
+  building_levels?: Record<string, number>;
+  building_instances?: Array<{ building_type: string; level: number }>;
   defense_bonus: number;
   vision_range?: number;
   unit_generation_bonus?: number;
-  currency_generation_bonus?: number;
+  energy_generation_bonus?: number;
 }
 
 export interface GamePlayer {
@@ -52,15 +54,20 @@ export interface GamePlayer {
   disconnect_deadline?: number | null;
   left_match_at?: number | null;
   capital_region_id: string | null;
-  currency: number;
+  energy: number;
   eliminated_reason?: string | null;
   eliminated_tick?: number | null;
   ability_cooldowns?: Record<string, number>;
+  ability_scrolls?: Record<string, number>;
+  ability_levels?: Record<string, number>;
+  unlocked_buildings?: string[];
+  unlocked_units?: string[];
   is_bot?: boolean;
   total_regions_conquered?: number;
   total_units_produced?: number;
   total_units_lost?: number;
   total_buildings_built?: number;
+  building_levels?: Record<string, number>;
 }
 
 export interface ActiveEffect {
@@ -123,6 +130,7 @@ interface UseGameSocketReturn {
   attack: (sourceRegionId: string, targetRegionId: string, units: number, unitType?: string | null) => void;
   move: (sourceRegionId: string, targetRegionId: string, units: number, unitType?: string | null) => void;
   build: (regionId: string, buildingType: string) => void;
+  upgradeBuilding: (regionId: string, buildingType: string) => void;
   produceUnit: (regionId: string, unitType: string) => void;
   useAbility: (targetRegionId: string, abilityType: string) => void;
   leaveMatch: () => Promise<boolean>;
@@ -217,8 +225,15 @@ export function useGameSocket(matchId: string): UseGameSocketReturn {
         console.error("Game error:", msg.message);
         setEvents((prev) => [
           ...prev.slice(-50),
-          { type: "server_error", message: msg.message as string },
+          { type: "server_error", message: msg.message as string, fatal: msg.fatal as boolean | undefined },
         ]);
+        // Fatal error = match cancelled/unrecoverable — update status
+        if (msg.fatal) {
+          setGameState((prev) => {
+            if (!prev) return prev;
+            return { ...prev, meta: { ...prev.meta, status: "cancelled" } };
+          });
+        }
         break;
       case "match_left":
         if (leaveResolverRef.current) {
@@ -355,6 +370,12 @@ export function useGameSocket(matchId: string): UseGameSocketReturn {
     [send]
   );
 
+  const upgradeBuilding = useCallback(
+    (regionId: string, buildingType: string) =>
+      send({ action: "upgrade_building", region_id: regionId, building_type: buildingType }),
+    [send]
+  );
+
   const produceUnit = useCallback(
     (regionId: string, unitType: string) =>
       send({ action: "produce_unit", region_id: regionId, unit_type: unitType }),
@@ -394,6 +415,7 @@ export function useGameSocket(matchId: string): UseGameSocketReturn {
     attack,
     move,
     build,
+    upgradeBuilding,
     produceUnit,
     useAbility,
     leaveMatch,

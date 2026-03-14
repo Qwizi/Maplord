@@ -5,33 +5,64 @@ import Image from "next/image";
 import type { GameRegion, BuildingQueueItem } from "@/hooks/useGameSocket";
 import type { BuildingType, UnitType } from "@/lib/api";
 import { getBuildingAsset, getActionAsset, getUnitAsset } from "@/lib/gameAssets";
+import { Lock } from "lucide-react";
 
 type SheetMode = null | "build" | "produce";
 
 interface MobileBuildSheetProps {
   region: GameRegion;
   regionId: string;
-  myCurrency: number;
+  myEnergy: number;
   buildings: BuildingType[];
   buildingQueue: BuildingQueueItem[];
   units: UnitType[];
   onBuild: (buildingType: string) => void;
   onProduceUnit: (unitType: string) => void;
+  /** When non-empty, buildings not in this list show a lock icon and are disabled */
+  unlockedBuildings?: string[];
+  /** When non-empty, units not in this list (and with produced_by_slug) show a lock icon and are disabled */
+  unlockedUnits?: string[];
+  /** Player's max buildable levels from their deck */
+  buildingLevels?: Record<string, number>;
 }
 
 export default memo(function MobileBuildSheet({
   region,
   regionId,
-  myCurrency,
+  myEnergy,
   buildings,
   buildingQueue,
   units,
   onBuild,
   onProduceUnit,
+  unlockedBuildings,
+  unlockedUnits,
+  buildingLevels,
 }: MobileBuildSheetProps) {
   const [mode, setMode] = useState<SheetMode>(null);
+  const hasBuildingLocks = unlockedBuildings != null && unlockedBuildings.length > 0;
+  const hasUnitLocks = unlockedUnits != null && unlockedUnits.length > 0;
 
-  const buildingCounts = useMemo(() => region.buildings ?? {}, [region.buildings]);
+  const buildingCounts = useMemo(() => {
+    // Prefer building_instances (new engine format); fall back to legacy buildings HashMap
+    if (region.building_instances && region.building_instances.length > 0) {
+      const counts: Record<string, number> = {};
+      for (const inst of region.building_instances) {
+        counts[inst.building_type] = (counts[inst.building_type] ?? 0) + 1;
+      }
+      return counts;
+    }
+    return region.buildings ?? {};
+  }, [region.building_instances, region.buildings]);
+
+  const instancesByType = useMemo(() => {
+    const map: Record<string, Array<{ building_type: string; level: number }>> = {};
+    for (const inst of region.building_instances ?? []) {
+      (map[inst.building_type] ??= []).push(inst);
+    }
+    for (const arr of Object.values(map)) arr.sort((a, b) => a.level - b.level);
+    return map;
+  }, [region.building_instances]);
 
   const queuedBuildingCounts = useMemo(
     () =>
@@ -52,7 +83,7 @@ export default memo(function MobileBuildSheet({
           (buildingCounts[b.slug] ?? 0) + (queuedBuildingCounts[b.slug] ?? 0) <
           b.max_per_region
       )
-      .sort((a, b) => a.order - b.order || a.currency_cost - b.currency_cost || a.name.localeCompare(b.name));
+      .sort((a, b) => a.order - b.order || a.energy_cost - b.energy_cost || a.name.localeCompare(b.name));
   }, [buildings, region.is_coastal, buildingCounts, queuedBuildingCounts]);
 
   const producedUnits = useMemo(() => {
@@ -142,84 +173,130 @@ export default memo(function MobileBuildSheet({
 
         <div className="px-4 space-y-2">
           {isBuildMode &&
-            buildOptions.map((building) => (
-              <button
-                key={building.id}
-                onClick={() => {
-                  onBuild(building.slug);
-                  setMode(null);
-                }}
-                disabled={myCurrency < building.currency_cost}
-                className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-amber-400/10 bg-amber-500/10 px-3 py-2.5 text-left transition-colors active:bg-amber-500/20 disabled:opacity-40"
-              >
-                <span className="flex min-w-0 items-center gap-2.5">
-                  {getBuildingAsset(building.asset_key || building.slug) && (
-                    <Image
-                      src={getBuildingAsset(building.asset_key || building.slug)!}
-                      alt={building.name}
-                      width={28}
-                      height={28}
-                      className="h-7 w-7 shrink-0 object-contain"
-                    />
-                  )}
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium text-zinc-50">{building.name}</span>
-                    <span className="block text-[11px] text-zinc-500">
-                      {(buildingCounts[building.slug] ?? 0) + (queuedBuildingCounts[building.slug] ?? 0)}/{building.max_per_region}
+            buildOptions.map((building) => {
+              const isBuildingLocked = hasBuildingLocks && !unlockedBuildings!.includes(building.slug);
+              // Derive the minimum level instance for this building type (weakest = first to upgrade)
+              const typeInstances = instancesByType[building.slug] ?? [];
+              const currentRegionLevel = typeInstances.length > 0
+                ? typeInstances[0].level
+                : region.building_levels?.[building.slug];
+              const playerMaxLevel = buildingLevels?.[building.slug];
+              const canUpgrade =
+                currentRegionLevel != null &&
+                playerMaxLevel != null &&
+                currentRegionLevel < playerMaxLevel;
+              const isAtMaxLevel =
+                currentRegionLevel != null &&
+                playerMaxLevel != null &&
+                currentRegionLevel >= playerMaxLevel;
+              const hasBuilt = (buildingCounts[building.slug] ?? 0) > 0;
+              const upgradeLabel = canUpgrade
+                ? `Ulepsz do Lvl ${currentRegionLevel! + 1}${typeInstances.length > 1 ? ` (najslabsza: Lvl ${currentRegionLevel})` : ""}`
+                : "Buduj Lvl 1";
+              const displayName = hasBuilt && currentRegionLevel != null
+                ? `${building.name} Lvl ${currentRegionLevel}`
+                : building.name;
+              const isUpgrade = (currentRegionLevel ?? 0) > 0;
+              const nextLevel = isUpgrade ? (currentRegionLevel ?? 0) + 1 : 1;
+              const nextCost = building.level_stats?.[String(nextLevel)]?.energy_cost ?? building.energy_cost;
+              return (
+                <button
+                  key={building.id}
+                  onClick={() => {
+                    if (isBuildingLocked || isAtMaxLevel) return;
+                    onBuild(building.slug);
+                    setMode(null);
+                  }}
+                  disabled={myEnergy < nextCost || isBuildingLocked || isAtMaxLevel === true}
+                  className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-amber-400/10 bg-amber-500/10 px-3 py-2.5 text-left transition-colors active:bg-amber-500/20 disabled:opacity-40"
+                >
+                  <span className="flex min-w-0 items-center gap-2.5">
+                    {getBuildingAsset(building.asset_key || building.slug) && (
+                      <Image
+                        src={getBuildingAsset(building.asset_key || building.slug)!}
+                        alt={building.name}
+                        width={28}
+                        height={28}
+                        className="h-7 w-7 shrink-0 object-contain"
+                      />
+                    )}
+                    <span className="min-w-0">
+                      <span className="flex items-center gap-1.5 truncate text-sm font-medium text-zinc-50">
+                        {isBuildingLocked && <Lock className="h-3 w-3 shrink-0 text-zinc-500" />}
+                        {displayName}
+                      </span>
+                      <span className="block text-[11px] text-zinc-500">
+                        {isBuildingLocked
+                          ? "Wymaga blueprintu z talii"
+                          : isAtMaxLevel
+                            ? "Max"
+                            : canUpgrade
+                              ? upgradeLabel
+                              : `${(buildingCounts[building.slug] ?? 0) + (queuedBuildingCounts[building.slug] ?? 0)}/${building.max_per_region}`}
+                      </span>
                     </span>
                   </span>
-                </span>
-                <span className="flex items-center gap-1 text-xs text-zinc-400">
-                  <Image
-                    src="/assets/common/coin_w200.webp"
-                    alt=""
-                    width={14}
-                    height={14}
-                    className="h-3.5 w-3.5 object-contain"
-                  />
-                  {building.currency_cost}
-                </span>
-              </button>
-            ))}
+                  {isBuildingLocked ? (
+                    <Lock className="h-4 w-4 text-zinc-600" />
+                  ) : isAtMaxLevel ? (
+                    <span className="rounded border border-yellow-300/20 bg-yellow-300/10 px-1.5 py-0.5 text-[10px] font-medium text-yellow-300">
+                      Max
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-xs text-zinc-400">
+                      <span className="text-[13px] text-cyan-400">⚡</span>
+                      {nextCost}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
 
           {!isBuildMode &&
-            producedUnits.map((unit) => (
-              <button
-                key={unit.id}
-                onClick={() => {
-                  onProduceUnit(unit.slug);
-                  setMode(null);
-                }}
-                disabled={myCurrency < unit.production_cost}
-                className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-cyan-400/10 bg-cyan-500/10 px-3 py-2.5 text-left transition-colors active:bg-cyan-500/20 disabled:opacity-40"
-              >
-                <span className="flex min-w-0 items-center gap-2.5">
-                  <Image
-                    src={getUnitAsset(unit.asset_key || unit.slug)}
-                    alt={unit.name}
-                    width={24}
-                    height={24}
-                    className="h-6 w-6 object-contain"
-                  />
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium text-zinc-50">{unit.name}</span>
-                    <span className="block text-[11px] text-zinc-500">
-                      Zaloga: {unit.manpower_cost} · {unit.production_time_ticks} tick
+            producedUnits.map((unit) => {
+              const isUnitLocked = hasUnitLocks && Boolean(unit.produced_by_slug) && !unlockedUnits!.includes(unit.slug);
+              return (
+                <button
+                  key={unit.id}
+                  onClick={() => {
+                    if (isUnitLocked) return;
+                    onProduceUnit(unit.slug);
+                    setMode(null);
+                  }}
+                  disabled={myEnergy < unit.production_cost || isUnitLocked}
+                  className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-cyan-400/10 bg-cyan-500/10 px-3 py-2.5 text-left transition-colors active:bg-cyan-500/20 disabled:opacity-40"
+                >
+                  <span className="flex min-w-0 items-center gap-2.5">
+                    <Image
+                      src={getUnitAsset(unit.asset_key || unit.slug)}
+                      alt={unit.name}
+                      width={24}
+                      height={24}
+                      className="h-6 w-6 object-contain"
+                    />
+                    <span className="min-w-0">
+                      <span className="flex items-center gap-1.5 truncate text-sm font-medium text-zinc-50">
+                        {isUnitLocked && <Lock className="h-3 w-3 shrink-0 text-zinc-500" />}
+                        {unit.name}
+                      </span>
+                      <span className="block text-[11px] text-zinc-500">
+                        {isUnitLocked
+                          ? "Wymaga blueprintu z talii"
+                          : `Zaloga: ${unit.manpower_cost} · ${unit.production_time_ticks} tick`}
+                      </span>
                     </span>
                   </span>
-                </span>
-                <span className="flex items-center gap-1 text-xs text-zinc-400">
-                  <Image
-                    src="/assets/common/coin_w200.webp"
-                    alt=""
-                    width={14}
-                    height={14}
-                    className="h-3.5 w-3.5 object-contain"
-                  />
-                  {unit.production_cost}
-                </span>
-              </button>
-            ))}
+                  {isUnitLocked ? (
+                    <Lock className="h-4 w-4 text-zinc-600" />
+                  ) : (
+                    <span className="flex items-center gap-1 text-xs text-zinc-400">
+                      <span className="text-[13px] text-cyan-400">⚡</span>
+                      {unit.production_cost}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
         </div>
       </div>
     </div>

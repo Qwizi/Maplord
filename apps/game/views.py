@@ -53,13 +53,11 @@ class ShareController:
         if body.resource_type == 'match_result':
             if not Match.objects.filter(id=body.resource_id, status='finished').exists():
                 return self.create_response(
-                    request,
                     {'detail': 'Match not found or not finished'},
                     status_code=404,
                 )
         else:
             return self.create_response(
-                request,
                 {'detail': f'Unknown resource type: {body.resource_type}'},
                 status_code=400,
             )
@@ -87,7 +85,6 @@ class ShareController:
             return self._get_match_result_data(link.resource_id)
 
         return self.create_response(
-            request,
             {'detail': 'Unknown resource type'},
             status_code=400,
         )
@@ -99,7 +96,6 @@ class ShareController:
 
         if link.resource_type != 'match_result':
             return self.create_response(
-                request,
                 {'detail': 'Not a match share'},
                 status_code=400,
             )

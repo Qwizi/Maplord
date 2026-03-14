@@ -2,6 +2,7 @@ import logging
 from django.db import transaction
 from ninja_extra import api_controller, route
 from ninja_jwt.authentication import JWTAuth
+from apps.pagination import paginate_qs
 
 from apps.crafting.models import CraftingLog, Recipe
 from apps.crafting.schemas import CraftInSchema, CraftingLogOutSchema, RecipeOutSchema
@@ -23,13 +24,14 @@ class CraftingController:
             .prefetch_related('ingredients__item', 'ingredients__item__category')
         )
 
-    @route.get('/history/', response=list[CraftingLogOutSchema], auth=JWTAuth())
-    def crafting_history(self, request):
+    @route.get('/history/', response=dict, auth=JWTAuth())
+    def crafting_history(self, request, limit: int = 50, offset: int = 0):
         """Get user's crafting history."""
-        return list(
+        qs = (
             CraftingLog.objects.filter(user=request.user)
-            .select_related('recipe', 'result_item', 'result_item__category')[:50]
+            .select_related('recipe', 'result_item', 'result_item__category')
         )
+        return paginate_qs(qs, limit, offset, schema=CraftingLogOutSchema)
 
     @route.post('/craft/', auth=JWTAuth())
     def craft_item(self, request, payload: CraftInSchema):
@@ -41,21 +43,20 @@ class CraftingController:
             .first()
         )
         if not recipe:
-            return self.create_response(request, {'error': 'Recipe not found'}, status=404)
+            return self.create_response({'error': 'Recipe not found'}, status_code=404)
 
         with transaction.atomic():
             # Check gold
             wallet = get_or_create_wallet(request.user)
             if wallet.gold < recipe.gold_cost:
-                return self.create_response(request, {'error': 'Insufficient gold'}, status=400)
+                return self.create_response({'error': 'Insufficient gold'}, status_code=400)
 
             # Check and consume ingredients
             for ingredient in recipe.ingredients.all():
                 if not remove_item_from_inventory(request.user, ingredient.item, ingredient.quantity):
                     return self.create_response(
-                        request,
                         {'error': f'Insufficient {ingredient.item.name} (need {ingredient.quantity})'},
-                        status=400,
+                        status_code=400,
                     )
 
             # Deduct gold

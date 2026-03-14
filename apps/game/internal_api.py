@@ -37,6 +37,10 @@ class AliveUpdateRequest(Schema):
     is_alive: bool
 
 
+class CancelMatchRequest(Schema):
+    match_id: str
+
+
 # --- Controller ---
 
 
@@ -47,7 +51,7 @@ class GameInternalController(ControllerBase):
     @route.post('/game/snapshot/')
     def save_snapshot(self, request, body: SnapshotRequest):
         if not check_internal_secret(request):
-            return self.create_response(request, {'error': 'Unauthorized'}, status_code=403)
+            return self.create_response({'error': 'Unauthorized'}, status_code=403)
 
         from apps.game.models import GameStateSnapshot
         GameStateSnapshot.objects.update_or_create(
@@ -60,7 +64,7 @@ class GameInternalController(ControllerBase):
     @route.get('/game/latest-snapshot/{match_id}/')
     def get_latest_snapshot(self, request, match_id: str):
         if not check_internal_secret(request):
-            return self.create_response(request, {'error': 'Unauthorized'}, status_code=403)
+            return self.create_response({'error': 'Unauthorized'}, status_code=403)
 
         from apps.game.models import GameStateSnapshot
         snapshot = GameStateSnapshot.objects.filter(match_id=match_id).order_by('-tick').first()
@@ -71,7 +75,7 @@ class GameInternalController(ControllerBase):
     @route.post('/game/finalize/')
     def finalize_match(self, request, body: FinalizeRequest):
         if not check_internal_secret(request):
-            return self.create_response(request, {'error': 'Unauthorized'}, status_code=403)
+            return self.create_response({'error': 'Unauthorized'}, status_code=403)
 
         from apps.game.tasks import finalize_match_results_sync
         finalize_match_results_sync(
@@ -85,7 +89,7 @@ class GameInternalController(ControllerBase):
     @route.post('/game/cleanup/')
     def cleanup_match(self, request, body: CleanupRequest):
         if not check_internal_secret(request):
-            return self.create_response(request, {'error': 'Unauthorized'}, status_code=403)
+            return self.create_response({'error': 'Unauthorized'}, status_code=403)
 
         from apps.game.tasks import cleanup_redis_game_state
         cleanup_redis_game_state.delay(body.match_id)
@@ -94,7 +98,7 @@ class GameInternalController(ControllerBase):
     @route.get('/users/{user_id}/')
     def get_user(self, request, user_id: str):
         if not check_internal_secret(request):
-            return self.create_response(request, {'error': 'Unauthorized'}, status_code=403)
+            return self.create_response({'error': 'Unauthorized'}, status_code=403)
 
         from apps.accounts.models import User
         try:
@@ -105,12 +109,12 @@ class GameInternalController(ControllerBase):
                 'elo_rating': user.elo_rating,
             }
         except User.DoesNotExist:
-            return self.create_response(request, {'error': 'User not found'}, status_code=404)
+            return self.create_response({'error': 'User not found'}, status_code=404)
 
     @route.get('/matches/{match_id}/verify-player/{user_id}/')
     def verify_player(self, request, match_id: str, user_id: str):
         if not check_internal_secret(request):
-            return self.create_response(request, {'error': 'Unauthorized'}, status_code=403)
+            return self.create_response({'error': 'Unauthorized'}, status_code=403)
 
         from apps.matchmaking.models import MatchPlayer
         is_member = MatchPlayer.objects.filter(match_id=match_id, user_id=user_id).exists()
@@ -119,7 +123,7 @@ class GameInternalController(ControllerBase):
     @route.get('/matches/{match_id}/data/')
     def get_match_data(self, request, match_id: str):
         if not check_internal_secret(request):
-            return self.create_response(request, {'error': 'Unauthorized'}, status_code=403)
+            return self.create_response({'error': 'Unauthorized'}, status_code=403)
 
         from apps.matchmaking.models import Match
         try:
@@ -134,17 +138,27 @@ class GameInternalController(ControllerBase):
                         'username': p.user.username,
                         'color': p.color,
                         'is_bot': p.user.is_bot,
+                        # Deck snapshot fields — consumed at match creation and stored on
+                        # MatchPlayer.deck_snapshot.  The Rust gateway reads these to
+                        # initialise the Player struct (unlocked_buildings, unlocked_units,
+                        # ability_scrolls, active_boosts).
+                        'unlocked_buildings': (p.deck_snapshot or {}).get('unlocked_buildings', []),
+                        'unlocked_units': (p.deck_snapshot or {}).get('unlocked_units', []),
+                        'ability_scrolls': (p.deck_snapshot or {}).get('ability_scrolls', {}),
+                        'active_boosts': (p.deck_snapshot or {}).get('active_boosts', []),
+                        'ability_levels': (p.deck_snapshot or {}).get('ability_levels', {}),
+                        'building_levels': (p.deck_snapshot or {}).get('building_levels', {}),
                     }
                     for p in match.players.all()
                 ],
             }
         except Match.DoesNotExist:
-            return self.create_response(request, {'error': 'Match not found'}, status_code=404)
+            return self.create_response({'error': 'Match not found'}, status_code=404)
 
     @route.get('/matches/{match_id}/regions/')
     def get_match_regions(self, request, match_id: str):
         if not check_internal_secret(request):
-            return self.create_response(request, {'error': 'Unauthorized'}, status_code=403)
+            return self.create_response({'error': 'Unauthorized'}, status_code=403)
 
         from apps.geo.models import Region
         from apps.matchmaking.models import Match
@@ -152,7 +166,7 @@ class GameInternalController(ControllerBase):
         try:
             match = Match.objects.select_related('map_config').get(id=match_id)
         except Match.DoesNotExist:
-            return self.create_response(request, {'error': 'Match not found'}, status_code=404)
+            return self.create_response({'error': 'Match not found'}, status_code=404)
 
         qs = Region.objects.select_related('country')
         if match.map_config and match.map_config.country_codes:
@@ -173,18 +187,18 @@ class GameInternalController(ControllerBase):
     @route.patch('/matches/{match_id}/status/')
     def update_match_status(self, request, match_id: str, body: StatusUpdateRequest):
         if not check_internal_secret(request):
-            return self.create_response(request, {'error': 'Unauthorized'}, status_code=403)
+            return self.create_response({'error': 'Unauthorized'}, status_code=403)
 
         from apps.matchmaking.models import Match
         updated = Match.objects.filter(id=match_id).update(status=body.status)
         if not updated:
-            return self.create_response(request, {'error': 'Match not found'}, status_code=404)
+            return self.create_response({'error': 'Match not found'}, status_code=404)
         return {'ok': True}
 
     @route.patch('/matches/{match_id}/players/{user_id}/alive/')
     def set_player_alive(self, request, match_id: str, user_id: str, body: AliveUpdateRequest):
         if not check_internal_secret(request):
-            return self.create_response(request, {'error': 'Unauthorized'}, status_code=403)
+            return self.create_response({'error': 'Unauthorized'}, status_code=403)
 
         from django.utils import timezone
         from apps.matchmaking.models import MatchPlayer
@@ -199,13 +213,44 @@ class GameInternalController(ControllerBase):
             match_id=match_id, user_id=user_id
         ).update(**updates)
         if not updated:
-            return self.create_response(request, {'error': 'MatchPlayer not found'}, status_code=404)
+            return self.create_response({'error': 'MatchPlayer not found'}, status_code=404)
         return {'ok': True}
+
+    @route.post('/game/cancel-match/')
+    def cancel_active_match(self, request, body: CancelMatchRequest):
+        """Admin-initiated cancellation of an active match. Sets Redis cancel flag."""
+        if not check_internal_secret(request):
+            return self.create_response({'error': 'Unauthorized'}, status_code=403)
+
+        import redis
+        from django.conf import settings
+        from apps.matchmaking.models import Match
+
+        match_id = body.match_id
+        redis_url = f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_GAME_DB}"
+        r = redis.Redis.from_url(redis_url)
+        r.set(f"game:{match_id}:cancel_requested", "1", ex=300)
+
+        Match.objects.filter(id=match_id).update(status='cancelled')
+
+        return {'ok': True, 'match_id': match_id}
+
+    @route.get('/game/active-matches/')
+    def list_active_matches(self, request):
+        """List all matches in selecting or in_progress status (for gateway recovery)."""
+        if not check_internal_secret(request):
+            return self.create_response({'error': 'Unauthorized'}, status_code=403)
+
+        from apps.matchmaking.models import Match
+        matches = Match.objects.filter(
+            status__in=[Match.Status.SELECTING, Match.Status.IN_PROGRESS]
+        ).values_list('id', flat=True)
+        return {'match_ids': [str(m) for m in matches]}
 
     @route.get('/regions/neighbors/')
     def get_neighbor_map(self, request):
         if not check_internal_secret(request):
-            return self.create_response(request, {'error': 'Unauthorized'}, status_code=403)
+            return self.create_response({'error': 'Unauthorized'}, status_code=403)
 
         from apps.geo.models import Region
         neighbor_map = {}

@@ -192,6 +192,7 @@ impl BotBrain {
                                     region_id: None,
                                     building_type: None,
                                     ability_type: None,
+                                    ..Default::default()
                                 });
                                 break 'attack; // Only one attack per decision
                             }
@@ -201,15 +202,15 @@ impl BotBrain {
             }
         }
 
-        // 2. BUILD: Rarely, and only when flush with currency (20% chance)
-        if player.currency >= 100 && rng.gen_bool(0.2) {
+        // 2. BUILD: Rarely, and only when flush with energy (20% chance)
+        if player.energy >= 100 && rng.gen_bool(0.2) {
             // Try to build factory on capital
             if let Some(capital_id) = &player.capital_region_id {
                 if let Some(capital) = regions.get(capital_id) {
-                    let factory_count = capital.buildings.get("factory").copied().unwrap_or(0);
+                    let factory_count = capital.building_instances.iter().filter(|b| b.building_type == "factory").count();
                     if factory_count < 1 {
                         if let Some(factory_cfg) = settings.building_types.get("factory") {
-                            if player.currency >= factory_cfg.currency_cost {
+                            if player.energy >= factory_cfg.energy_cost {
                                 actions.push(Action {
                                     action_type: "build".into(),
                                     player_id: Some(self.player_id.clone()),
@@ -220,6 +221,7 @@ impl BotBrain {
                                     units: None,
                                     unit_type: None,
                                     ability_type: None,
+                                    ..Default::default()
                                 });
                             }
                         }
@@ -231,11 +233,11 @@ impl BotBrain {
         // 3. PRODUCE UNITS: Only 20% chance when factory available
         if rng.gen_bool(0.2) {
             for (rid, region) in &my_regions {
-                let factory_count = region.buildings.get("factory").copied().unwrap_or(0);
+                let factory_count = region.building_instances.iter().filter(|b| b.building_type == "factory").count();
                 if factory_count > 0 {
                     for (unit_slug, unit_cfg) in &settings.unit_types {
                         if unit_cfg.produced_by_slug.as_deref() == Some("factory")
-                            && player.currency >= unit_cfg.production_cost as i64
+                            && player.energy >= unit_cfg.production_cost as i64
                         {
                             actions.push(Action {
                                 action_type: "produce_unit".into(),
@@ -247,6 +249,7 @@ impl BotBrain {
                                 units: None,
                                 building_type: None,
                                 ability_type: None,
+                                ..Default::default()
                             });
                             break;
                         }
@@ -279,6 +282,7 @@ impl BotBrain {
                                     region_id: None,
                                     building_type: None,
                                     ability_type: None,
+                                    ..Default::default()
                                 });
                                 return actions; // Only one move per decision
                             }
@@ -319,11 +323,11 @@ mod tests {
             unit_type: Some("infantry".into()),
             is_capital,
             building_type: None,
-            buildings: HashMap::new(),
+            building_instances: Vec::new(),
             defense_bonus: 0.0,
             vision_range: 0,
             unit_generation_bonus: 0.0,
-            currency_generation_bonus: 0.0,
+            energy_generation_bonus: 0.0,
             is_coastal: false,
             sea_distances: Vec::new(),
             units: {
@@ -381,14 +385,19 @@ mod tests {
                 eliminated_reason: None,
                 eliminated_tick: None,
                 capital_region_id: Some("A".into()),
-                currency: 100,
-                currency_accum: 0.0,
+                energy: 100,
+                energy_accum: 0.0,
                 ability_cooldowns: HashMap::new(),
                 is_bot: true,
                 total_units_produced: 0,
                 total_units_lost: 0,
                 total_regions_conquered: 0,
                 total_buildings_built: 0,
+                unlocked_buildings: vec![],
+                unlocked_units: vec![],
+                ability_scrolls: HashMap::new(),
+                active_boosts: vec![],
+                ..Default::default()
             },
         );
 
@@ -397,9 +406,9 @@ mod tests {
             capital_selection_time_seconds: 30,
             base_unit_generation_rate: 1.0,
             capital_generation_bonus: 2.0,
-            starting_currency: 100,
-            base_currency_per_tick: 2.0,
-            region_currency_per_tick: 0.35,
+            starting_energy: 100,
+            base_energy_per_tick: 2.0,
+            region_energy_per_tick: 0.35,
             attacker_advantage: 0.0,
             defender_advantage: 0.1,
             combat_randomness: 0.2,
@@ -455,14 +464,19 @@ mod tests {
                 eliminated_reason: Some("capital_captured".into()),
                 eliminated_tick: Some(10),
                 capital_region_id: None,
-                currency: 0,
-                currency_accum: 0.0,
+                energy: 0,
+                energy_accum: 0.0,
                 ability_cooldowns: HashMap::new(),
                 is_bot: true,
                 total_units_produced: 0,
                 total_units_lost: 0,
                 total_regions_conquered: 0,
                 total_buildings_built: 0,
+                unlocked_buildings: vec![],
+                unlocked_units: vec![],
+                ability_scrolls: HashMap::new(),
+                active_boosts: vec![],
+                ..Default::default()
             },
         );
 
@@ -471,9 +485,9 @@ mod tests {
             capital_selection_time_seconds: 30,
             base_unit_generation_rate: 1.0,
             capital_generation_bonus: 2.0,
-            starting_currency: 100,
-            base_currency_per_tick: 2.0,
-            region_currency_per_tick: 0.35,
+            starting_energy: 100,
+            base_energy_per_tick: 2.0,
+            region_energy_per_tick: 0.35,
             attacker_advantage: 0.0,
             defender_advantage: 0.1,
             combat_randomness: 0.2,
