@@ -225,8 +225,15 @@ export function useGameSocket(matchId: string): UseGameSocketReturn {
         console.error("Game error:", msg.message);
         setEvents((prev) => [
           ...prev.slice(-50),
-          { type: "server_error", message: msg.message as string },
+          { type: "server_error", message: msg.message as string, fatal: msg.fatal as boolean | undefined },
         ]);
+        // Fatal error = match cancelled/unrecoverable — update status
+        if (msg.fatal) {
+          setGameState((prev) => {
+            if (!prev) return prev;
+            return { ...prev, meta: { ...prev.meta, status: "cancelled" } };
+          });
+        }
         break;
       case "match_left":
         if (leaveResolverRef.current) {

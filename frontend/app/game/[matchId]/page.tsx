@@ -1204,7 +1204,28 @@ export default function GamePage({
         )}
       </div>
 
-      {!connected && status !== "finished" && (
+      {/* Match cancelled overlay */}
+      {status === "cancelled" && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="flex max-w-sm flex-col items-center gap-4 rounded-2xl border border-red-400/30 bg-slate-950/95 p-8 text-center shadow-2xl backdrop-blur-xl">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-red-500/20">
+              <span className="text-2xl">⚠️</span>
+            </div>
+            <h2 className="font-display text-2xl text-zinc-50">Mecz anulowany</h2>
+            <p className="text-sm text-slate-400">
+              Ten mecz został anulowany z powodu błędu serwera lub rozłączenia graczy.
+            </p>
+            <button
+              onClick={() => router.push("/dashboard")}
+              className="mt-2 rounded-xl border border-cyan-400/30 bg-cyan-500/20 px-6 py-2.5 text-sm font-medium text-cyan-200 transition-all hover:bg-cyan-500/30"
+            >
+              Wróć do panelu
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!connected && status !== "finished" && status !== "cancelled" && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70">
           <div className="flex items-center gap-3 rounded-[24px] border border-white/10 bg-slate-950/88 px-6 py-4 backdrop-blur-xl">
             <Image
