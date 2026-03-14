@@ -30,14 +30,12 @@ export default memo(function AbilityBar({
   abilityScrolls,
   abilityLevels,
 }: AbilityBarProps) {
-  const scrolls = abilityScrolls ?? {};
-  const levels = abilityLevels ?? {};
-
   const sorted = useMemo(() => {
+    const s = abilityScrolls;
     const base = [...abilities].sort((a, b) => a.order - b.order);
-    // Only show abilities the player has scrolls for (no scrolls = no abilities)
-    return base.filter((a) => (scrolls[a.slug] ?? 0) > 0);
-  }, [abilities, scrolls]);
+    if (!s) return [];
+    return base.filter((a) => (s[a.slug] ?? 0) > 0);
+  }, [abilities, abilityScrolls]);
 
   const handleClick = useCallback(
     (slug: string) => {
@@ -63,8 +61,8 @@ export default memo(function AbilityBar({
             onClick={handleClick}
             size="lg"
             locked={allowedAbility != null && allowedAbility !== ability.slug}
-            remainingUses={scrolls[ability.slug]}
-            abilityLevel={levels[ability.slug]}
+            remainingUses={abilityScrolls?.[ability.slug]}
+            abilityLevel={abilityLevels?.[ability.slug]}
           />
         ))}
       </div>
@@ -82,8 +80,8 @@ export default memo(function AbilityBar({
             onClick={handleClick}
             size="sm"
             locked={allowedAbility != null && allowedAbility !== ability.slug}
-            remainingUses={scrolls[ability.slug]}
-            abilityLevel={levels[ability.slug]}
+            remainingUses={abilityScrolls?.[ability.slug]}
+            abilityLevel={abilityLevels?.[ability.slug]}
           />
         ))}
       </div>

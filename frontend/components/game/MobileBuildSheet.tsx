@@ -55,6 +55,15 @@ export default memo(function MobileBuildSheet({
     return region.buildings ?? {};
   }, [region.building_instances, region.buildings]);
 
+  const instancesByType = useMemo(() => {
+    const map: Record<string, Array<{ building_type: string; level: number }>> = {};
+    for (const inst of region.building_instances ?? []) {
+      (map[inst.building_type] ??= []).push(inst);
+    }
+    for (const arr of Object.values(map)) arr.sort((a, b) => a.level - b.level);
+    return map;
+  }, [region.building_instances]);
+
   const queuedBuildingCounts = useMemo(
     () =>
       buildingQueue
@@ -167,9 +176,7 @@ export default memo(function MobileBuildSheet({
             buildOptions.map((building) => {
               const isBuildingLocked = hasBuildingLocks && !unlockedBuildings!.includes(building.slug);
               // Derive the minimum level instance for this building type (weakest = first to upgrade)
-              const typeInstances = (region.building_instances ?? [])
-                .filter((inst) => inst.building_type === building.slug)
-                .sort((a, b) => a.level - b.level);
+              const typeInstances = instancesByType[building.slug] ?? [];
               const currentRegionLevel = typeInstances.length > 0
                 ? typeInstances[0].level
                 : region.building_levels?.[building.slug];

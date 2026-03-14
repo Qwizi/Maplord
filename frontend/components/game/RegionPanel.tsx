@@ -67,6 +67,16 @@ export default memo(function RegionPanel({
   );
   const getUnitConfig = (slug: string) => unitConfigMap.get(slug) ?? null;
 
+  // Pre-group building instances by type (avoids filter/sort in render loops)
+  const instancesByType = useMemo(() => {
+    const map: Record<string, Array<{ building_type: string; level: number }>> = {};
+    for (const inst of region.building_instances ?? []) {
+      (map[inst.building_type] ??= []).push(inst);
+    }
+    for (const arr of Object.values(map)) arr.sort((a, b) => a.level - b.level);
+    return map;
+  }, [region.building_instances]);
+
   const queuedBuildingCounts = useMemo(
     () =>
       buildingQueue
@@ -284,9 +294,7 @@ export default memo(function RegionPanel({
             <div className="grid gap-2">
               {compactDisplayedBuildings.map((building) => {
                 // Collect all instances for this building type, sorted by level ascending
-                const instances = (region.building_instances ?? [])
-                  .filter((inst) => inst.building_type === building.slug)
-                  .sort((a, b) => a.level - b.level);
+                const instances = instancesByType[building.slug] ?? [];
                 // Fall back to legacy count with no level info
                 const legacyCount = !region.building_instances ? (buildingCounts[building.slug] ?? 0) : 0;
 
@@ -438,10 +446,7 @@ export default memo(function RegionPanel({
             {compactBuildOptions.map((building) => {
               const isBuildingLocked = hasBuildingLocks && !unlockedBuildings!.includes(building.slug);
               // Derive the minimum level instance for this building type (weakest = first to upgrade)
-              const typeInstances = (region.building_instances ?? [])
-                .filter((inst) => inst.building_type === building.slug)
-                .sort((a, b) => a.level - b.level);
-              // Current region level = min level of existing instances (or from legacy building_levels)
+              const typeInstances = instancesByType[building.slug] ?? [];
               const currentRegionLevel = typeInstances.length > 0
                 ? typeInstances[0].level
                 : region.building_levels?.[building.slug];
