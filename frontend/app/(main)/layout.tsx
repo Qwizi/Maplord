@@ -523,73 +523,142 @@ function QueueBannerInline() {
 
   const mins = Math.floor(queueSeconds / 60);
   const secs = String(queueSeconds % 60).padStart(2, "0");
+  const countdownStr = readyCountdown !== null
+    ? `${Math.floor(readyCountdown / 60)}:${String(readyCountdown % 60).padStart(2, "0")}`
+    : null;
 
   return (
-    <div className="flex items-center gap-2 md:gap-2.5 ml-auto">
-      {/* Player avatars — click to go to lobby page */}
-      {lobbyPlayers.length > 0 && (
-        <Link
-          href={lobbyId ? `/lobby/${lobbyId}` : "#"}
-          className="flex -space-x-2 transition-opacity hover:opacity-80"
-        >
-          {lobbyPlayers.map((player) => (
-            <div
-              key={player.user_id}
-              title={player.username}
-              className={cn(
-                "flex h-7 w-7 items-center justify-center rounded-full border-2 text-[10px] font-bold uppercase",
-                player.is_ready
-                  ? "border-green-500 bg-green-500/20 text-green-400"
-                  : "border-border bg-secondary text-muted-foreground",
-                player.is_bot && "opacity-70"
-              )}
+    <>
+      {/* ── Desktop: inline in header ── */}
+      <div className="hidden md:flex items-center gap-2.5 ml-auto">
+        {lobbyPlayers.length > 0 && (
+          <Link
+            href={lobbyId ? `/lobby/${lobbyId}` : "#"}
+            className="flex -space-x-2 transition-opacity hover:opacity-80"
+          >
+            {lobbyPlayers.map((player) => (
+              <div
+                key={player.user_id}
+                title={player.username}
+                className={cn(
+                  "flex h-7 w-7 items-center justify-center rounded-full border-2 text-[10px] font-bold uppercase",
+                  player.is_ready
+                    ? "border-green-500 bg-green-500/20 text-green-400"
+                    : "border-border bg-secondary text-muted-foreground",
+                  player.is_bot && "opacity-70"
+                )}
+              >
+                {player.username.charAt(0)}
+              </div>
+            ))}
+          </Link>
+        )}
+
+        <div className="flex items-center gap-1.5 rounded-full bg-primary/10 border border-primary/20 pl-3 pr-1.5 py-1">
+          <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+          <span className="text-sm font-semibold text-primary tabular-nums">{mins}:{secs}</span>
+          <span className="text-xs text-primary/70">· {lobbyPlayers.length} graczy</span>
+
+          {lobbyFull && !allReady && !myReady && (
+            <Button
+              size="xs"
+              onClick={setReady}
+              className="ml-1 rounded-full bg-green-500 text-white hover:bg-green-400 active:scale-[0.95] font-bold"
             >
-              {player.username.charAt(0)}
-            </div>
-          ))}
-        </Link>
-      )}
+              Gotowy! {countdownStr && <span className="tabular-nums">({countdownStr})</span>}
+            </Button>
+          )}
+          {lobbyFull && !allReady && myReady && (
+            <span className="ml-1 text-[10px] text-green-400 font-semibold tabular-nums">
+              {countdownStr ?? "Oczekiwanie..."}
+            </span>
+          )}
 
-      <div className="flex items-center gap-1.5 rounded-full bg-primary/10 border border-primary/20 pl-2.5 pr-1 py-1 md:pl-3 md:pr-1.5 md:py-1">
-        <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-        <span className="text-xs md:text-sm font-semibold text-primary tabular-nums">{mins}:{secs}</span>
-        <span className="hidden md:inline text-xs text-primary/70">· {lobbyPlayers.length} graczy</span>
+          {lobbyId && (
+            <Link
+              href={`/lobby/${lobbyId}`}
+              className="flex items-center justify-center h-6 w-6 rounded-full bg-primary/20 text-primary hover:bg-primary/30 transition-colors ml-0.5 active:scale-[0.9]"
+              title="Lobby"
+            >
+              <Users className="h-3 w-3" />
+            </Link>
+          )}
 
-        {/* Ready button — show when lobby is full */}
+          <button
+            onClick={leaveQueue}
+            className="flex items-center justify-center h-6 w-6 rounded-full bg-primary/20 text-primary hover:bg-destructive/20 hover:text-destructive transition-colors ml-0.5 active:scale-[0.9]"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      </div>
+
+      {/* ── Mobile: subheader bar below main header ── */}
+      <div className="fixed inset-x-0 top-12 z-39 flex items-center gap-2 px-3 py-1.5 border-b border-border bg-card/90 backdrop-blur-xl md:hidden">
+        {/* Avatars */}
+        {lobbyPlayers.length > 0 && (
+          <Link
+            href={lobbyId ? `/lobby/${lobbyId}` : "#"}
+            className="flex -space-x-1.5 shrink-0"
+          >
+            {lobbyPlayers.map((player) => (
+              <div
+                key={player.user_id}
+                className={cn(
+                  "flex h-6 w-6 items-center justify-center rounded-full border-[1.5px] text-[9px] font-bold uppercase",
+                  player.is_ready
+                    ? "border-green-500 bg-green-500/20 text-green-400"
+                    : "border-border bg-secondary text-muted-foreground",
+                  player.is_bot && "opacity-70"
+                )}
+              >
+                {player.username.charAt(0)}
+              </div>
+            ))}
+          </Link>
+        )}
+
+        {/* Timer */}
+        <div className="flex items-center gap-1">
+          <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+          <span className="text-xs font-semibold text-primary tabular-nums">{mins}:{secs}</span>
+        </div>
+
+        <div className="flex-1" />
+
+        {/* Ready / countdown */}
         {lobbyFull && !allReady && !myReady && (
           <Button
             size="xs"
             onClick={setReady}
-            className="ml-1 rounded-full bg-green-500 text-white hover:bg-green-400 active:scale-[0.95] font-bold"
+            className="rounded-full bg-green-500 text-white hover:bg-green-400 active:scale-[0.95] font-bold text-[11px] h-6 px-2.5"
           >
-            Gotowy! {readyCountdown !== null && <span className="tabular-nums">({Math.floor(readyCountdown / 60)}:{String(readyCountdown % 60).padStart(2, "0")})</span>}
+            Gotowy! {countdownStr && <span className="tabular-nums">({countdownStr})</span>}
           </Button>
         )}
-        {lobbyFull && !allReady && myReady && (
-          <span className="ml-1 text-[10px] text-green-400 font-semibold tabular-nums">
-            {readyCountdown !== null ? `${Math.floor(readyCountdown / 60)}:${String(readyCountdown % 60).padStart(2, "0")}` : "Oczekiwanie..."}
-          </span>
+        {lobbyFull && !allReady && myReady && countdownStr && (
+          <span className="text-[10px] text-green-400 font-semibold tabular-nums">{countdownStr}</span>
         )}
 
         {/* Lobby link */}
         {lobbyId && (
           <Link
             href={`/lobby/${lobbyId}`}
-            className="flex items-center justify-center h-5 w-5 md:h-6 md:w-6 rounded-full bg-primary/20 text-primary hover:bg-primary/30 transition-colors ml-0.5 active:scale-[0.9]"
-            title="Lobby"
+            className="flex items-center justify-center h-5 w-5 rounded-full bg-primary/20 text-primary active:scale-[0.9]"
           >
-            <Users className="h-3 w-3" />
+            <Users className="h-2.5 w-2.5" />
           </Link>
         )}
 
+        {/* Cancel */}
         <button
           onClick={leaveQueue}
-          className="flex items-center justify-center h-5 w-5 md:h-6 md:w-6 rounded-full bg-primary/20 text-primary hover:bg-destructive/20 hover:text-destructive transition-colors ml-0.5 active:scale-[0.9]"
+          className="flex items-center justify-center h-5 w-5 rounded-full bg-primary/20 text-primary hover:bg-destructive/20 hover:text-destructive transition-colors active:scale-[0.9]"
         >
-          <X className="h-3 w-3" />
+          <X className="h-2.5 w-2.5" />
         </button>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -607,6 +676,7 @@ export default function MainLayout({ children }: { children: ReactNode }) {
 
 function MainLayoutInner({ children }: { children: ReactNode }) {
   const { user, logout, token } = useAuth();
+  const { inQueue: showQueueSubheader } = useMatchmaking();
   const pathname = usePathname();
   const [wallet, setWallet] = useState<WalletOut | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -666,7 +736,7 @@ function MainLayoutInner({ children }: { children: ReactNode }) {
       {/* ------------------------------------------------------------------ */}
       {/* Body (below top bar)                                                */}
       {/* ------------------------------------------------------------------ */}
-      <div className="flex pt-12">
+      <div className={cn("flex pt-12", showQueueSubheader && "max-md:pt-[calc(3rem+2.25rem)]")}>
 
         {/* ---------------------------------------------------------------- */}
         {/* Desktop sidebar                                                   */}

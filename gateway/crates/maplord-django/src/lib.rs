@@ -280,6 +280,7 @@ pub struct LobbyStateResult {
     pub game_mode: Option<String>,
     pub host_user_id: String,
     pub players: Vec<LobbyPlayerInfo>,
+    pub full_at: Option<f64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -294,6 +295,7 @@ pub struct FindOrCreateLobbyResult {
     pub status: String,
     pub created: bool,
     pub players: Vec<LobbyPlayerInfo>,
+    pub full_at: Option<f64>,
 }
 
 impl DjangoClient {

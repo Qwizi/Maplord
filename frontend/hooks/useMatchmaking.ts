@@ -120,6 +120,7 @@ export function MatchmakingProvider({ children }: { children: ReactNode }) {
   const [voiceToken, setVoiceToken] = useState<string | null>(null);
   const [voiceUrl, setVoiceUrl] = useState<string | null>(null);
   const [readyCountdown, setReadyCountdown] = useState<number | null>(null);
+  // Server timestamp (epoch seconds) when lobby became full
   const [lobbyFullAt, setLobbyFullAt] = useState<number | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -143,47 +144,22 @@ export function MatchmakingProvider({ children }: { children: ReactNode }) {
     if (!inQueue) setQueueSeconds(0);
   }, [inQueue]);
 
-  // Ready countdown (30s to accept after lobby_full)
+  // Ready countdown — computed from server-provided full_at timestamp.
+  // Backend handles the actual timeout (Celery kicks unready players after 2 min).
   const READY_TIMEOUT_SECS = 120;
 
   useEffect(() => {
-    if (lobbyFull && !allReady) {
-      if (!lobbyFullAt) setLobbyFullAt(Date.now());
-    } else {
-      setLobbyFullAt(null);
+    if (!lobbyFull || allReady || !lobbyFullAt) {
       setReadyCountdown(null);
+      return;
     }
-  }, [lobbyFull, allReady, lobbyFullAt]);
-
-  useEffect(() => {
-    if (!lobbyFullAt || allReady) return;
     const id = setInterval(() => {
-      const elapsed = Math.floor((Date.now() - lobbyFullAt) / 1000);
+      const elapsed = Math.floor(Date.now() / 1000 - lobbyFullAt);
       const remaining = Math.max(0, READY_TIMEOUT_SECS - elapsed);
       setReadyCountdown(remaining);
-      if (remaining <= 0) {
-        // Time's up — auto-cancel
-        clearInterval(id);
-        if (wsRef.current?.readyState === WebSocket.OPEN) {
-          wsRef.current.send(JSON.stringify({ action: "cancel" }));
-        }
-        wsRef.current?.close();
-        wsRef.current = null;
-        setInQueue(false);
-        setLobbyId(null);
-        setLobbyPlayers([]);
-        setLobbyFull(false);
-        setAllReady(false);
-        setLobbyChatMessages([]);
-        setVoiceToken(null);
-        setVoiceUrl(null);
-        setReadyCountdown(null);
-        setLobbyFullAt(null);
-        saveQueueSession(null);
-      }
     }, 500);
     return () => clearInterval(id);
-  }, [lobbyFullAt, allReady]);
+  }, [lobbyFull, allReady, lobbyFullAt]);
 
   const handleMessage = useCallback((msg: WSMessage) => {
     switch (msg.type) {
@@ -199,6 +175,7 @@ export function MatchmakingProvider({ children }: { children: ReactNode }) {
         setLobbyPlayers([]);
         setLobbyFull(false);
         setAllReady(false);
+        setLobbyFullAt(null);
         setLobbyChatMessages([]);
         setVoiceToken(null);
         setVoiceUrl(null);
@@ -216,6 +193,7 @@ export function MatchmakingProvider({ children }: { children: ReactNode }) {
         setLobbyPlayers([]);
         setLobbyFull(false);
         setAllReady(false);
+        setLobbyFullAt(null);
         saveQueueSession(null);
         break;
 
@@ -252,6 +230,7 @@ export function MatchmakingProvider({ children }: { children: ReactNode }) {
         });
         setLobbyFull(false);
         setAllReady(false);
+        setLobbyFullAt(null);
         break;
       }
       case "player_ready": {
@@ -268,6 +247,9 @@ export function MatchmakingProvider({ children }: { children: ReactNode }) {
           setLobbyPlayers(msg.players as LobbyPlayer[]);
           setPlayersInQueue((msg.players as LobbyPlayer[]).length);
         }
+        if (msg.full_at) {
+          setLobbyFullAt(msg.full_at as number);
+        }
         break;
       }
       case "all_ready":
@@ -281,6 +263,7 @@ export function MatchmakingProvider({ children }: { children: ReactNode }) {
         setLobbyPlayers([]);
         setLobbyFull(false);
         setAllReady(false);
+        setLobbyFullAt(null);
         setLobbyChatMessages([]);
         setVoiceToken(null);
         setVoiceUrl(null);
@@ -292,6 +275,7 @@ export function MatchmakingProvider({ children }: { children: ReactNode }) {
         setLobbyPlayers([]);
         setLobbyFull(false);
         setAllReady(false);
+        setLobbyFullAt(null);
         setLobbyChatMessages([]);
         setVoiceToken(null);
         setVoiceUrl(null);
@@ -369,6 +353,7 @@ export function MatchmakingProvider({ children }: { children: ReactNode }) {
     setLobbyPlayers([]);
     setLobbyFull(false);
     setAllReady(false);
+    setLobbyFullAt(null);
     setLobbyChatMessages([]);
     setVoiceToken(null);
     setVoiceUrl(null);

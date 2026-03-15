@@ -161,6 +161,7 @@ impl MatchmakingManager {
                         "type": "lobby_full",
                         "lobby_id": state.lobby_id,
                         "players": state.players,
+                        "full_at": state.full_at,
                     })));
                 }
                 if state.status == "ready" {
@@ -250,6 +251,7 @@ impl MatchmakingManager {
                     "type": "lobby_full",
                     "lobby_id": lobby_id,
                     "players": result.players,
+                    "full_at": result.full_at,
                 });
                 self.broadcast_to_lobby(&lobby_id, &full_msg, None);
                 // Also send to joining user (not yet in lobby_connections)
@@ -418,6 +420,7 @@ impl MatchmakingManager {
                         "type": "lobby_full",
                         "lobby_id": state.lobby_id,
                         "players": state.players,
+                        "full_at": state.full_at,
                     }));
                 }
                 if state.status == "ready" {

@@ -789,10 +789,12 @@ class LobbyInternalController(ControllerBase):
             defaults={'is_bot': body.is_bot},
         )
 
+        from django.utils import timezone as tz
         player_count = lobby.players.count()
         if player_count >= lobby.max_players:
             lobby.status = Lobby.Status.FULL
-            lobby.save(update_fields=['status'])
+            lobby.full_at = tz.now()
+            lobby.save(update_fields=['status', 'full_at'])
 
         players = list(lobby.players.select_related('user').all())
 
@@ -828,7 +830,8 @@ class LobbyInternalController(ControllerBase):
             # Non-host left — revert to waiting so new players can join
             # Also reset all ready states since lobby composition changed
             lobby.status = Lobby.Status.WAITING
-            lobby.save(update_fields=['status'])
+            lobby.full_at = None
+            lobby.save(update_fields=['status', 'full_at'])
             lobby.players.update(is_ready=False)
 
         return {
@@ -908,11 +911,14 @@ class LobbyInternalController(ControllerBase):
         player_count = len(players)
 
         if player_count >= lobby.max_players:
+            from django.utils import timezone as tz
             if all(p.is_ready for p in players):
                 lobby.status = Lobby.Status.READY
             else:
                 lobby.status = Lobby.Status.FULL
-            lobby.save(update_fields=['status'])
+            if not lobby.full_at:
+                lobby.full_at = tz.now()
+            lobby.save(update_fields=['status', 'full_at'])
 
         return {
             'bot_ids': [str(bid) for bid in chosen_bot_ids],
@@ -975,6 +981,7 @@ class LobbyInternalController(ControllerBase):
             'game_mode': lobby.game_mode.slug if lobby.game_mode else None,
             'host_user_id': str(lobby.host_user_id),
             'players': [_lobby_player_dict(p) for p in players],
+            'full_at': lobby.full_at.timestamp() if lobby.full_at else None,
         }
 
     @route.get('/active/{user_id}/')
@@ -1079,8 +1086,10 @@ class LobbyInternalController(ControllerBase):
                 )
                 player_count = lobby.players.count()
                 if player_count >= lobby.max_players:
+                    from django.utils import timezone as tz
                     lobby.status = Lobby.Status.FULL
-                    lobby.save(update_fields=['status'])
+                    lobby.full_at = tz.now()
+                    lobby.save(update_fields=['status', 'full_at'])
 
                 players = list(lobby.players.select_related('user').all())
                 return {
@@ -1089,6 +1098,7 @@ class LobbyInternalController(ControllerBase):
                     'status': lobby.status,
                     'created': False,
                     'players': [_lobby_player_dict(p) for p in players],
+                    'full_at': lobby.full_at.timestamp() if lobby.full_at else None,
                 }
             else:
                 if gm:
@@ -1110,4 +1120,5 @@ class LobbyInternalController(ControllerBase):
                     'status': lobby.status,
                     'created': True,
                     'players': [_lobby_player_dict(p) for p in players],
+                    'full_at': None,
                 }
