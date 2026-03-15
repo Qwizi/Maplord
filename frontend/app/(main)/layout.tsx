@@ -459,7 +459,7 @@ function QueueGuard({ children, pathname }: { children: ReactNode; pathname: str
 // ---------------------------------------------------------------------------
 
 function QueueBannerInline() {
-  const { inQueue, lobbyId, lobbyPlayers, lobbyFull, allReady, queueSeconds, leaveQueue, matchId, setReady } = useMatchmaking();
+  const { inQueue, lobbyId, lobbyPlayers, lobbyFull, allReady, queueSeconds, leaveQueue, matchId, setReady, readyCountdown } = useMatchmaking();
   const { user } = useAuth();
   const router = useRouter();
   const myReady = lobbyPlayers.some(p => p.user_id === user?.id && p.is_ready);
@@ -474,8 +474,8 @@ function QueueBannerInline() {
     if (lobbyFull && !lobbyToastRef.current) {
       try { const a = new Audio("/assets/audio/gui/int_message_alert.ogg"); a.volume = 0.7; a.play().catch(() => {}); } catch {}
       lobbyToastRef.current = toast.success("Mecz znaleziony!", {
-        description: "Kliknij Gotowy aby potwierdzić",
-        duration: 30000,
+        description: "Kliknij Gotowy aby potwierdzić (2:00)",
+        duration: 120000,
         action: {
           label: "Gotowy!",
           onClick: () => setReady(),
@@ -490,6 +490,26 @@ function QueueBannerInline() {
       lobbyToastRef.current = null;
     }
   }, [lobbyFull, setReady]);
+
+  // Update toast with countdown
+  useEffect(() => {
+    if (lobbyToastRef.current && readyCountdown !== null && lobbyFull && !allReady) {
+      const m = Math.floor(readyCountdown / 60);
+      const s = String(readyCountdown % 60).padStart(2, "0");
+      toast.success("Mecz znaleziony!", {
+        id: lobbyToastRef.current,
+        description: `Kliknij Gotowy aby potwierdzić (${m}:${s})`,
+        duration: 120000,
+        action: {
+          label: "Gotowy!",
+          onClick: () => setReady(),
+        },
+        classNames: {
+          actionButton: "!bg-green-500 !text-white !font-bold !rounded-lg !px-4 !py-2 !text-sm hover:!bg-green-400 !border-0",
+        },
+      });
+    }
+  }, [readyCountdown, lobbyFull, allReady, setReady]);
 
   // Dismiss toast on cancel / leave
   useEffect(() => {
@@ -542,11 +562,13 @@ function QueueBannerInline() {
             onClick={setReady}
             className="ml-1 rounded-full bg-green-500 text-white hover:bg-green-400 active:scale-[0.95] font-bold"
           >
-            Gotowy!
+            Gotowy! {readyCountdown !== null && <span className="tabular-nums">({Math.floor(readyCountdown / 60)}:{String(readyCountdown % 60).padStart(2, "0")})</span>}
           </Button>
         )}
         {lobbyFull && !allReady && myReady && (
-          <span className="ml-1 text-[10px] text-green-400 font-semibold">Oczekiwanie...</span>
+          <span className="ml-1 text-[10px] text-green-400 font-semibold tabular-nums">
+            {readyCountdown !== null ? `${Math.floor(readyCountdown / 60)}:${String(readyCountdown % 60).padStart(2, "0")}` : "Oczekiwanie..."}
+          </span>
         )}
 
         {/* Lobby link */}

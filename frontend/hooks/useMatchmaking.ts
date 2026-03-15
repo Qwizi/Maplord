@@ -144,7 +144,7 @@ export function MatchmakingProvider({ children }: { children: ReactNode }) {
   }, [inQueue]);
 
   // Ready countdown (30s to accept after lobby_full)
-  const READY_TIMEOUT_SECS = 30;
+  const READY_TIMEOUT_SECS = 120;
 
   useEffect(() => {
     if (lobbyFull && !allReady) {
