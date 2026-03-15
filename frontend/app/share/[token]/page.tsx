@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
 import dynamic from "next/dynamic";
 import {
   getSharedResource,
@@ -33,8 +32,10 @@ import {
   Clock,
   Crown,
   Hammer,
+  Globe,
   LogIn,
   Loader2,
+  UserPlus,
   MapPin,
   Pause,
   Play,
@@ -318,39 +319,46 @@ export default function SharePage() {
   const hasReplay = snapshots.length > 0;
 
   return (
-    <div className="min-h-screen overflow-hidden bg-background text-foreground">
-      {/* Subtle background texture */}
-      <div className="pointer-events-none absolute inset-0 bg-[url('/assets/ui/hex_bg_tile.webp')] bg-[size:240px] opacity-[0.05]" />
-
-      {/* Header / branding */}
-      <header className="relative border-b border-border bg-card backdrop-blur-xl">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-          <Link href="/" className="flex items-center gap-2.5">
-            <div className="rounded-xl border border-border bg-secondary p-1.5">
-              <Image
-                src="/assets/common/world.webp"
-                alt="MapLord"
-                width={28}
-                height={28}
-                className="h-7 w-7 object-contain"
-              />
+    <div className="min-h-screen bg-background text-foreground">
+      {/* ── Top bar (same as main layout) ── */}
+      <header className="fixed inset-x-0 top-0 z-40 h-12 border-b border-border bg-card/80 backdrop-blur-xl">
+        <div className="flex h-full items-center gap-3 px-4">
+          <Link href="/" className="flex shrink-0 items-center gap-2 mr-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-secondary">
+              <Globe size={15} className="text-muted-foreground" />
             </div>
-            <span className="font-display text-2xl text-foreground">
-              MapLord
+            <span className="font-display text-sm font-semibold uppercase tracking-[0.18em] text-foreground">
+              MAPLORD
             </span>
           </Link>
-
-          <Link
-            href="/register"
-            className={buttonVariants({ className: "h-12 gap-2 rounded-full px-8 text-base" })}
-          >
-            <LogIn className="h-5 w-5" />
-            Dołącz do gry
-          </Link>
+          <div className="flex-1" />
         </div>
       </header>
 
-      <main className="relative mx-auto max-w-5xl space-y-6 px-4 py-8 sm:px-6">
+      {/* ── Sidebar (auth links only) ── */}
+      <aside className="fixed left-0 top-12 hidden h-[calc(100vh-3rem)] w-56 flex-col border-r border-border bg-card md:flex">
+        <nav className="flex flex-col gap-1 p-4 pt-6">
+          <p className="px-3 pb-2 text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">Konto</p>
+          <Link
+            href="/login"
+            className="cursor-target flex items-center gap-3.5 rounded-lg px-4 py-3.5 text-lg font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <LogIn size={22} />
+            Zaloguj się
+          </Link>
+          <Link
+            href="/register"
+            className="cursor-target flex items-center gap-3.5 rounded-lg px-4 py-3.5 text-lg font-medium text-primary transition-colors hover:bg-primary/10"
+          >
+            <UserPlus size={22} />
+            Zarejestruj się
+          </Link>
+        </nav>
+      </aside>
+
+      {/* ── Main content ── */}
+      <main className="pt-12 md:pl-56">
+        <div className="space-y-8 px-4 py-6 sm:px-6 lg:px-8">
         {/* Page title */}
         <div>
           <h1 className="font-display text-4xl sm:text-5xl text-foreground">
@@ -797,6 +805,7 @@ export default function SharePage() {
             </div>
           </CardContent>
         </Card>
+        </div>
       </main>
     </div>
   );

@@ -64,11 +64,16 @@ const TargetCursor: React.FC<TargetCursorProps> = ({
       currentLeaveHandler = null;
     };
 
+    // Start hidden — only show after first mouse move
+    const lastMouseX = (window as unknown as Record<string, number>).__cursorX;
+    const lastMouseY = (window as unknown as Record<string, number>).__cursorY;
+    const hasPosition = lastMouseX != null && lastMouseY != null;
     gsap.set(cursor, {
       xPercent: -50,
       yPercent: -50,
-      x: window.innerWidth / 2,
-      y: window.innerHeight / 2
+      x: hasPosition ? lastMouseX : 0,
+      y: hasPosition ? lastMouseY : 0,
+      opacity: hasPosition ? 1 : 0,
     });
 
     const createSpinTimeline = () => {
@@ -111,7 +116,16 @@ const TargetCursor: React.FC<TargetCursorProps> = ({
 
     tickerFnRef.current = tickerFn;
 
-    const moveHandler = (e: MouseEvent) => moveCursor(e.clientX, e.clientY);
+    let firstMove = !hasPosition;
+    const moveHandler = (e: MouseEvent) => {
+      (window as unknown as Record<string, number>).__cursorX = e.clientX;
+      (window as unknown as Record<string, number>).__cursorY = e.clientY;
+      if (firstMove && cursorRef.current) {
+        gsap.set(cursorRef.current, { opacity: 1 });
+        firstMove = false;
+      }
+      moveCursor(e.clientX, e.clientY);
+    };
     window.addEventListener('mousemove', moveHandler);
 
     // Watch for target element removal from DOM — triggers leave if element disappears

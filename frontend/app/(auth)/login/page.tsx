@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import AuthScreen from "@/components/auth/AuthScreen";
 import { toast } from "sonner";
 import { APIError, type User } from "@/lib/api";
-import { Trophy, Plus, X, ChevronRight, ArrowLeft, Save, SkipForward } from "lucide-react";
+import { Trophy, Plus, X, ArrowLeft, Save, SkipForward } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // Saved profiles — stored in localStorage, no passwords
@@ -68,8 +68,8 @@ function removeProfile(username: string) {
 // ---------------------------------------------------------------------------
 
 const loginSchema = z.object({
-  identifier: z.string().min(1, "Nazwa uzytkownika lub email jest wymagana"),
-  password: z.string().min(1, "Haslo jest wymagane"),
+  identifier: z.string().min(1, "Nazwa użytkownika lub email jest wymagana"),
+  password: z.string().min(1, "Hasło jest wymagane"),
 });
 
 type LoginFormData = z.infer<typeof loginSchema>;
@@ -92,18 +92,23 @@ function ProfileCard({
       role="button"
       tabIndex={0}
       onClick={() => onSelect(profile)}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(profile); } }}
-      className="group flex w-full cursor-pointer items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-left transition-all hover:border-cyan-300/20 hover:bg-white/[0.06]"
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect(profile);
+        }
+      }}
+      className="cursor-target group flex w-full cursor-pointer items-center gap-4 rounded-2xl border border-border bg-secondary p-5 text-left transition-all hover:border-border/60 hover:bg-muted"
     >
-      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#38bdf8,#0f766e)] font-display text-lg text-slate-950">
+      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary/20 font-display text-2xl text-primary">
         {profile.username[0].toUpperCase()}
       </div>
       <div className="min-w-0 flex-1">
-        <div className="truncate font-medium text-zinc-100">
+        <div className="truncate text-xl font-semibold text-foreground">
           {profile.username}
         </div>
-        <div className="flex items-center gap-1 text-xs text-slate-400">
-          <Trophy className="h-3 w-3 text-amber-300" />
+        <div className="flex items-center gap-1.5 text-base text-muted-foreground">
+          <Trophy className="h-4 w-4 text-accent" />
           {profile.elo_rating} ELO
         </div>
       </div>
@@ -112,12 +117,11 @@ function ProfileCard({
           e.stopPropagation();
           onRemove(profile.username);
         }}
-        className="rounded-lg p-1.5 text-slate-500 opacity-0 transition-all hover:bg-white/10 hover:text-red-400 group-hover:opacity-100"
-        title="Usun profil"
+        className="rounded-lg p-1.5 text-muted-foreground opacity-0 transition-all hover:bg-muted hover:text-destructive group-hover:opacity-100"
+        title="Usuń profil"
       >
         <X className="h-4 w-4" />
       </button>
-      <ChevronRight className="h-4 w-4 shrink-0 text-slate-500 transition-colors group-hover:text-cyan-300" />
     </div>
   );
 }
@@ -141,6 +145,11 @@ function LoginForm() {
   const [savedProfiles, setSavedProfiles] = useState<SavedProfile[]>([]);
   const [view, setView] = useState<ViewState>({ kind: "profiles" });
   const [generalError, setGeneralError] = useState<string | null>(null);
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (user) router.replace("/dashboard");
+  }, [user, router]);
 
   // Load profiles once on the client
   useEffect(() => {
@@ -206,7 +215,6 @@ function LoginForm() {
     setGeneralError(null);
     try {
       await login(data.identifier, data.password);
-      // Don't redirect yet — check if we should ask to save profile
     } catch (err: unknown) {
       if (err instanceof APIError) {
         if (
@@ -214,7 +222,7 @@ function LoginForm() {
           err.message.toLowerCase().includes("credentials") ||
           err.message.toLowerCase().includes("no active account")
         ) {
-          setGeneralError("Nieprawidlowy login lub haslo");
+          setGeneralError("Nieprawidłowy login lub hasło");
         } else if (
           err.status === 400 &&
           err.body &&
@@ -238,19 +246,17 @@ function LoginForm() {
             hasFieldError = true;
           }
           if (!hasFieldError) {
-            setGeneralError("Wystapil blad podczas logowania. Sprobuj ponownie.");
+            setGeneralError("Wystąpił błąd podczas logowania. Spróbuj ponownie.");
           }
         } else {
-          setGeneralError("Wystapil blad podczas logowania. Sprobuj ponownie.");
+          setGeneralError("Wystąpił błąd podczas logowania. Spróbuj ponownie.");
         }
       } else {
-        setGeneralError("Wystapil blad podczas logowania. Sprobuj ponownie.");
+        setGeneralError("Wystąpił błąd podczas logowania. Spróbuj ponownie.");
       }
-      return; // don't proceed on error
+      return;
     }
 
-    // Login succeeded — if profile already saved, update and go to dashboard
-    // Otherwise show save prompt (user state will update via useAuth)
     if (isProfileSaved(data.identifier)) {
       setView({ kind: "auto-save" } as ViewState);
     } else {
@@ -275,26 +281,23 @@ function LoginForm() {
   if (view.kind === "save-prompt") {
     return (
       <AuthScreen
-        eyebrow="Access Portal"
-        title="Zalogowano"
-        description="Czy chcesz zapisac ten profil? Nastepnym razem wystarczy tylko haslo."
-        altPrompt=""
-        altHref=""
-        altLabel=""
+        eyebrow="Zalogowano"
+        title="Zapisz profil"
+        description="Czy chcesz zapisać ten profil? Następnym razem wystarczy tylko hasło."
       >
         <div className="space-y-4">
           {/* Profile preview */}
           {user && (
-            <div className="flex items-center gap-3 rounded-2xl border border-cyan-300/15 bg-cyan-500/5 p-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#38bdf8,#0f766e)] font-display text-xl text-slate-950">
+            <div className="flex items-center gap-3 rounded-2xl border border-border bg-secondary p-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/20 font-display text-xl text-primary">
                 {user.username[0].toUpperCase()}
               </div>
               <div className="min-w-0">
-                <div className="truncate text-lg font-medium text-zinc-50">
+                <div className="truncate text-lg font-medium text-foreground">
                   {user.username}
                 </div>
-                <div className="flex items-center gap-1.5 text-sm text-slate-400">
-                  <Trophy className="h-3.5 w-3.5 text-amber-300" />
+                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <Trophy className="h-3.5 w-3.5 text-accent" />
                   {user.elo_rating} ELO
                 </div>
               </div>
@@ -305,22 +308,22 @@ function LoginForm() {
             <Button
               onClick={handleSkipSave}
               variant="outline"
-              className="h-11 flex-1 gap-2 rounded-xl border-white/10 bg-white/[0.04] text-slate-300 hover:bg-white/[0.08] hover:text-zinc-100"
+              className="h-11 flex-1 gap-2 rounded-xl"
             >
               <SkipForward className="h-4 w-4" />
-              Nie, dziekuje
+              Nie, dziękuję
             </Button>
             <Button
               onClick={handleSaveProfile}
-              className="h-11 flex-1 gap-2 rounded-xl border border-cyan-300/30 bg-[linear-gradient(135deg,#38bdf8,#0f766e)] font-display text-sm uppercase tracking-[0.15em] text-slate-950 hover:opacity-95"
+              className="h-11 flex-1 gap-2 rounded-xl bg-primary font-display text-sm uppercase tracking-[0.15em] text-primary-foreground hover:bg-primary/90"
             >
               <Save className="h-4 w-4" />
               Zapisz profil
             </Button>
           </div>
 
-          <p className="text-center text-xs text-slate-500">
-            Zapisywane sa tylko nazwa i ELO — nigdy haslo.
+          <p className="text-center text-xs text-muted-foreground">
+            Zapisywane są tylko nazwa i ELO — nigdy hasło.
           </p>
         </div>
       </AuthScreen>
@@ -334,12 +337,12 @@ function LoginForm() {
   if (view.kind === "profiles" && savedProfiles.length > 0) {
     return (
       <AuthScreen
-        eyebrow="Access Portal"
+        eyebrow="Logowanie"
         title="Witaj z powrotem"
-        description="Wybierz profil, aby kontynuowac. Potrzebujesz tylko hasla."
+        description="Wybierz profil, aby kontynuować. Potrzebujesz tylko hasła."
         altPrompt="Nie masz konta?"
         altHref="/register"
-        altLabel="Zarejestruj sie"
+        altLabel="Zarejestruj się"
       >
         <div className="space-y-3">
           {savedProfiles.map((profile) => (
@@ -351,15 +354,14 @@ function LoginForm() {
             />
           ))}
 
-          <button
-            onClick={() => {
-              setView({ kind: "form", selectedProfile: null });
-            }}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-3 text-sm text-slate-400 transition-colors hover:border-white/20 hover:text-zinc-200"
+          <Button
+            variant="outline"
+            onClick={() => setView({ kind: "form", selectedProfile: null })}
+            className="cursor-target h-16 w-full gap-3 rounded-2xl border-dashed text-xl"
           >
-            <Plus className="h-4 w-4" />
+            <Plus className="h-6 w-6" />
             Zaloguj na inne konto
-          </button>
+          </Button>
         </div>
       </AuthScreen>
     );
@@ -371,37 +373,36 @@ function LoginForm() {
 
   return (
     <AuthScreen
-      eyebrow="Access Portal"
-      title="Logowanie"
-      description="Wejdz do panelu dowodzenia i wracaj do swoich meczow rankingowych na mapie swiata."
+      eyebrow="Logowanie"
+      title="Zaloguj się"
       altPrompt="Nie masz konta?"
       altHref="/register"
-      altLabel="Zarejestruj sie"
+      altLabel="Zarejestruj się"
     >
-      <div className="space-y-5">
+      <div className="space-y-8">
         {/* Back link */}
         {savedProfiles.length > 0 && (
           <button
             onClick={backToProfiles}
-            className="flex items-center gap-1.5 text-sm text-slate-400 transition-colors hover:text-zinc-200"
+            className="cursor-target flex items-center gap-2 text-lg text-muted-foreground transition-colors hover:text-foreground"
           >
-            <ArrowLeft className="h-4 w-4" />
-            Powrot do wyboru profilu
+            <ArrowLeft className="h-5 w-5" />
+            Powrót do wyboru profilu
           </button>
         )}
 
         {/* Selected profile preview */}
         {selectedProfile && (
-          <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#38bdf8,#0f766e)] font-display text-base text-slate-950">
+          <div className="flex items-center gap-4 rounded-2xl border border-border bg-secondary p-5">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-primary/20 font-display text-2xl text-primary">
               {selectedProfile.username[0].toUpperCase()}
             </div>
             <div className="min-w-0">
-              <div className="truncate font-medium text-zinc-100">
+              <div className="truncate text-2xl font-semibold text-foreground">
                 {selectedProfile.username}
               </div>
-              <div className="flex items-center gap-1 text-xs text-slate-400">
-                <Trophy className="h-3 w-3 text-amber-300" />
+              <div className="flex items-center gap-2 text-lg text-muted-foreground">
+                <Trophy className="h-5 w-5 text-accent" />
                 {selectedProfile.elo_rating} ELO
               </div>
             </div>
@@ -410,30 +411,28 @@ function LoginForm() {
 
         {/* General error */}
         {generalError && (
-          <div className="rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-300">
+          <div className="rounded-2xl border border-destructive/20 bg-destructive/5 px-6 py-4 text-lg text-destructive">
             {generalError}
           </div>
         )}
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          {/* Identifier field — hidden when a saved profile is selected */}
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          {/* Identifier field */}
           {!selectedProfile && (
-            <div className="space-y-2">
-              <Label htmlFor="identifier" className="text-slate-300">
-                Nazwa uzytkownika lub email
+            <div className="space-y-3">
+              <Label htmlFor="identifier" className="text-lg">
+                Nazwa użytkownika lub email
               </Label>
               <Input
                 id="identifier"
                 type="text"
-                placeholder="dowodca lub dowodca@maplord.gg"
+                placeholder="dowódca lub dowódca@maplord.gg"
                 autoComplete="username"
-                className={`h-11 rounded-xl bg-slate-900/80 px-4 text-zinc-100 placeholder:text-slate-500 ${
-                  errors.identifier ? "border-red-500/40" : "border-white/10"
-                }`}
+                className={`h-16 text-xl rounded-2xl ${errors.identifier ? "border-destructive" : ""}`}
                 {...rhfRegister("identifier")}
               />
               {errors.identifier && (
-                <p className="mt-1 text-xs text-red-400">
+                <p className="mt-2 text-base text-destructive">
                   {errors.identifier.message}
                 </p>
               )}
@@ -441,23 +440,19 @@ function LoginForm() {
           )}
 
           {/* Password field */}
-          <div className="space-y-2">
-            <Label htmlFor="password" className="text-slate-300">
-              Haslo
-            </Label>
+          <div className="space-y-3">
+            <Label htmlFor="password" className="text-lg">Hasło</Label>
             <Input
               id="password"
               type="password"
               placeholder="••••••••"
               autoComplete="current-password"
               autoFocus={!!selectedProfile}
-              className={`h-11 rounded-xl bg-slate-900/80 px-4 text-zinc-100 placeholder:text-slate-500 ${
-                errors.password ? "border-red-500/40" : "border-white/10"
-              }`}
+              className={`h-16 text-xl rounded-2xl ${errors.password ? "border-destructive" : ""}`}
               {...rhfRegister("password")}
             />
             {errors.password && (
-              <p className="mt-1 text-xs text-red-400">
+              <p className="mt-2 text-base text-destructive">
                 {errors.password.message}
               </p>
             )}
@@ -465,10 +460,10 @@ function LoginForm() {
 
           <Button
             type="submit"
-            className="h-11 w-full rounded-xl border border-cyan-300/30 bg-[linear-gradient(135deg,#38bdf8,#0f766e)] font-display text-sm uppercase tracking-[0.22em] text-slate-950 hover:opacity-95"
+            className="cursor-target h-16 w-full rounded-2xl bg-primary font-display text-xl uppercase tracking-wider text-primary-foreground hover:bg-primary/90"
             disabled={isSubmitting}
           >
-            {isSubmitting ? "Logowanie..." : "Wejdz do gry"}
+            {isSubmitting ? "Logowanie..." : "Wejdź do gry"}
           </Button>
         </form>
       </div>
