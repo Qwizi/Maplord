@@ -2,16 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Image from "next/image";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import { getMatch, getMatchResult, createShareLink, type Match, type MatchResult } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   ArrowLeft,
   Clock,
   Crown,
+  Loader2,
   MapPin,
   Shield,
   Skull,
@@ -27,11 +29,11 @@ import {
 import { toast } from "sonner";
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  finished: { label: "Zakonczony", color: "text-slate-400" },
-  in_progress: { label: "W trakcie", color: "text-emerald-300" },
-  selecting: { label: "Wybor stolic", color: "text-amber-200" },
-  cancelled: { label: "Anulowany", color: "text-red-400" },
-  waiting: { label: "Oczekiwanie", color: "text-slate-400" },
+  finished: { label: "Zakończony", color: "text-muted-foreground" },
+  in_progress: { label: "W trakcie", color: "text-green-400" },
+  selecting: { label: "Wybór stolic", color: "text-accent" },
+  cancelled: { label: "Anulowany", color: "text-destructive" },
+  waiting: { label: "Oczekiwanie", color: "text-muted-foreground" },
 };
 
 function formatDuration(seconds: number): string {
@@ -42,8 +44,7 @@ function formatDuration(seconds: number): string {
 }
 
 function formatDate(dateStr: string): string {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString("pl-PL", {
+  return new Date(dateStr).toLocaleDateString("pl-PL", {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -64,11 +65,7 @@ export default function MatchDetailPage() {
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user || !token) {
-      router.replace("/login");
-      return;
-    }
-
+    if (!user || !token) { router.replace("/login"); return; }
     Promise.all([
       getMatch(token, id),
       getMatchResult(token, id).catch(() => null),
@@ -81,14 +78,8 @@ export default function MatchDetailPage() {
 
   if (loading || !match) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <Image
-          src="/assets/match_making/circle291.webp"
-          alt=""
-          width={48}
-          height={48}
-          className="h-12 w-12 animate-spin object-contain"
-        />
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -98,261 +89,214 @@ export default function MatchDetailPage() {
     setShareLoading(true);
     try {
       const link = await createShareLink(token, "match_result", match.id);
-      const shareUrl = `${window.location.origin}/share/${link.token}`;
-      await navigator.clipboard.writeText(shareUrl);
+      await navigator.clipboard.writeText(`${window.location.origin}/share/${link.token}`);
       setShareCopied(true);
       toast.success("Link skopiowany do schowka!");
       setTimeout(() => setShareCopied(false), 3000);
     } catch {
-      toast.error("Nie udalo sie utworzyc linku.");
+      toast.error("Nie udało się utworzyć linku.");
     } finally {
       setShareLoading(false);
     }
   };
 
-  const status = STATUS_LABELS[match.status] ?? { label: match.status, color: "text-slate-400" };
+  const status = STATUS_LABELS[match.status] ?? { label: match.status, color: "text-muted-foreground" };
   const isActive = match.status === "in_progress" || match.status === "selecting";
   const winner = match.players.find((p) => p.user_id === match.winner_id);
+  const startDate = match.started_at ? new Date(match.started_at) : null;
+  const endDate = match.finished_at ? new Date(match.finished_at) : null;
+  const durationMin = startDate && endDate ? Math.round((endDate.getTime() - startDate.getTime()) / 60000) : null;
 
   return (
-    <div className="space-y-6">
-      {/* Back + header */}
+    <div className="space-y-8">
+      {/* Header */}
       <div className="flex items-start justify-between gap-4">
-        <div>
+        <div className="space-y-2">
           <Link
             href="/dashboard"
-            className="mb-3 inline-flex items-center gap-1.5 text-sm text-slate-400 transition-colors hover:text-zinc-100"
+            className="cursor-target inline-flex items-center gap-2 text-base text-muted-foreground transition-colors hover:text-foreground"
           >
-            <ArrowLeft className="h-4 w-4" />
-            Dashboard
+            <ArrowLeft className="h-5 w-5" />
+            Panel
           </Link>
-          <h1 className="font-display text-3xl text-zinc-50">Szczegoly meczu</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            ID: {match.id.slice(0, 8)}...
-          </p>
+          <h1 className="font-display text-4xl sm:text-5xl text-foreground">Szczegóły meczu</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           {match.status === "finished" && (
             <>
               <Link
                 href={`/replay/${match.id}`}
-                className="inline-flex items-center gap-2 rounded-full border border-amber-300/25 bg-amber-400/10 px-5 py-2 font-display text-sm uppercase tracking-[0.2em] text-amber-200 transition-colors hover:bg-amber-400/15"
+                className="cursor-target inline-flex items-center gap-2 rounded-2xl border border-accent/25 bg-accent/10 px-6 py-3 font-display text-base uppercase tracking-[0.15em] text-accent transition-colors hover:bg-accent/20"
               >
-                <PlayCircle className="h-4 w-4" />
+                <PlayCircle className="h-5 w-5" />
                 Replay
               </Link>
               <button
                 onClick={handleShare}
                 disabled={shareLoading}
-                className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.05] px-5 py-2 font-display text-sm uppercase tracking-[0.2em] text-slate-300 transition-colors hover:bg-white/[0.09] hover:text-zinc-100 disabled:opacity-50"
+                className="cursor-target inline-flex items-center gap-2 rounded-2xl border border-border px-6 py-3 font-display text-base uppercase tracking-[0.15em] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
               >
-                {shareCopied ? (
-                  <Check className="h-4 w-4 text-emerald-400" />
-                ) : (
-                  <Share2 className="h-4 w-4" />
-                )}
-                {shareCopied ? "Skopiowano!" : "Udostepnij"}
+                {shareCopied ? <Check className="h-5 w-5 text-green-400" /> : <Share2 className="h-5 w-5" />}
+                {shareCopied ? "Skopiowano!" : "Udostępnij"}
               </button>
             </>
           )}
           {isActive && (
             <Button
-              className="gap-2 rounded-full border border-cyan-300/30 bg-[linear-gradient(135deg,#38bdf8,#0f766e)] px-5 font-display uppercase tracking-[0.2em] text-slate-950 hover:opacity-90"
+              className="cursor-target h-14 gap-3 rounded-2xl bg-primary px-8 font-display text-lg uppercase tracking-wider text-primary-foreground hover:bg-primary/90"
               onClick={() => router.push(`/game/${match.id}`)}
             >
-              <Shield className="h-4 w-4" />
-              Wroc do gry
+              <Shield className="h-6 w-6" />
+              Wróć do gry
             </Button>
           )}
         </div>
       </div>
 
-      {/* Match info */}
-      <section className="rounded-[24px] border border-white/10 bg-slate-950/55 p-6 backdrop-blur-xl">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
-            <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-slate-500">
-              <Swords className="h-3.5 w-3.5" />
-              Status
+      {/* Stats grid */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card className="rounded-2xl">
+          <CardContent className="flex flex-col gap-2 p-5">
+            <div className="flex items-center gap-2">
+              <Swords className="h-5 w-5 text-primary" />
+              <span className="text-xs uppercase tracking-[0.2em] text-muted-foreground font-medium">Status</span>
             </div>
-            <div className={`mt-1 font-display text-xl ${status.color}`}>
-              {status.label}
+            <div className={`font-display text-3xl ${status.color}`}>{status.label}</div>
+          </CardContent>
+        </Card>
+        <Card className="rounded-2xl">
+          <CardContent className="flex flex-col gap-2 p-5">
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-primary" />
+              <span className="text-xs uppercase tracking-[0.2em] text-muted-foreground font-medium">Gracze</span>
             </div>
-          </div>
-          <div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
-            <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-slate-500">
-              <Users className="h-3.5 w-3.5" />
-              Gracze
+            <div className="font-display text-3xl text-foreground">{match.players.length} / {match.max_players}</div>
+          </CardContent>
+        </Card>
+        <Card className="rounded-2xl">
+          <CardContent className="flex flex-col gap-2 p-5">
+            <div className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-primary" />
+              <span className="text-xs uppercase tracking-[0.2em] text-muted-foreground font-medium">Czas trwania</span>
             </div>
-            <div className="mt-1 font-display text-xl text-zinc-50">
-              {match.players.length} / {match.max_players}
+            <div className="font-display text-3xl text-foreground">
+              {result ? formatDuration(result.duration_seconds) : durationMin != null ? `${durationMin}m` : "—"}
             </div>
-          </div>
-          <div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
-            <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-slate-500">
-              <Clock className="h-3.5 w-3.5" />
-              {match.finished_at ? "Czas trwania" : "Utworzono"}
-            </div>
-            <div className="mt-1 font-display text-xl text-zinc-50">
-              {result
-                ? formatDuration(result.duration_seconds)
-                : formatDate(match.created_at)}
-            </div>
-          </div>
-          {winner && (
-            <div className="rounded-xl border border-amber-300/20 bg-amber-400/5 px-4 py-3">
-              <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-amber-300/70">
-                <Crown className="h-3.5 w-3.5" />
-                Zwyciezca
+          </CardContent>
+        </Card>
+        {winner && (
+          <Card className="rounded-2xl border-accent/25">
+            <CardContent className="flex flex-col gap-2 p-5">
+              <div className="flex items-center gap-2">
+                <Crown className="h-5 w-5 text-accent" />
+                <span className="text-xs uppercase tracking-[0.2em] text-accent/70 font-medium">Zwycięzca</span>
               </div>
-              <div className="mt-1 font-display text-xl text-amber-200">
-                {winner.username}
-              </div>
-            </div>
-          )}
-        </div>
-        {(match.started_at || match.finished_at) && (
-          <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500">
-            {match.started_at && <span>Start: {formatDate(match.started_at)}</span>}
-            {match.finished_at && <span>Koniec: {formatDate(match.finished_at)}</span>}
-            {result && <span>Ticki: {result.total_ticks}</span>}
-          </div>
+              <div className="font-display text-3xl text-accent">{winner.username}</div>
+            </CardContent>
+          </Card>
         )}
-      </section>
+      </div>
 
-      {/* Players */}
-      <section className="rounded-[24px] border border-white/10 bg-slate-950/55 p-6 backdrop-blur-xl">
-        <div className="mb-5 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04]">
-            <Users className="h-5 w-5 text-cyan-300" />
-          </div>
-          <h3 className="font-display text-xl text-zinc-50">Gracze</h3>
+      {/* Timestamps */}
+      {(match.started_at || match.finished_at) && (
+        <div className="flex flex-wrap gap-6 text-base text-muted-foreground">
+          {match.started_at && <span>Start: <span className="text-foreground">{formatDate(match.started_at)}</span></span>}
+          {match.finished_at && <span>Koniec: <span className="text-foreground">{formatDate(match.finished_at)}</span></span>}
+          {result && <span>Ticki: <span className="text-foreground">{result.total_ticks}</span></span>}
         </div>
+      )}
 
-        <div className="space-y-2">
-          {match.players.map((player) => {
-            const isMe = player.user_id === user?.id;
-            const isWinner = player.user_id === match.winner_id;
-            const playerResult = result?.player_results.find(
-              (pr) => pr.user_id === player.user_id
-            );
+      {/* Players table */}
+      <Card className="rounded-2xl overflow-hidden">
+        <div className="flex items-center gap-3 px-6 pt-5 pb-3">
+          <Users className="h-6 w-6 text-primary" />
+          <h3 className="font-display text-2xl text-foreground">Gracze</h3>
+        </div>
+        <Table className="text-base">
+          <TableHeader>
+            <TableRow>
+              <TableHead className="h-14 pl-6 text-base font-semibold">Gracz</TableHead>
+              <TableHead className="h-14 text-base font-semibold text-center">Status</TableHead>
+              <TableHead className="h-14 text-base font-semibold text-center">Miejsce</TableHead>
+              <TableHead className="h-14 text-base font-semibold text-center">
+                <span className="flex items-center justify-center gap-1"><MapPin className="h-4 w-4" />Regiony</span>
+              </TableHead>
+              <TableHead className="h-14 text-base font-semibold text-center">Jednostki</TableHead>
+              <TableHead className="h-14 text-base font-semibold text-center">Straty</TableHead>
+              <TableHead className="h-14 text-base font-semibold text-center">
+                <span className="flex items-center justify-center gap-1"><Hammer className="h-4 w-4" />Budynki</span>
+              </TableHead>
+              <TableHead className="h-14 pr-6 text-base font-semibold text-right">ELO</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {match.players.map((player) => {
+              const isMe = player.user_id === user?.id;
+              const isWinner = player.user_id === match.winner_id;
+              const pr = result?.player_results.find((r) => r.user_id === player.user_id);
 
-            return (
-              <div
-                key={player.id}
-                className={`grid grid-cols-[auto_1fr_auto] items-center gap-4 rounded-2xl border p-4 ${
-                  isWinner
-                    ? "border-amber-300/25 bg-amber-400/5"
-                    : isMe
-                      ? "border-cyan-300/20 bg-cyan-400/5"
-                      : "border-white/10 bg-white/[0.03]"
-                }`}
-              >
-                {/* Color + name */}
-                <div className="flex items-center gap-3">
-                  <div
-                    className="h-8 w-8 rounded-lg border border-white/15"
-                    style={{ backgroundColor: player.color }}
-                  />
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-zinc-50">
-                        {player.username}
+              return (
+                <TableRow
+                  key={player.id}
+                  className={`cursor-target cursor-pointer ${
+                    isWinner ? "bg-accent/5 hover:bg-accent/10" : isMe ? "bg-primary/5 hover:bg-primary/10" : "hover:bg-muted/50"
+                  }`}
+                  onClick={() => router.push(`/profile/${player.user_id}`)}
+                >
+                  <TableCell className="pl-6 py-5">
+                    <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-lg border border-border" style={{ backgroundColor: player.color }} />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-semibold text-foreground">{player.username}</span>
+                          {isMe && <Badge className="border-0 bg-primary/15 text-sm text-primary">Ty</Badge>}
+                          {isWinner && <Crown className="h-4 w-4 text-accent" />}
+                        </div>
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="py-5 text-center">
+                    {player.is_alive ? (
+                      <Badge className="border-0 bg-green-500/15 text-sm text-green-400">Żywy</Badge>
+                    ) : (
+                      <Badge className="border-0 bg-destructive/15 text-sm text-destructive">
+                        <Skull className="mr-1 h-3.5 w-3.5" />Wyeliminowany
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell className="py-5 text-center font-display text-2xl text-foreground">
+                    {pr ? (
+                      match.players.length > 2 ? `#${pr.placement}` : isWinner ? "🏆" : "💀"
+                    ) : "—"}
+                  </TableCell>
+                  <TableCell className="py-5 text-center text-lg tabular-nums text-primary">
+                    {pr?.regions_conquered ?? "—"}
+                  </TableCell>
+                  <TableCell className="py-5 text-center text-lg tabular-nums text-foreground">
+                    {pr?.units_produced ?? "—"}
+                  </TableCell>
+                  <TableCell className="py-5 text-center text-lg tabular-nums text-destructive">
+                    {pr?.units_lost ?? "—"}
+                  </TableCell>
+                  <TableCell className="py-5 text-center text-lg tabular-nums text-accent">
+                    {pr?.buildings_built ?? "—"}
+                  </TableCell>
+                  <TableCell className="py-5 pr-6 text-right">
+                    {pr ? (
+                      <span className={`flex items-center justify-end gap-1 font-display text-xl ${
+                        pr.elo_change > 0 ? "text-green-400" : pr.elo_change < 0 ? "text-destructive" : "text-muted-foreground"
+                      }`}>
+                        {pr.elo_change > 0 ? <TrendingUp className="h-4 w-4" /> : pr.elo_change < 0 ? <TrendingDown className="h-4 w-4" /> : null}
+                        {pr.elo_change > 0 ? "+" : ""}{pr.elo_change}
                       </span>
-                      {isMe && (
-                        <Badge className="border-0 bg-cyan-400/15 text-[10px] text-cyan-200 hover:bg-cyan-400/15">
-                          Ty
-                        </Badge>
-                      )}
-                      {isWinner && (
-                        <Crown className="h-4 w-4 text-amber-300" />
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-slate-500">
-                      {player.is_alive ? (
-                        <span className="text-emerald-400">Zywy</span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-red-400">
-                          <Skull className="h-3 w-3" />
-                          Wyeliminowany
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Stats (if result exists) */}
-                {playerResult ? (
-                  <div className="flex flex-wrap justify-end gap-x-5 gap-y-1 text-sm">
-                    <div className="text-center">
-                      <div className="text-[10px] uppercase tracking-wider text-slate-500">Miejsce</div>
-                      <div className="font-display text-lg text-zinc-50">#{playerResult.placement}</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-[10px] uppercase tracking-wider text-slate-500">Regiony</div>
-                      <div className="font-display text-lg text-cyan-200">
-                        <span className="inline-flex items-center gap-1">
-                          <MapPin className="h-3 w-3" />
-                          {playerResult.regions_conquered}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-[10px] uppercase tracking-wider text-slate-500">Jednostki</div>
-                      <div className="font-display text-lg text-zinc-50">
-                        {playerResult.units_produced}
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-[10px] uppercase tracking-wider text-slate-500">Straty</div>
-                      <div className="font-display text-lg text-red-400">
-                        {playerResult.units_lost}
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-[10px] uppercase tracking-wider text-slate-500">Budynki</div>
-                      <div className="font-display text-lg text-amber-200">
-                        <span className="inline-flex items-center gap-1">
-                          <Hammer className="h-3 w-3" />
-                          {playerResult.buildings_built}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div />
-                )}
-
-                {/* ELO change */}
-                {playerResult ? (
-                  <div className="text-right">
-                    <div className="text-[10px] uppercase tracking-wider text-slate-500">ELO</div>
-                    <div
-                      className={`flex items-center gap-1 font-display text-lg ${
-                        playerResult.elo_change > 0
-                          ? "text-emerald-300"
-                          : playerResult.elo_change < 0
-                            ? "text-red-400"
-                            : "text-slate-400"
-                      }`}
-                    >
-                      {playerResult.elo_change > 0 ? (
-                        <TrendingUp className="h-4 w-4" />
-                      ) : playerResult.elo_change < 0 ? (
-                        <TrendingDown className="h-4 w-4" />
-                      ) : null}
-                      {playerResult.elo_change > 0 ? "+" : ""}
-                      {playerResult.elo_change}
-                    </div>
-                  </div>
-                ) : (
-                  <div />
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </section>
+                    ) : "—"}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </Card>
     </div>
   );
 }

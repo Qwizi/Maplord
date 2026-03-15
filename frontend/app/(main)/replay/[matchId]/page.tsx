@@ -259,31 +259,54 @@ export default function ReplayPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
-        <div>
+        <div className="space-y-2">
           <Link
             href={`/match/${matchId}`}
-            className="mb-2 inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-zinc-100"
+            className="cursor-target inline-flex items-center gap-2 text-base text-muted-foreground hover:text-foreground transition-colors"
           >
-            <ArrowLeft className="h-4 w-4" />
-            Szczegoly meczu
+            <ArrowLeft className="h-5 w-5" />
+            Szczegóły meczu
           </Link>
-          <h1 className="font-display text-2xl text-zinc-50">Replay</h1>
+          <h1 className="font-display text-4xl text-foreground">Replay</h1>
         </div>
-        <div className="flex items-center gap-2 text-sm text-slate-400">
-          <span>Tick {currentTick} / {totalTicks}</span>
-          <span className="text-slate-600">|</span>
-          <span>{snapshots.length} snapshotow</span>
+        <div className="flex items-center gap-3 text-base text-muted-foreground">
+          <span>Tick <span className="font-display text-lg text-foreground">{currentTick}</span> / {totalTicks}</span>
+          <span className="text-border">|</span>
+          <span>{snapshots.length} snapshotów</span>
+        </div>
+      </div>
+
+      {/* Timeline controls — above map */}
+      <div className="rounded-2xl border border-border bg-card p-5">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5">
+            <Button variant="ghost" onClick={stepBackward} disabled={currentIndex === 0} className="cursor-target h-10 w-10 rounded-full p-0 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30">
+              <SkipBack className="h-5 w-5" />
+            </Button>
+            <Button variant="ghost" onClick={() => setPlaying(!playing)} className="cursor-target h-12 w-12 rounded-full p-0 text-primary hover:bg-primary/10">
+              {playing ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6" />}
+            </Button>
+            <Button variant="ghost" onClick={stepForward} disabled={currentIndex >= snapshots.length - 1} className="cursor-target h-10 w-10 rounded-full p-0 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30">
+              <SkipForward className="h-5 w-5" />
+            </Button>
+          </div>
+          <input type="range" min={0} max={snapshots.length - 1} value={currentIndex} onChange={handleSliderChange} className="h-2 flex-1 cursor-pointer appearance-none rounded-full bg-border accent-primary [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:shadow-[0_0_10px_rgba(34,211,238,0.4)]" />
+          <button onClick={cycleSpeed} className="cursor-target rounded-full border border-border px-4 py-1.5 text-base font-semibold text-foreground hover:bg-muted">{speed}x</button>
+          <div className="hidden text-right sm:block">
+            <span className="font-display text-xl text-foreground">{currentTick}</span>
+            <span className="text-base text-muted-foreground"> / {totalTicks}</span>
+          </div>
         </div>
       </div>
 
       {/* Map + players sidebar */}
-      <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
+      <div className="grid gap-4 lg:grid-cols-[1fr_320px]" style={{ height: "calc(100vh - 20rem)" }}>
         {/* Map container */}
-        <div className="relative overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/55 backdrop-blur-xl">
-          <div className="aspect-[16/10] w-full">
+        <div className="relative overflow-hidden rounded-2xl border border-border bg-card">
+          <div className="h-full w-full">
             {gameState && (
               <GameMap
                 tilesUrl={getRegionTilesUrl(matchId)}
@@ -299,6 +322,7 @@ export default function ReplayPage() {
                 animations={[]}
                 buildingIcons={buildingIcons}
                 activeEffects={gameState.active_effects}
+                initialZoom={2.5}
               />
             )}
           </div>
@@ -316,50 +340,50 @@ export default function ReplayPage() {
         </div>
 
         {/* Player panel */}
-        <div className="rounded-[24px] border border-white/10 bg-slate-950/55 p-4 backdrop-blur-xl">
-          <div className="mb-3 flex items-center gap-2">
-            <Users className="h-4 w-4 text-cyan-300" />
-            <h3 className="font-display text-sm uppercase tracking-[0.2em] text-slate-300">
+        <div className="rounded-2xl border border-border bg-card p-5 overflow-y-auto">
+          <div className="mb-4 flex items-center gap-2.5">
+            <Users className="h-5 w-5 text-primary" />
+            <h3 className="font-display text-base uppercase tracking-[0.2em] text-foreground">
               Gracze
             </h3>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-3">
             {playerList.map((p) => {
               const isWinner = p.id === match.winner_id;
               return (
                 <div
                   key={p.id}
-                  className={`rounded-xl border p-3 ${
+                  className={`rounded-xl border p-4 ${
                     !p.is_alive
-                      ? "border-white/5 bg-white/[0.02] opacity-50"
+                      ? "border-border/30 opacity-40"
                       : isWinner
-                        ? "border-amber-300/20 bg-amber-400/5"
-                        : "border-white/10 bg-white/[0.04]"
+                        ? "border-accent/25 bg-accent/5"
+                        : "border-border bg-secondary/50"
                   }`}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
                     <div
-                      className="h-4 w-4 rounded border border-white/15"
+                      className="h-6 w-6 rounded-lg border border-border"
                       style={{ backgroundColor: p.color }}
                     />
-                    <span className="flex-1 truncate text-sm font-medium text-zinc-100">
+                    <span className="flex-1 truncate text-base font-semibold text-foreground">
                       {p.username}
                     </span>
-                    {isWinner && <Crown className="h-3.5 w-3.5 text-amber-300" />}
-                    {!p.is_alive && <Skull className="h-3.5 w-3.5 text-red-400" />}
+                    {isWinner && <Crown className="h-5 w-5 text-accent" />}
+                    {!p.is_alive && <Skull className="h-5 w-5 text-destructive" />}
                   </div>
-                  <div className="mt-2 grid grid-cols-3 gap-1 text-center text-[10px]">
+                  <div className="mt-3 grid grid-cols-3 gap-2 text-center">
                     <div>
-                      <div className="text-slate-500">Regiony</div>
-                      <div className="font-display text-sm text-cyan-200">{p.ownedRegions}</div>
+                      <div className="text-xs text-muted-foreground">Regiony</div>
+                      <div className="font-display text-lg text-primary">{p.ownedRegions}</div>
                     </div>
                     <div>
-                      <div className="text-slate-500">Jednostki</div>
-                      <div className="font-display text-sm text-zinc-100">{p.totalUnits}</div>
+                      <div className="text-xs text-muted-foreground">Jednostki</div>
+                      <div className="font-display text-lg text-foreground">{p.totalUnits}</div>
                     </div>
                     <div>
-                      <div className="text-slate-500">Energia</div>
-                      <div className="font-display text-sm text-cyan-200">{p.energy}</div>
+                      <div className="text-xs text-muted-foreground">Energia</div>
+                      <div className="font-display text-lg text-primary">{p.energy}</div>
                     </div>
                   </div>
                 </div>
@@ -369,64 +393,6 @@ export default function ReplayPage() {
         </div>
       </div>
 
-      {/* Timeline controls */}
-      <div className="rounded-[24px] border border-white/10 bg-slate-950/55 p-4 backdrop-blur-xl">
-        <div className="flex items-center gap-3">
-          {/* Controls */}
-          <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={stepBackward}
-              disabled={currentIndex === 0}
-              className="h-8 w-8 rounded-full p-0 text-slate-300 hover:bg-white/[0.08] hover:text-zinc-100 disabled:opacity-30"
-            >
-              <SkipBack className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setPlaying(!playing)}
-              className="h-9 w-9 rounded-full p-0 text-cyan-200 hover:bg-cyan-400/10 hover:text-cyan-100"
-            >
-              {playing ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={stepForward}
-              disabled={currentIndex >= snapshots.length - 1}
-              className="h-8 w-8 rounded-full p-0 text-slate-300 hover:bg-white/[0.08] hover:text-zinc-100 disabled:opacity-30"
-            >
-              <SkipForward className="h-4 w-4" />
-            </Button>
-          </div>
-
-          {/* Slider */}
-          <input
-            type="range"
-            min={0}
-            max={snapshots.length - 1}
-            value={currentIndex}
-            onChange={handleSliderChange}
-            className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-white/10 accent-cyan-400 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-cyan-400 [&::-webkit-slider-thumb]:shadow-[0_0_8px_rgba(34,211,238,0.4)]"
-          />
-
-          {/* Speed */}
-          <button
-            onClick={cycleSpeed}
-            className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-medium text-slate-300 transition-colors hover:bg-white/[0.08] hover:text-zinc-100"
-          >
-            {speed}x
-          </button>
-
-          {/* Tick counter */}
-          <div className="hidden text-right text-xs text-slate-500 sm:block">
-            <span className="font-display text-sm text-zinc-100">{currentTick}</span>
-            <span> / {totalTicks}</span>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

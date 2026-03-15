@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -54,6 +55,14 @@ const RARITY_BADGE_CLASS: Record<string, string> = {
   rare: "bg-blue-500/20 text-blue-300",
   epic: "bg-purple-500/20 text-purple-300",
   legendary: "bg-amber-500/20 text-amber-300",
+};
+
+const RARITY_TEXT: Record<string, string> = {
+  common: "text-slate-300",
+  uncommon: "text-green-300",
+  rare: "text-blue-300",
+  epic: "text-purple-300",
+  legendary: "text-amber-300",
 };
 
 const RARITY_LABELS: Record<string, string> = {
@@ -198,12 +207,13 @@ function BrowseList({
             {filtered.map((agg) => {
               const rarity = agg.item.rarity ?? "common";
               return (
+                <HoverCard key={agg.item.slug}>
+                <HoverCardTrigger render={<div />}>
                 <Link
-                  key={agg.item.slug}
                   href={`/marketplace/${agg.item.slug}`}
                   className="cursor-target group flex items-center gap-4 rounded-xl border border-border px-4 py-3.5 transition-all hover:border-border/60 hover:bg-muted"
                 >
-                  {/* Item icon — inventory slot style */}
+                  {/* Item icon */}
                   <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-l-2 border-border/60 text-2xl ${RARITY_LEFT_BORDER_SLOT[rarity]} ${RARITY_SLOT_BG[rarity]}`}>
                     {agg.item.icon || "📦"}
                   </div>
@@ -233,6 +243,29 @@ function BrowseList({
 
                   <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground group-hover:text-foreground transition-colors" />
                 </Link>
+                </HoverCardTrigger>
+                <HoverCardContent side="right" sideOffset={8} className="w-80 p-5">
+                  <div className="flex items-center gap-3 mb-3">
+                    <span className="text-3xl">{agg.item.icon || "📦"}</span>
+                    <div>
+                      <p className={`text-lg font-semibold ${RARITY_TEXT[rarity]}`}>{agg.item.name}</p>
+                      <div className="flex gap-1.5 mt-0.5">
+                        <Badge className={`text-xs ${RARITY_BADGE_CLASS[rarity]}`} variant="outline">{RARITY_LABELS[rarity]}</Badge>
+                        <Badge variant="outline" className="text-xs">{TYPE_LABELS[agg.item.item_type] ?? agg.item.item_type}</Badge>
+                      </div>
+                    </div>
+                  </div>
+                  {agg.item.description && (
+                    <p className="text-sm text-muted-foreground mb-3">{agg.item.description}</p>
+                  )}
+                  <div className="flex gap-4 text-sm text-muted-foreground">
+                    {agg.cheapestPrice > 0 && (
+                      <span>Od: <span className="text-accent font-semibold">{agg.cheapestPrice}g</span></span>
+                    )}
+                    <span>Ofert: <span className="text-foreground font-semibold">{agg.listingCount}</span></span>
+                  </div>
+                </HoverCardContent>
+                </HoverCard>
               );
             })}
           </div>

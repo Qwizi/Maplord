@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Check,
@@ -10,10 +10,12 @@ import {
   Search,
   Sparkles,
 } from "lucide-react";
+import { gsap } from "gsap";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/hooks/useAuth";
@@ -101,6 +103,70 @@ const CATEGORIES = [
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
+function RecipeRow({ recipe, craftable, active, rarity, owned, onSelect }: {
+  recipe: RecipeOut;
+  craftable: boolean;
+  active: boolean;
+  rarity: string;
+  owned: (slug: string) => number;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      onClick={onSelect}
+      className={`cursor-target group w-full rounded-xl border p-4 text-left transition-colors ${
+        active ? "bg-secondary/50 border-primary/30" : "border-border/30 hover:bg-muted/30"
+      } ${!craftable ? "opacity-50" : ""}`}
+    >
+      <div className="flex items-center gap-4">
+        <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border ${RARITY_BORDER[rarity]} bg-secondary text-3xl`}>
+          {recipe.result_item.icon || "📦"}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="text-lg font-semibold text-foreground">{recipe.result_item.name}</span>
+            <Badge className={`border px-1.5 py-0.5 text-xs font-bold uppercase ${RARITY_BORDER[rarity]} ${RARITY_BG[rarity]} ${RARITY_TEXT[rarity]}`}>
+              {RARITY_LABEL[rarity]}
+            </Badge>
+            {recipe.result_item.level > 1 && (
+              <span className="text-sm font-medium text-muted-foreground">Lvl {recipe.result_item.level}</span>
+            )}
+          </div>
+          <div className="mt-2 flex items-center gap-3">
+            {recipe.ingredients.slice(0, 5).map((ing) => (
+              <span key={ing.item.slug} className="flex items-center gap-1">
+                <span className="text-lg">{ing.item.icon || "?"}</span>
+                <span className={`text-base font-semibold ${owned(ing.item.slug) >= ing.quantity ? "text-foreground" : "text-red-400"}`}>
+                  {owned(ing.item.slug)}/{ing.quantity}
+                </span>
+              </span>
+            ))}
+            {recipe.ingredients.length > 5 && (
+              <span className="text-base text-muted-foreground">+{recipe.ingredients.length - 5}</span>
+            )}
+            {recipe.gold_cost > 0 && (
+              <span className="flex items-center gap-1 text-base font-semibold text-accent">
+                <Coins className="h-4 w-4" />{recipe.gold_cost}
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="shrink-0">
+          {craftable ? (
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-green-500/15 text-green-400">
+              <Check className="h-5 w-5" />
+            </div>
+          ) : (
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-muted text-muted-foreground/40">
+              <Lock className="h-5 w-5" />
+            </div>
+          )}
+        </div>
+      </div>
+    </button>
+  );
+}
+
 export default function CraftingPage() {
   const { user, loading: authLoading, token } = useAuth();
   const router = useRouter();
@@ -161,22 +227,71 @@ export default function CraftingPage() {
     [wallet, ownedMap]
   );
 
+  // Crafting modal state
+  const [craftingModal, setCraftingModal] = useState<{
+    phase: "forging" | "result";
+    recipe: RecipeOut;
+    result?: CraftResult;
+  } | null>(null);
+  const modalIconRef = useRef<HTMLDivElement>(null);
+  const modalSparkRef = useRef<HTMLDivElement>(null);
+
   const handleCraft = async (recipe: RecipeOut) => {
     if (!token) return;
     setCrafting(recipe.slug);
-    setLastResult(null);
+    setCraftingModal({ phase: "forging", recipe });
+
     try {
-      const result = await craftItem(token, recipe.slug);
-      toast.success(result.message);
+      // Wait minimum 1.5s for animation even if API is faster
+      const [result] = await Promise.all([
+        craftItem(token, recipe.slug),
+        new Promise((r) => setTimeout(r, 1500)),
+      ]);
+      setCraftingModal({ phase: "result", recipe, result });
       setLastResult(result);
       setSelected(recipe.slug);
       loadData();
+      // Auto-close after 3s
+      setTimeout(() => setCraftingModal(null), 3000);
     } catch (e: unknown) {
+      setCraftingModal(null);
       toast.error(e instanceof Error ? e.message : "Błąd craftingu");
     } finally {
       setCrafting(null);
     }
   };
+
+  // Animate modal phases
+  useEffect(() => {
+    if (!craftingModal) return;
+    if (craftingModal.phase === "forging" && modalIconRef.current) {
+      gsap.to(modalIconRef.current, {
+        rotation: 360,
+        duration: 1.5,
+        ease: "power2.inOut",
+        repeat: -1,
+      });
+      if (modalSparkRef.current) {
+        gsap.to(modalSparkRef.current, {
+          scale: 1.3,
+          opacity: 0.5,
+          duration: 0.6,
+          ease: "power1.inOut",
+          repeat: -1,
+          yoyo: true,
+        });
+      }
+    }
+    if (craftingModal.phase === "result" && modalIconRef.current) {
+      gsap.killTweensOf(modalIconRef.current);
+      gsap.to(modalIconRef.current, { rotation: 0, scale: 1.2, duration: 0.3, ease: "back.out(2)" });
+      gsap.to(modalIconRef.current, { scale: 1, duration: 0.3, delay: 0.3 });
+      if (modalSparkRef.current) {
+        gsap.killTweensOf(modalSparkRef.current);
+        gsap.to(modalSparkRef.current, { scale: 2, opacity: 0, duration: 0.5 });
+      }
+    }
+  }, [craftingModal?.phase]);
 
   // ─── Filtering ────────────────────────────────────────────
 
@@ -269,7 +384,7 @@ export default function CraftingPage() {
               <button
                 key={c.value}
                 onClick={() => { setCategory(c.value); setSelected(null); }}
-                className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-3 text-left transition-all ${
+                className={`cursor-target flex w-full items-center gap-2.5 rounded-xl px-3 py-3 text-left transition-all ${
                   active
                     ? "bg-secondary text-foreground font-semibold border border-border"
                     : "text-foreground/70 hover:bg-muted hover:text-foreground border border-transparent"
@@ -320,7 +435,7 @@ export default function CraftingPage() {
             <Button
               variant={showOnlyCraftable ? "secondary" : "outline"}
               onClick={() => setShowOnlyCraftable((v) => !v)}
-              className={`shrink-0 rounded-xl gap-1.5 px-4 h-11 text-base font-medium ${
+              className={`cursor-target shrink-0 rounded-xl gap-1.5 px-4 h-11 text-base font-medium ${
                 showOnlyCraftable
                   ? "border-green-500/30 bg-green-500/10 text-green-300 hover:bg-green-500/15"
                   : ""
@@ -347,84 +462,39 @@ export default function CraftingPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              {filtered.map((recipe) => {
-                const craftable = canCraft(recipe);
+              {/* Available recipes */}
+              {filtered.filter((r) => canCraft(r)).length > 0 && (
+                <div className="flex items-center gap-2 px-1 pt-1 pb-2">
+                  <Check className="h-4 w-4 text-green-400" />
+                  <span className="text-sm font-semibold uppercase tracking-[0.2em] text-green-400">
+                    Dostępne ({filtered.filter((r) => canCraft(r)).length})
+                  </span>
+                  <div className="h-px flex-1 bg-green-500/20" />
+                </div>
+              )}
+              {filtered.filter((r) => canCraft(r)).map((recipe) => {
                 const active = selected === recipe.slug;
                 const rarity = recipe.result_item.rarity;
                 return (
-                  <button
-                    key={recipe.slug}
-                    onClick={() => setSelected(active ? null : recipe.slug)}
-                    className={`group w-full rounded-xl border-b border-border/30 p-3 text-left transition-colors last:border-b-0 ${
-                      active ? "bg-secondary/50" : "hover:bg-muted/30"
-                    } ${!craftable ? "opacity-40" : ""}`}
-                  >
-                    <div className="flex items-center gap-3">
-                      {/* Icon */}
-                      <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border ${RARITY_BORDER[rarity]} bg-secondary text-2xl`}>
-                        {recipe.result_item.icon || "📦"}
-                      </div>
+                  <RecipeRow key={recipe.slug} recipe={recipe} craftable active={active} rarity={rarity} owned={owned} onSelect={() => setSelected(active ? null : recipe.slug)} />
+                );
+              })}
 
-                      {/* Name + ingredients preview */}
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg font-semibold text-foreground">
-                            {recipe.result_item.name}
-                          </span>
-                          <Badge
-                            className={`border px-1.5 py-0.5 text-xs font-bold uppercase ${RARITY_BORDER[rarity]} ${RARITY_BG[rarity]} ${RARITY_TEXT[rarity]}`}
-                          >
-                            {RARITY_LABEL[rarity]}
-                          </Badge>
-                          {recipe.result_item.level > 1 && (
-                            <span className="text-sm font-medium text-muted-foreground">
-                              Lvl {recipe.result_item.level}
-                            </span>
-                          )}
-                        </div>
-                        <div className="mt-1.5 flex items-center gap-3 text-base">
-                          {recipe.ingredients.slice(0, 4).map((ing) => (
-                            <span key={ing.item.slug} className="flex items-center gap-1">
-                              <span className="text-base">{ing.item.icon || "?"}</span>
-                              <span
-                                className={`font-medium ${
-                                  owned(ing.item.slug) >= ing.quantity
-                                    ? "text-foreground/80"
-                                    : "text-red-400"
-                                }`}
-                              >
-                                {ing.quantity}
-                              </span>
-                            </span>
-                          ))}
-                          {recipe.ingredients.length > 4 && (
-                            <span className="text-muted-foreground">
-                              +{recipe.ingredients.length - 4}
-                            </span>
-                          )}
-                          {recipe.gold_cost > 0 && (
-                            <span className="flex items-center gap-1 font-medium text-accent">
-                              <Coins className="h-3.5 w-3.5" />
-                              {recipe.gold_cost}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Status */}
-                      <div className="shrink-0">
-                        {craftable ? (
-                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-green-500/15 text-green-400">
-                            <Check className="h-4 w-4" />
-                          </div>
-                        ) : (
-                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground/40">
-                            <Lock className="h-4 w-4" />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </button>
+              {/* Unavailable recipes */}
+              {!showOnlyCraftable && filtered.filter((r) => !canCraft(r)).length > 0 && (
+                <div className="flex items-center gap-2 px-1 pt-4 pb-2">
+                  <Lock className="h-4 w-4 text-muted-foreground/50" />
+                  <span className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground/50">
+                    Brak składników ({filtered.filter((r) => !canCraft(r)).length})
+                  </span>
+                  <div className="h-px flex-1 bg-border/30" />
+                </div>
+              )}
+              {!showOnlyCraftable && filtered.filter((r) => !canCraft(r)).map((recipe) => {
+                const active = selected === recipe.slug;
+                const rarity = recipe.result_item.rarity;
+                return (
+                  <RecipeRow key={recipe.slug} recipe={recipe} craftable={false} active={active} rarity={rarity} owned={owned} onSelect={() => setSelected(active ? null : recipe.slug)} />
                 );
               })}
             </div>
@@ -444,8 +514,9 @@ export default function CraftingPage() {
               lastResult={selected === lastResult?.item_slug ? lastResult : null}
             />
           ) : (
-            <div className="flex h-64 items-center justify-center rounded-2xl border border-dashed border-border text-base text-muted-foreground">
-              Wybierz recepturę
+            <div className="flex h-64 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border">
+              <Hammer className="h-10 w-10 text-muted-foreground/30" />
+              <p className="text-lg text-muted-foreground">Wybierz recepturę z listy</p>
             </div>
           )}
         </div>
@@ -465,6 +536,65 @@ export default function CraftingPage() {
           />
         </div>
       )}
+
+      {/* ── Crafting Modal ── */}
+      <Dialog open={!!craftingModal} onOpenChange={(open) => !open && setCraftingModal(null)}>
+        <DialogContent showCloseButton={craftingModal?.phase === "result"} className="sm:max-w-sm text-center">
+          {craftingModal?.phase === "forging" && (
+            <div className="flex flex-col items-center gap-6 py-6">
+              <div ref={modalSparkRef} className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="h-32 w-32 rounded-full bg-primary/10" />
+              </div>
+              <div ref={modalIconRef} className="relative z-10 flex h-24 w-24 items-center justify-center rounded-2xl border border-primary/30 bg-primary/10 text-5xl">
+                {craftingModal.recipe.result_item.icon || "📦"}
+              </div>
+              <div>
+                <p className="font-display text-2xl text-foreground">Tworzenie...</p>
+                <p className="mt-1 text-base text-muted-foreground">{craftingModal.recipe.result_item.name}</p>
+              </div>
+              <div className="flex gap-1">
+                <div className="h-2 w-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: "0ms" }} />
+                <div className="h-2 w-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: "150ms" }} />
+                <div className="h-2 w-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: "300ms" }} />
+              </div>
+            </div>
+          )}
+          {craftingModal?.phase === "result" && craftingModal.result && (
+            <div className="flex flex-col items-center gap-5 py-6">
+              <div className="flex h-24 w-24 items-center justify-center rounded-2xl border border-accent/30 bg-accent/10 text-5xl">
+                {craftingModal.recipe.result_item.icon || "📦"}
+              </div>
+              <div>
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <Sparkles className="h-5 w-5 text-accent" />
+                  <p className="font-display text-2xl text-accent">Stworzono!</p>
+                </div>
+                <p className="text-lg font-semibold text-foreground">{craftingModal.result.item_name}</p>
+              </div>
+              {craftingModal.result.instance && (
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Badge className={`text-sm ${WEAR_COLORS[craftingModal.result.instance.wear_condition] ?? ""}`} variant="outline">
+                    {WEAR_FULL[craftingModal.result.instance.wear_condition] ?? craftingModal.result.instance.wear_condition}
+                  </Badge>
+                  <Badge variant="outline" className="text-sm font-mono text-muted-foreground">
+                    {craftingModal.result.instance.wear.toFixed(4)}
+                  </Badge>
+                  {craftingModal.result.instance.stattrak && (
+                    <Badge className="text-sm border-orange-500/40 bg-orange-500/15 text-orange-300" variant="outline">
+                      StatTrak™
+                    </Badge>
+                  )}
+                  {craftingModal.result.instance.is_rare_pattern && (
+                    <Badge className="text-sm text-accent border-accent/30 bg-accent/10" variant="outline">
+                      ⭐ Rzadki wzór #{craftingModal.result.instance.pattern_seed}
+                    </Badge>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -609,9 +739,9 @@ function RecipeDetail({
 
         {/* Craft button */}
         <Button
-          className={`w-full gap-2 rounded-xl h-12 text-lg font-bold transition-all ${
+          className={`cursor-target w-full gap-2 rounded-xl h-14 text-lg font-bold transition-all ${
             craftable
-              ? "bg-primary/20 text-primary hover:bg-primary/30 border border-primary/20"
+              ? "bg-primary text-primary-foreground hover:bg-primary/90"
               : "bg-muted text-muted-foreground border border-border"
           }`}
           disabled={!craftable || isCrafting}

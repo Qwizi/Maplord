@@ -72,6 +72,7 @@ interface GameMapProps {
   speakingPlayerIds?: string[];
   unitsConfig?: UnitType[];
   onMapReady?: () => void;
+  initialZoom?: number;
 }
 
 // ── Constants ────────────────────────────────────────────────
@@ -299,6 +300,7 @@ export default memo(function GameMap({
   speakingPlayerIds = [],
   unitsConfig,
   onMapReady,
+  initialZoom,
 }: GameMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -359,7 +361,7 @@ export default memo(function GameMap({
         ],
       },
       center: [15, 51],
-      zoom: 4,
+      zoom: initialZoom ?? 4,
       maxZoom: 7,
       minZoom: 1.5,
       renderWorldCopies: false,
