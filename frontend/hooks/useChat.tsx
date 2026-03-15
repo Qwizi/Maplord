@@ -18,6 +18,8 @@ interface ChatContextType {
   sendMessage: (content: string) => void;
   unreadCount: number;
   resetUnread: () => void;
+  chatOpen: boolean;
+  setChatOpen: (open: boolean) => void;
 }
 
 const ChatContext = createContext<ChatContextType | null>(null);
@@ -27,9 +29,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [connected, setConnected] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [chatOpen, setChatOpen] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const userIdRef = useRef<string | null>(null);
+  const chatOpenRef = useRef(false);
   const initializedRef = useRef(false);
+
+  useEffect(() => { chatOpenRef.current = chatOpen; }, [chatOpen]);
 
   useEffect(() => {
     userIdRef.current = user?.id ?? null;
@@ -74,9 +80,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             initializedRef.current = true;
           } else if (msg.type === "chat_message") {
             setMessages((prev) => [...prev.slice(-199), msg as unknown as ChatMessage]);
-            // Unread for messages from others (skip during initial load)
+            // Unread for messages from others when chat is closed or tab is hidden
             if (initializedRef.current && msg.user_id !== userIdRef.current) {
-              if (document.visibilityState === "hidden") {
+              if (!chatOpenRef.current || document.visibilityState === "hidden") {
                 setUnreadCount((c) => c + 1);
               }
             }
@@ -127,7 +133,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const resetUnread = useCallback(() => setUnreadCount(0), []);
 
   return (
-    <ChatContext.Provider value={{ messages, connected, sendMessage, unreadCount, resetUnread }}>
+    <ChatContext.Provider value={{ messages, connected, sendMessage, unreadCount, resetUnread, chatOpen, setChatOpen }}>
       {children}
     </ChatContext.Provider>
   );
