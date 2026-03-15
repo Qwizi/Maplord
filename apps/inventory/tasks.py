@@ -9,17 +9,17 @@ logger = logging.getLogger(__name__)
 # Rarity weights by placement role
 # Winner gets better odds for rarer items; loser gets heavier common weighting
 WINNER_RARITY_WEIGHTS = {
-    'common': 30,
-    'uncommon': 40,
-    'rare': 20,
-    'epic': 8,
+    'common': 40,
+    'uncommon': 35,
+    'rare': 18,
+    'epic': 5,
     'legendary': 2,
 }
 
 LOSER_RARITY_WEIGHTS = {
-    'common': 50,
-    'uncommon': 30,
-    'rare': 15,
+    'common': 55,
+    'uncommon': 28,
+    'rare': 12,
     'epic': 4,
     'legendary': 1,
 }
@@ -31,21 +31,40 @@ _EXCLUDED_TYPES = {
     'cosmetic',
 }
 
+# Gold and drop count constants
+WINNER_GOLD = 80
+LOSER_GOLD = 35
+WINNER_DROPS = (4, 7)
+LOSER_DROPS = (2, 4)
+
+# Drop category weights (out of 100)
+MATERIAL_DROP_WEIGHT = 70
+EQUIPMENT_DROP_WEIGHT = 20  # blueprints, tactical packages, boosts
+OTHER_DROP_WEIGHT = 10
+
+_MATERIAL_TYPE = 'material'
+_EQUIPMENT_TYPES = {'blueprint_building', 'blueprint_unit', 'tactical_package', 'boost'}
+
 
 def generate_match_drops(match_id: str):
     """Generate item drops for all players after a match finishes.
 
     Called from finalize_match_results_sync inside apps/game/tasks.py.
 
-    Winner (placement=1): 50 gold + 2-4 random item drops (winner rarity weights).
-    Loser (placement>1): 20 gold + 1-2 random item drops (loser rarity weights).
+    Winner (placement=1): 80 gold + 4-7 random item drops (winner rarity weights).
+    Loser (placement>1): 35 gold + 2-4 random item drops (loser rarity weights).
 
-    Drop pool: active Item objects excluding crate, key, and cosmetic types.
+    Drop pool is split into weighted categories:
+      - 70% materials (2-4 quantity per drop to ensure Tier 0/1 raw materials flow)
+      - 20% equipment (blueprints, tactical packages, boosts) — qty 1
+      - 10% any item from full pool — qty 1
+
     Creates ItemDrop records with source='match_reward' and match FK.
     Adds items to UserInventory and gold to Wallet.
     """
     from apps.game.models import PlayerResult
     from apps.inventory.models import Item, ItemDrop, UserInventory, Wallet
+    from apps.inventory.views import add_item_to_inventory
 
     player_results = list(
         PlayerResult.objects
@@ -67,13 +86,26 @@ def generate_match_drops(match_id: str):
         logger.warning("No droppable items defined, skipping drops for match %s", match_id)
         return
 
-    # Group droppable items by rarity for weighted selection
+    # Group full pool by rarity for weighted selection (fallback / other pool)
     items_by_rarity: dict[str, list] = {}
     for item in droppable_items:
         items_by_rarity.setdefault(item.rarity, []).append(item)
 
-    # All rarities available in the pool (for fallback)
+    # All rarities available in the full pool (for fallback)
     all_rarities = list(items_by_rarity.keys())
+
+    # Separate pools by drop category
+    material_items = [i for i in droppable_items if i.item_type == _MATERIAL_TYPE]
+    equipment_items = [i for i in droppable_items if i.item_type in _EQUIPMENT_TYPES]
+
+    # Group each category pool by rarity
+    materials_by_rarity: dict[str, list] = {}
+    for item in material_items:
+        materials_by_rarity.setdefault(item.rarity, []).append(item)
+
+    equipment_by_rarity: dict[str, list] = {}
+    for item in equipment_items:
+        equipment_by_rarity.setdefault(item.rarity, []).append(item)
 
     match_obj = player_results[0].match_result.match
 
@@ -82,9 +114,8 @@ def generate_match_drops(match_id: str):
             continue
 
         is_winner = pr.placement == 1
-        gold_reward = 50 if is_winner else 20
-        min_drops = 2 if is_winner else 1
-        max_drops = 4 if is_winner else 2
+        gold_reward = WINNER_GOLD if is_winner else LOSER_GOLD
+        min_drops, max_drops = WINNER_DROPS if is_winner else LOSER_DROPS
         rarity_weights = WINNER_RARITY_WEIGHTS if is_winner else LOSER_RARITY_WEIGHTS
 
         with transaction.atomic():
@@ -97,29 +128,45 @@ def generate_match_drops(match_id: str):
             # Roll item drops
             num_drops = random.randint(min_drops, max_drops)
             for _ in range(num_drops):
-                rarity = _roll_rarity(rarity_weights, all_rarities)
-                pool = items_by_rarity.get(rarity)
-                if not pool:
-                    # Fallback to any rarity present in pool
-                    pool = droppable_items
+                # Decide drop category based on weighted roll
+                category_roll = random.randint(1, 100)
+                if category_roll <= MATERIAL_DROP_WEIGHT and material_items:
+                    # Material drop — use material pool, give 2-4 quantity
+                    pool_by_rarity = materials_by_rarity
+                    pool_all = material_items
+                    drop_qty = random.randint(2, 4)
+                elif category_roll <= MATERIAL_DROP_WEIGHT + EQUIPMENT_DROP_WEIGHT and equipment_items:
+                    # Equipment drop — blueprints, tactical packages, boosts
+                    pool_by_rarity = equipment_by_rarity
+                    pool_all = equipment_items
+                    drop_qty = 1
+                else:
+                    # Any item from the full droppable pool
+                    pool_by_rarity = items_by_rarity
+                    pool_all = droppable_items
+                    drop_qty = 1
+
+                rarity = _roll_rarity(rarity_weights, list(pool_by_rarity.keys()) or all_rarities)
+                pool = pool_by_rarity.get(rarity, pool_all)
                 drop_item = random.choice(pool)
 
-                # Add to inventory
-                inv, created = UserInventory.objects.get_or_create(
-                    user=pr.user, item=drop_item,
-                    defaults={'quantity': 1},
+                # Add to inventory (handles both stackable and non-stackable)
+                result = add_item_to_inventory(
+                    pr.user,
+                    drop_item,
+                    drop_qty,
+                    dropped_from_match=match_obj,
                 )
-                if not created:
-                    inv.quantity = min(inv.quantity + 1, drop_item.max_stack)
-                    inv.save(update_fields=['quantity'])
+                instance = result if hasattr(result, 'pattern_seed') else None
 
                 # Record the drop
                 ItemDrop.objects.create(
                     user=pr.user,
                     item=drop_item,
-                    quantity=1,
+                    quantity=drop_qty,
                     source=ItemDrop.DropSource.MATCH_REWARD,
                     match=match_obj,
+                    instance=instance,
                 )
 
     logger.info(

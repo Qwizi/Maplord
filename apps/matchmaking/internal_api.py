@@ -24,7 +24,7 @@ def _consume_default_deck(user) -> dict:
     Tarcza (Shield) Lvl 1 is always available as a free ability regardless of deck.
     Returns at minimum the free ability even if the user has no default deck.
     """
-    from apps.inventory.models import Deck, Item, UserInventory
+    from apps.inventory.models import Deck, Item, ItemInstance, UserInventory
     from django.db import transaction
 
     # Free ability — always available
@@ -35,6 +35,7 @@ def _consume_default_deck(user) -> dict:
     building_levels: dict[str, int] = {}
     unlocked_units: list[str] = []
     active_boosts: list[dict] = []
+    instance_ids: list[str] = []
 
     try:
         deck = Deck.objects.prefetch_related(
@@ -48,61 +49,92 @@ def _consume_default_deck(user) -> dict:
             'ability_scrolls': ability_scrolls,
             'ability_levels': ability_levels,
             'active_boosts': active_boosts,
+            'instance_ids': instance_ids,
         }
 
     with transaction.atomic():
-        for deck_item in deck.items.select_related('item').all():
+        # Use list() so we can safely delete deck items during iteration
+        for deck_item in list(deck.items.select_related('item').all()):
             item = deck_item.item
             qty = deck_item.quantity
 
-            # Tactical packages are permanent — they unlock abilities without being consumed.
-            if item.item_type == Item.ItemType.TACTICAL_PACKAGE:
-                # Verify user still owns at least 1 (don't consume)
-                if not UserInventory.objects.filter(user=user, item=item, quantity__gte=1).exists():
+            # Non-consumable items: verify ownership but do NOT remove from
+            # inventory or deck. They persist across matches.
+            if not item.is_consumable:
+                if item.is_stackable:
+                    owns = UserInventory.objects.filter(
+                        user=user, item=item, quantity__gte=1,
+                    ).exists()
+                else:
+                    owns = ItemInstance.objects.filter(owner=user, item=item).exists()
+
+                if not owns:
                     continue
-                ability_slug = item.blueprint_ref or item.slug
-                ability_scrolls[ability_slug] = 999  # unlimited uses per match
-                # Track the highest level the player has for this ability
-                ability_levels[ability_slug] = max(
-                    ability_levels.get(ability_slug, 0), item.level
-                )
+
+                if item.item_type == Item.ItemType.TACTICAL_PACKAGE:
+                    ability_slug = item.blueprint_ref or item.slug
+                    ability_scrolls[ability_slug] = 999
+                    ability_levels[ability_slug] = max(
+                        ability_levels.get(ability_slug, 0), item.level
+                    )
+                elif item.item_type == Item.ItemType.BLUEPRINT_BUILDING:
+                    if item.blueprint_ref:
+                        if item.blueprint_ref not in unlocked_buildings:
+                            unlocked_buildings.append(item.blueprint_ref)
+                        building_levels[item.blueprint_ref] = max(
+                            building_levels.get(item.blueprint_ref, 0), item.level
+                        )
+                elif item.item_type == Item.ItemType.BLUEPRINT_UNIT:
+                    if item.blueprint_ref and item.blueprint_ref not in unlocked_units:
+                        unlocked_units.append(item.blueprint_ref)
+
+                # Track instance IDs for post-match StatTrak updates
+                if not item.is_stackable and deck_item.instance_id:
+                    instance_ids.append(str(deck_item.instance_id))
                 continue
 
-            # Consume other item types from inventory
+            # Consumable items: remove from inventory AND deck on use.
             consumed = 0
-            try:
-                inv = UserInventory.objects.select_for_update().get(
-                    user=user, item=item
-                )
-                consumed = min(inv.quantity, qty)
-                inv.quantity -= consumed
-                if inv.quantity == 0:
-                    inv.delete()
+            if item.is_stackable:
+                try:
+                    inv = UserInventory.objects.select_for_update().get(
+                        user=user, item=item
+                    )
+                    consumed = min(inv.quantity, qty)
+                    inv.quantity -= consumed
+                    if inv.quantity == 0:
+                        inv.delete()
+                    else:
+                        inv.save(update_fields=['quantity'])
+                except UserInventory.DoesNotExist:
+                    consumed = 0
+            else:
+                # Non-stackable consumable: delete the specific ItemInstance
+                if deck_item.instance_id:
+                    try:
+                        inst = ItemInstance.objects.get(
+                            id=deck_item.instance_id, owner=user
+                        )
+                        inst.delete()
+                        consumed = 1
+                    except ItemInstance.DoesNotExist:
+                        consumed = 0
                 else:
-                    inv.save(update_fields=['quantity'])
-            except UserInventory.DoesNotExist:
-                consumed = 0
+                    consumed = 0
 
             if consumed == 0:
                 continue
 
-            # Classify into snapshot buckets
-            if item.item_type == Item.ItemType.BLUEPRINT_BUILDING:
-                if item.blueprint_ref:
-                    if item.blueprint_ref not in unlocked_buildings:
-                        unlocked_buildings.append(item.blueprint_ref)
-                    # Track the highest buildable level for this building
-                    building_levels[item.blueprint_ref] = max(
-                        building_levels.get(item.blueprint_ref, 0), item.level
-                    )
-            elif item.item_type == Item.ItemType.BLUEPRINT_UNIT:
-                if item.blueprint_ref and item.blueprint_ref not in unlocked_units:
-                    unlocked_units.append(item.blueprint_ref)
-            elif item.item_type == Item.ItemType.BOOST:
+            # Remove consumed item from deck
+            deck_item.delete()
+
+            # Classify consumed items into snapshot buckets
+            if item.item_type == Item.ItemType.BOOST:
                 active_boosts.append({
                     'slug': item.slug,
                     'params': {**(item.boost_params or {}), 'level': item.level},
                 })
+                ability_scrolls[item.slug] = 1
 
     return {
         'unlocked_buildings': unlocked_buildings,
@@ -111,7 +143,31 @@ def _consume_default_deck(user) -> dict:
         'ability_scrolls': ability_scrolls,
         'ability_levels': ability_levels,
         'active_boosts': active_boosts,
+        'instance_ids': instance_ids,
     }
+
+
+def _build_cosmetic_snapshot(user) -> dict:
+    """Build cosmetic snapshot. Static skins are {slot: url_string}.
+    VFX cosmetics are {slot: {url: str|None, params: dict}}."""
+    from apps.inventory.models import EquippedCosmetic
+    snapshot = {}
+    for ec in EquippedCosmetic.objects.filter(user=user).select_related('item__cosmetic_asset'):
+        url = None
+        if ec.item.cosmetic_asset and ec.item.cosmetic_asset.file:
+            url = ec.item.cosmetic_asset.file.url
+
+        if ec.slot.startswith('vfx_'):
+            # VFX slot: include params alongside URL
+            snapshot[ec.slot] = {
+                'url': url,
+                'params': ec.item.cosmetic_params or {},
+            }
+        else:
+            # Static skin slot: just the URL
+            if url:
+                snapshot[ec.slot] = url
+    return snapshot
 
 
 # --- Schemas ---
@@ -430,14 +486,17 @@ class MatchmakingInternalController(ControllerBase):
         entry_ids = []
         for i, entry in enumerate(queue_entries):
             deck_snapshot = {}
+            cosmetic_snapshot = {}
             if not entry.user.is_bot:
                 deck_snapshot = _consume_default_deck(entry.user)
+                cosmetic_snapshot = _build_cosmetic_snapshot(entry.user)
 
             MatchPlayer.objects.create(
                 match=match,
                 user=entry.user,
                 color=colors[i % len(colors)],
                 deck_snapshot=deck_snapshot,
+                cosmetic_snapshot=cosmetic_snapshot,
             )
             users.append(str(entry.user.id))
             if entry.user.is_bot:

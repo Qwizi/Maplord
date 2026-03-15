@@ -257,6 +257,12 @@ impl MatchmakingManager {
         });
     }
 
+    /// Instantly fill with bots — no timeout, called directly from "instant_bot" action.
+    pub async fn instant_bot_fill(&self, game_mode: Option<&str>) {
+        info!("instant_bot_fill called with game_mode={game_mode:?}");
+        self.try_fill_with_bots(game_mode).await;
+    }
+
     async fn try_fill_with_bots(&self, game_mode: Option<&str>) {
         info!("try_fill_with_bots called with game_mode={game_mode:?}");
         let result = match self.django.fill_with_bots(game_mode).await {

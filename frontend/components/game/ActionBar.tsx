@@ -4,7 +4,8 @@ import { memo, useState, useMemo } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import type { GameRegion } from "@/hooks/useGameSocket";
-import { getActionAsset, getUnitAsset } from "@/lib/gameAssets";
+import type { UnitType } from "@/lib/api";
+import { getActionAsset, getPlayerUnitAsset } from "@/lib/gameAssets";
 
 function getUnitLabel(unitType: string) {
   switch (unitType) {
@@ -34,6 +35,8 @@ interface ActionBarProps {
   targets: TargetEntry[];
   selectedUnitType: string;
   selectedUnitScale?: number;
+  unitsConfig?: UnitType[];
+  myCosmetics?: Record<string, unknown>;
   onSelectedUnitTypeChange: (unitType: string) => void;
   onConfirm: (payload: { allocations: { regionId: string; units: number }[]; unitType: string }) => void;
   onRemoveTarget: (regionId: string) => void;
@@ -46,11 +49,17 @@ export default memo(function ActionBar({
   targets,
   selectedUnitType,
   selectedUnitScale = 1,
+  unitsConfig,
+  myCosmetics,
   onSelectedUnitTypeChange,
   onConfirm,
   onRemoveTarget,
   onCancel,
 }: ActionBarProps) {
+  const unitConfigMap = useMemo(
+    () => new Map((unitsConfig ?? []).map((u) => [u.slug, u])),
+    [unitsConfig]
+  );
   const unitTypes = useMemo(
     () => Object.entries(sourceRegion.units ?? {}).filter(([, count]) => count > 0),
     [sourceRegion.units]
@@ -122,6 +131,7 @@ export default memo(function ActionBar({
           <div className="flex gap-1.5 overflow-x-auto">
             {unitTypes.map(([unitType, count]) => {
               const active = unitType === selectedUnitType;
+              const unitCfg = unitConfigMap.get(unitType);
               return (
                 <button
                   key={unitType}
@@ -133,7 +143,7 @@ export default memo(function ActionBar({
                   }`}
                 >
                   <Image
-                    src={getUnitAsset(unitType)}
+                    src={getPlayerUnitAsset(unitType, myCosmetics, unitCfg?.asset_url)}
                     alt=""
                     width={16}
                     height={16}
@@ -212,6 +222,7 @@ export default memo(function ActionBar({
             <div className="flex min-w-0 flex-wrap gap-2">
               {unitTypes.map(([unitType, count]) => {
                 const active = unitType === selectedUnitType;
+                const unitCfg = unitConfigMap.get(unitType);
                 return (
                   <button
                     key={unitType}
@@ -223,7 +234,7 @@ export default memo(function ActionBar({
                     }`}
                   >
                     <Image
-                      src={getUnitAsset(unitType)}
+                      src={getPlayerUnitAsset(unitType, myCosmetics, unitCfg?.asset_url)}
                       alt=""
                       width={18}
                       height={18}
@@ -321,4 +332,3 @@ export default memo(function ActionBar({
     </div>
   );
 });
-

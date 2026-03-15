@@ -130,105 +130,97 @@ export default function RegisterPage() {
 
   return (
     <AuthScreen
-      eyebrow="Recruitment"
+      eyebrow="Rejestracja"
       title="Nowe konto"
-      description="Utworz profil dowodcy i zacznij walke o dominacje na mapie swiata."
-      altPrompt="Masz juz konto?"
+      description="Utwórz profil i zacznij walkę o dominację na mapie świata."
+      altPrompt="Masz już konto?"
       altHref="/login"
-      altLabel="Zaloguj sie"
+      altLabel="Zaloguj się"
     >
-      <div className="space-y-5">
+      <div className="space-y-8">
         {generalError && (
-          <div className="rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-300">
+          <div className="rounded-2xl border border-destructive/20 bg-destructive/5 px-6 py-4 text-lg text-destructive">
             {generalError}
           </div>
         )}
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="username" className="text-slate-300">
-              Nazwa uzytkownika
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          <div className="space-y-3">
+            <Label htmlFor="username" className="text-lg">
+              Nazwa użytkownika
             </Label>
             <Input
               id="username"
               placeholder="Strateg42"
               autoComplete="username"
-              className={`h-11 rounded-xl bg-slate-900/80 px-4 text-zinc-100 placeholder:text-slate-500 ${
-                errors.username ? "border-red-500/40" : "border-white/10"
-              }`}
+              className={`h-16 text-xl rounded-2xl ${errors.username ? "border-destructive" : ""}`}
               {...rhfRegister("username")}
             />
             {errors.username && (
-              <p className="text-xs text-red-400 mt-1">{errors.username.message}</p>
+              <p className="text-base text-destructive mt-2">{errors.username.message}</p>
             )}
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="email" className="text-slate-300">
+          <div className="space-y-3">
+            <Label htmlFor="email" className="text-lg">
               Email
             </Label>
             <Input
               id="email"
               type="email"
-              placeholder="dowodca@maplord.gg"
+              placeholder="dowódca@maplord.gg"
               autoComplete="email"
-              className={`h-11 rounded-xl bg-slate-900/80 px-4 text-zinc-100 placeholder:text-slate-500 ${
-                errors.email ? "border-red-500/40" : "border-white/10"
-              }`}
+              className={`h-16 text-xl rounded-2xl ${errors.email ? "border-destructive" : ""}`}
               {...rhfRegister("email")}
             />
             {errors.email && (
-              <p className="text-xs text-red-400 mt-1">{errors.email.message}</p>
+              <p className="text-base text-destructive mt-2">{errors.email.message}</p>
             )}
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="password" className="text-slate-300">
-              Haslo
+          <div className="space-y-3">
+            <Label htmlFor="password" className="text-lg">
+              Hasło
             </Label>
             <Input
               id="password"
               type="password"
-              placeholder="min. 8 znakow"
+              placeholder="min. 8 znaków"
               autoComplete="new-password"
-              className={`h-11 rounded-xl bg-slate-900/80 px-4 text-zinc-100 placeholder:text-slate-500 ${
-                errors.password ? "border-red-500/40" : "border-white/10"
-              }`}
+              className={`h-16 text-xl rounded-2xl ${errors.password ? "border-destructive" : ""}`}
               {...rhfRegister("password")}
             />
             {passwordValue && strength !== "none" && (
-              <div className="mt-1.5 h-1 w-full rounded-full bg-slate-700/60">
+              <div className="mt-2 h-2 w-full rounded-full bg-secondary">
                 <div
-                  className={`h-1 rounded-full transition-all duration-300 ${strengthConfig[strength].color}`}
+                  className={`h-2 rounded-full transition-all duration-300 ${strengthConfig[strength].color}`}
                   style={{ width: strengthConfig[strength].width }}
                 />
               </div>
             )}
             {errors.password && (
-              <p className="text-xs text-red-400 mt-1">{errors.password.message}</p>
+              <p className="text-base text-destructive mt-2">{errors.password.message}</p>
             )}
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword" className="text-slate-300">
-              Powtorz haslo
+          <div className="space-y-3">
+            <Label htmlFor="confirmPassword" className="text-lg">
+              Powtórz hasło
             </Label>
             <Input
               id="confirmPassword"
               type="password"
               placeholder="••••••••"
               autoComplete="new-password"
-              className={`h-11 rounded-xl bg-slate-900/80 px-4 text-zinc-100 placeholder:text-slate-500 ${
-                errors.confirmPassword ? "border-red-500/40" : "border-white/10"
-              }`}
+              className={`h-16 text-xl rounded-2xl ${errors.confirmPassword ? "border-destructive" : ""}`}
               {...rhfRegister("confirmPassword")}
             />
             {errors.confirmPassword && (
-              <p className="text-xs text-red-400 mt-1">{errors.confirmPassword.message}</p>
+              <p className="text-base text-destructive mt-2">{errors.confirmPassword.message}</p>
             )}
           </div>
           <Button
             type="submit"
-            className="h-11 w-full rounded-xl border border-amber-300/30 bg-[linear-gradient(135deg,#f59e0b,#fbbf24)] font-display text-sm uppercase tracking-[0.22em] text-slate-950 hover:opacity-95"
+            className="cursor-target h-16 w-full rounded-2xl bg-primary font-display text-xl uppercase tracking-wider text-primary-foreground hover:bg-primary/90"
             disabled={isSubmitting}
           >
-            {isSubmitting ? "Rejestracja..." : "Utworz konto"}
+            {isSubmitting ? "Rejestracja..." : "Utwórz konto"}
           </Button>
         </form>
       </div>

@@ -1,3 +1,5 @@
+import { getAssetUrl, getOverrideUrl } from "./assetOverrides";
+
 export const BUILDING_ASSET_MAP: Record<string, string> = {
   port: "/assets/buildings/v2/navyport_w300.webp",
   barracks: "/assets/buildings/v2/barracks1_w300.webp",
@@ -14,12 +16,20 @@ export const BUILDING_ASSET_MAP: Record<string, string> = {
   mine: "/assets/buildings/v2/mine_w300.webp",
 };
 
-export function getBuildingAsset(slug: string | null | undefined): string | null {
+export function getBuildingAsset(slug: string | null | undefined, assetUrl?: string | null): string | null {
+  if (assetUrl) return assetUrl;
   if (!slug) return null;
+  // Check override by slug
+  const override = getOverrideUrl(slug);
+  if (override) return override;
   return BUILDING_ASSET_MAP[slug] ?? null;
 }
 
-export function getUnitAsset(kind: string | null | undefined = "default"): string {
+export function getUnitAsset(kind: string | null | undefined = "default", assetUrl?: string | null): string {
+  if (assetUrl) return assetUrl;
+  // Check override by kind key
+  const override = getOverrideUrl(kind ?? "default");
+  if (override) return override;
   switch (kind) {
     case "moving":
       return "/assets/units/moving.webp";
@@ -43,25 +53,72 @@ export function getUnitAsset(kind: string | null | undefined = "default"): strin
   }
 }
 
+/**
+ * Resolve a building asset with player cosmetic priority.
+ * Priority: playerCosmetics[slug] > global override > fallback
+ */
+export function getPlayerBuildingAsset(
+  slug: string | null | undefined,
+  playerCosmetics?: Record<string, unknown>,
+  assetUrl?: string | null
+): string | null {
+  if (slug && playerCosmetics?.[slug]) {
+    const v = playerCosmetics[slug];
+    const url = typeof v === "string" ? v : typeof v === "object" && v !== null && "url" in v ? (v as { url?: string | null }).url : null;
+    if (url) return url;
+  }
+  return getBuildingAsset(slug, assetUrl);
+}
+
+/**
+ * Resolve a unit asset with player cosmetic priority.
+ * Priority: playerCosmetics[kind] > global override > fallback
+ */
+export function getPlayerUnitAsset(
+  kind: string | null | undefined,
+  playerCosmetics?: Record<string, unknown>,
+  assetUrl?: string | null
+): string {
+  const resolvedKind = kind ?? "default";
+  if (playerCosmetics?.[resolvedKind]) {
+    const v = playerCosmetics[resolvedKind];
+    const url = typeof v === "string" ? v : typeof v === "object" && v !== null && "url" in v ? (v as { url?: string | null }).url : null;
+    if (url) return url;
+  }
+  return getUnitAsset(kind, assetUrl);
+}
+
 export function getActionAsset(
   action: "attack" | "move" | "build" | "close" | "defense" | "players",
   unitType?: string | null
 ): string {
-  if (action === "close") return "/assets/icons/close_w80.webp";
-  if (action === "build") return "/assets/icons/building_icon.webp";
-  if (action === "defense") return "/assets/visuals/shield_w100.webp";
-  if (action === "players") return "/assets/icons/hex.webp";
+  const keyMap: Record<string, string> = {
+    close: "icon_close",
+    build: "icon_building",
+    defense: "icon_shield",
+    players: "icon_hex",
+  };
+  if (keyMap[action]) {
+    const fallbacks: Record<string, string> = {
+      close: "/assets/icons/close_w80.webp",
+      build: "/assets/icons/building_icon.webp",
+      defense: "/assets/visuals/shield_w100.webp",
+      players: "/assets/icons/hex.webp",
+    };
+    return getAssetUrl(keyMap[action], fallbacks[action]);
+  }
 
+  // attack / move: unit-type based logic
   if (unitType === "fighter" || unitType === "bomber") {
-    return "/assets/units/plane_tag.png";
+    return getAssetUrl("icon_plane_tag", "/assets/units/plane_tag.png");
   }
   if (unitType === "ship" || unitType === "ship_1") {
     return action === "attack"
-      ? "/assets/units/ships/ship1_colors.png"
-      : "/assets/units/ships/ship1.png";
+      ? getAssetUrl("icon_ship_attack", "/assets/units/ships/ship1_colors.png")
+      : getAssetUrl("icon_ship_move", "/assets/units/ships/ship1.png");
   }
 
   return action === "attack"
-    ? "/assets/icons/attack_icon.webp"
-    : "/assets/visuals/arrow_head_2.webp";
+    ? getAssetUrl("icon_attack", "/assets/icons/attack_icon.webp")
+    : getAssetUrl("icon_move", "/assets/visuals/arrow_head_2.webp");
 }

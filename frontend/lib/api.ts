@@ -135,6 +135,7 @@ export interface BuildingType {
   name: string;
   slug: string;
   asset_key: string;
+  asset_url: string | null;
   description: string;
   icon: string;
   cost: number;
@@ -156,6 +157,7 @@ export interface UnitType {
   name: string;
   slug: string;
   asset_key: string;
+  asset_url: string | null;
   description: string;
   icon: string;
   attack: number;
@@ -228,9 +230,11 @@ export interface AbilityType {
   name: string;
   slug: string;
   asset_key: string;
+  asset_url: string | null;
   description: string;
   icon: string;
   sound_key: string;
+  sound_url: string | null;
   target_type: "enemy" | "own" | "any";
   range: number;
   energy_cost: number;
@@ -744,6 +748,24 @@ export interface ItemOut {
   is_consumable: boolean;
   base_value: number;
   level: number;
+  blueprint_ref: string;
+}
+
+export interface ItemInstanceOut {
+  id: string;
+  item: ItemOut;
+  pattern_seed: number;
+  wear: number;
+  wear_condition: string;
+  stattrak: boolean;
+  stattrak_matches: number;
+  stattrak_kills: number;
+  stattrak_units_produced: number;
+  nametag: string;
+  is_rare_pattern: boolean;
+  first_owner_username: string | null;
+  crafted_by_username: string | null;
+  created_at: string;
 }
 
 export interface ItemCategoryOut {
@@ -757,6 +779,8 @@ export interface InventoryItemOut {
   id: string;
   item: ItemOut;
   quantity: number;
+  is_instance: boolean;
+  instance: ItemInstanceOut | null;
 }
 
 export interface WalletOut {
@@ -771,6 +795,7 @@ export interface ItemDropOut {
   quantity: number;
   source: string;
   match_id: string | null;
+  instance: ItemInstanceOut | null;
   created_at: string;
 }
 
@@ -896,6 +921,48 @@ export async function cancelListing(
   });
 }
 
+// --- Cosmetics ---
+
+export interface EquippedCosmeticOut {
+  slot: string;
+  item_slug: string;
+  item_name: string;
+  asset_url: string | null;
+}
+
+export interface EquippedCosmeticDetail {
+  slot: string;
+  item_slug: string;
+  item_name: string;
+  asset_url: string | null;
+}
+
+export async function getEquippedCosmetics(token: string): Promise<EquippedCosmeticOut[]> {
+  return fetchAPI<EquippedCosmeticOut[]>("/inventory/cosmetics/equipped/", { token });
+}
+
+export async function equipCosmetic(
+  token: string,
+  item_slug: string
+): Promise<EquippedCosmeticDetail> {
+  return fetchAPI<EquippedCosmeticDetail>("/inventory/cosmetics/equip/", {
+    method: "POST",
+    token,
+    body: JSON.stringify({ item_slug }),
+  });
+}
+
+export async function unequipCosmetic(
+  token: string,
+  slot: string
+): Promise<{ detail: string }> {
+  return fetchAPI<{ detail: string }>("/inventory/cosmetics/unequip/", {
+    method: "POST",
+    token,
+    body: JSON.stringify({ slot }),
+  });
+}
+
 // --- Crafting ---
 
 export interface RecipeIngredientOut {
@@ -919,11 +986,19 @@ export async function getRecipes(): Promise<RecipeOut[]> {
   return fetchAPI<RecipeOut[]>("/crafting/recipes/");
 }
 
+export interface CraftResult {
+  message: string;
+  item_name: string;
+  item_slug: string;
+  quantity: number;
+  instance: ItemInstanceOut | null;
+}
+
 export async function craftItem(
   token: string,
   recipeSlug: string
-): Promise<{ message: string; item_name: string; item_slug: string; quantity: number }> {
-  return fetchAPI("/crafting/craft/", {
+): Promise<CraftResult> {
+  return fetchAPI<CraftResult>("/crafting/craft/", {
     method: "POST",
     token,
     body: JSON.stringify({ recipe_slug: recipeSlug }),
@@ -935,6 +1010,7 @@ export async function craftItem(
 export interface DeckItemOut {
   item: ItemOut;
   quantity: number;
+  instance: ItemInstanceOut | null;
 }
 
 export interface DeckOut {

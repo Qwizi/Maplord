@@ -15,6 +15,7 @@ import {
   type UnitType,
   type AbilityType,
 } from "@/lib/api";
+import { loadAssetOverrides } from "@/lib/assetOverrides";
 import { getSeaTravelRange, getTravelDistance } from "@/lib/gameTravel.js";
 import GameMap, {
   type TroopAnimation,
@@ -33,6 +34,13 @@ import TutorialOverlay from "@/components/game/TutorialOverlay";
 import MatchChatPanel from "@/components/chat/MatchChatPanel";
 import VoicePanel from "@/components/chat/VoicePanel";
 import { useVoiceChat } from "@/hooks/useVoiceChat";
+
+const BOOST_EFFECT_LABELS: Record<string, string> = {
+  unit_bonus: "Mobilizacja (+jednostki)",
+  defense_bonus: "Fortyfikacja (+obrona)",
+  energy_bonus: "Ekonomia (+energia)",
+  attack_bonus: "Blitzkrieg (+atak)",
+};
 
 function getUnitRules(units: UnitType[], unitSlug: string | null | undefined) {
   return (
@@ -163,8 +171,8 @@ export default function GamePage({
   // Load geo graph filtered to this match's map config, plus global config
   useEffect(() => {
     getRegionsGraph(matchId).then(setRegionGraph).catch(console.error);
-    getConfig()
-      .then((cfg) => {
+    Promise.all([getConfig(), loadAssetOverrides()])
+      .then(([cfg]) => {
         setBuildings(cfg.buildings);
         setUnitsConfig(cfg.units);
         setAbilitiesConfig(cfg.abilities || []);
@@ -216,11 +224,52 @@ export default function GamePage({
     return tutorial.currentStep.getHighlightRegions(gameState, user.id, neighborMap);
   }, [tutorial.isActive, tutorial.currentStep, gameState, user?.id, neighborMap]);
 
-  // In tutorial, override ability/building costs to match the snapshot values
+  // In tutorial, override ability/building costs to match the snapshot values.
+  // Also inject synthetic AbilityType entries for deck boosts so they show in AbilityBar.
   const effectiveAbilities = useMemo(() => {
-    if (!isTutorial) return abilitiesConfig;
-    return abilitiesConfig.map((a) => ({ ...a, energy_cost: 10, cooldown_ticks: 5 }));
-  }, [isTutorial, abilitiesConfig]);
+    const base = isTutorial
+      ? abilitiesConfig.map((a) => ({ ...a, energy_cost: 10, cooldown_ticks: 5 }))
+      : [...abilitiesConfig];
+
+    // Create synthetic ability entries for boosts from the player's active_boosts
+    const myPlayer = gameState?.players[myUserId];
+    const boosts = myPlayer?.active_boosts ?? [];
+    for (const boost of boosts) {
+      // Skip if already in config (shouldn't happen, but be safe)
+      if (base.some((a) => a.slug === boost.slug)) continue;
+      const params = boost.params as Record<string, unknown>;
+      const effectType = (params?.effect_type as string) ?? "";
+      const value = (params?.value as number) ?? 0;
+      const level = (params?.level as number) ?? 1;
+      // Human-readable name from slug: "boost-mobilization-1" → "Mobilizacja"
+      const nameFromSlug = boost.slug
+        .replace(/^boost-/, "")
+        .replace(/-\d+$/, "")
+        .replace(/-/g, " ")
+        .replace(/^\w/, (c) => c.toUpperCase());
+      base.push({
+        id: boost.slug,
+        name: nameFromSlug,
+        slug: boost.slug,
+        asset_key: "",
+        asset_url: null,
+        description: `${effectType}: +${Math.round(value * 100)}%`,
+        icon: "",
+        sound_key: "",
+        sound_url: null,
+        target_type: "own" as const,
+        energy_cost: 0,
+        cooldown_ticks: 0,
+        effect_duration_ticks: 60,
+        effect_params: { [effectType]: value },
+        order: 100 + level,
+        max_level: 3,
+        level_stats: {},
+      } as AbilityType);
+    }
+
+    return base;
+  }, [isTutorial, abilitiesConfig, gameState?.players, myUserId]);
   const effectiveBuildings = useMemo(() => {
     if (!isTutorial) return buildings;
     return buildings.map((b) => ({ ...b, cost: 0, energy_cost: 10, build_time_ticks: 3 }));
@@ -595,6 +644,9 @@ export default function GamePage({
       );
   }, [status, players]);
 
+  // ── Notification system (must be before event processing) ──
+  const { notifications, notify, dismiss } = useGameNotifications();
+
   // ── Event-driven animations (visible to ALL clients) ───────
   //
   // Instead of triggering animations locally (only visible to the acting player),
@@ -652,22 +704,26 @@ export default function GamePage({
           type: ((e.action_type as string) === "attack" ? "attack" : "move"),
           startTime: Date.now(),
           durationMs: travelTicks * tickMs,
+          playerId,
         });
       } else if (e.type === "attack_success" || e.type === "attack_failed") {
         // Arrival/combat resolution only; travel animation is driven by troops_sent.
       } else if (e.type === "units_moved") {
         // Arrival event only; travel animation is driven by troops_sent.
+      } else if (e.type === "boost_activated" && e.player_id === myUserId) {
+        const effectLabel = BOOST_EFFECT_LABELS[e.effect_type as string] ?? (e.effect_type as string);
+        notify(`Boost aktywowany: ${effectLabel}`, "success");
+      } else if (e.type === "boost_expired" && e.player_id === myUserId) {
+        const slug = e.boost_slug as string;
+        const label = slug.replace(/^boost-/, "").replace(/-\d+$/, "").replace(/-/g, " ");
+        notify(`Boost wygasł: ${label}`, "warning");
       }
     }
 
     if (newAnims.length > 0) {
       setAnimations((prev) => [...prev, ...newAnims]);
     }
-  }, [events, myUserId, unitsConfig]);
-
-  // ── Notification system ────────────────────────────────────
-
-  const { notifications, notify, dismiss } = useGameNotifications();
+  }, [events, myUserId, unitsConfig, notify]);
 
   // ── Click handler ──────────────────────────────────────────
 
@@ -840,6 +896,7 @@ export default function GamePage({
           type: actionType,
           startTime: Date.now(),
           durationMs: travelTicks * tickMs,
+          playerId: myUserId,
         });
         if (target.owner_id !== myUserId) {
           attack(selectedRegion, regionId, units, unitType);
@@ -898,6 +955,14 @@ export default function GamePage({
       setActionTargets([]);
     }
   }, []);
+
+  // Boosts activate globally — no region target needed; send with empty target_region_id
+  const handleActivateBoost = useCallback(
+    (slug: string) => {
+      castAbility("", slug);
+    },
+    [castAbility]
+  );
 
   const handleRemoveTarget = useCallback((rid: string) => {
     setActionTargets((prev) => prev.filter((id) => id !== rid));
@@ -1386,6 +1451,7 @@ export default function GamePage({
           nukeBlackout={nukeBlackout}
           tutorialHighlightRegions={tutorialHighlightRegions}
           speakingPlayerIds={speakingPlayerIds}
+          unitsConfig={unitsConfig}
           onMapReady={handleMapReady}
         />
 
@@ -1409,6 +1475,7 @@ export default function GamePage({
         buildings={effectiveBuildings}
         units={unitsConfig}
         myUserId={myUserId}
+        myCosmetics={gameState?.players[myUserId]?.cosmetics}
       />
 
       {/* Action Bar (multi-target) */}
@@ -1422,6 +1489,8 @@ export default function GamePage({
           selectedUnitScale={
             unitsConfig.find((unit) => unit.slug === (selectedUnitTypeForAction ?? sourceRegionData.unit_type ?? "infantry"))?.manpower_cost ?? 1
           }
+          unitsConfig={unitsConfig}
+          myCosmetics={gameState?.players[myUserId]?.cosmetics}
           onSelectedUnitTypeChange={handleSelectedActionUnitTypeChange}
           onConfirm={handleConfirmAction}
           onRemoveTarget={handleRemoveTarget}
@@ -1460,9 +1529,11 @@ export default function GamePage({
           currentTick={currentTick}
           selectedAbility={selectedAbility}
           onSelectAbility={handleSelectAbility}
+          onActivateBoost={handleActivateBoost}
           allowedAbility={tutorial.isActive ? (tutorial.currentStep?.allowedAbility ?? null) : undefined}
           abilityScrolls={gameState?.players[myUserId]?.ability_scrolls}
           abilityLevels={gameState?.players[myUserId]?.ability_levels}
+          myCosmetics={gameState?.players[myUserId]?.cosmetics}
         />
       )}
 
@@ -1520,6 +1591,7 @@ export default function GamePage({
           unlockedBuildings={gameState?.players[myUserId]?.unlocked_buildings}
           unlockedUnits={gameState?.players[myUserId]?.unlocked_units}
           buildingLevels={gameState?.players[myUserId]?.building_levels}
+          myCosmetics={gameState?.players[myUserId]?.cosmetics}
         />
       )}
     </div>

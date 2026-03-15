@@ -66,7 +66,15 @@ class CraftingController:
                 wallet.save(update_fields=['gold', 'total_spent'])
 
             # Give result
-            add_item_to_inventory(request.user, recipe.result_item, recipe.result_quantity)
+            result = add_item_to_inventory(
+                request.user,
+                recipe.result_item,
+                recipe.result_quantity,
+                crafted_by=request.user,
+            )
+
+            # Determine if we got an ItemInstance (non-stackable item)
+            instance = result if hasattr(result, 'pattern_seed') else None
 
             # Log
             ItemDrop.objects.create(
@@ -74,6 +82,7 @@ class CraftingController:
                 item=recipe.result_item,
                 quantity=recipe.result_quantity,
                 source=ItemDrop.DropSource.CRAFTING,
+                instance=instance,
             )
             CraftingLog.objects.create(
                 user=request.user,
@@ -81,6 +90,7 @@ class CraftingController:
                 result_item=recipe.result_item,
                 result_quantity=recipe.result_quantity,
                 gold_spent=recipe.gold_cost,
+                instance=instance,
             )
 
         return {

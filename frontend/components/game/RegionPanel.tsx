@@ -4,7 +4,7 @@ import { memo, useMemo } from "react";
 import Image from "next/image";
 import type { GameRegion, GamePlayer, BuildingQueueItem } from "@/hooks/useGameSocket";
 import type { BuildingType, UnitType } from "@/lib/api";
-import { getActionAsset, getBuildingAsset, getUnitAsset } from "@/lib/gameAssets";
+import { getActionAsset, getPlayerBuildingAsset, getPlayerUnitAsset } from "@/lib/gameAssets";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Lock } from "lucide-react";
@@ -49,6 +49,8 @@ export default memo(function RegionPanel({
   const hasUnitLocks = unlockedUnits != null && unlockedUnits.length > 0;
   const isOwned = region.owner_id === myUserId;
   const owner = region.owner_id ? players[region.owner_id] : null;
+  const ownerCosmetics = owner?.cosmetics;
+  const myCosmetics = players[myUserId]?.cosmetics;
   const buildingCounts = useMemo(() => {
     // Prefer building_instances (new engine format); fall back to legacy buildings HashMap
     if (region.building_instances && region.building_instances.length > 0) {
@@ -188,7 +190,7 @@ export default memo(function RegionPanel({
             <span className="block text-xs uppercase tracking-[0.16em] text-zinc-500">Jednostki</span>
             <div className="mt-2 flex min-w-0 items-center gap-2">
               <Image
-                src={getUnitAsset(region.unit_type ?? "default")}
+                src={getPlayerUnitAsset(region.unit_type ?? "default", ownerCosmetics, getUnitConfig(region.unit_type ?? "")?.asset_url)}
                 alt=""
                 width={24}
                 height={24}
@@ -232,7 +234,7 @@ export default memo(function RegionPanel({
                       <div className="min-w-0">
                         <div className="flex min-w-0 items-center gap-2">
                           <Image
-                            src={getUnitAsset(type)}
+                            src={getPlayerUnitAsset(type, ownerCosmetics, unitConfig?.asset_url)}
                             alt={type}
                             width={18}
                             height={18}
@@ -312,9 +314,9 @@ export default memo(function RegionPanel({
                         className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-white/10 bg-slate-900/60 px-3 py-2"
                       >
                         <div className="flex min-w-0 items-center gap-2">
-                          {getBuildingAsset(building.asset_key || building.slug) && (
+                          {getPlayerBuildingAsset(building.asset_key || building.slug, ownerCosmetics, building.asset_url) && (
                             <Image
-                              src={getBuildingAsset(building.asset_key || building.slug)!}
+                              src={getPlayerBuildingAsset(building.asset_key || building.slug, ownerCosmetics, building.asset_url)!}
                               alt={building.name}
                               width={22}
                               height={22}
@@ -338,9 +340,9 @@ export default memo(function RegionPanel({
                     className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-white/10 bg-slate-900/60 px-3 py-2"
                   >
                     <div className="flex min-w-0 items-center gap-2">
-                      {getBuildingAsset(building.asset_key || building.slug) && (
+                      {getPlayerBuildingAsset(building.asset_key || building.slug, ownerCosmetics, building.asset_url) && (
                         <Image
-                          src={getBuildingAsset(building.asset_key || building.slug)!}
+                          src={getPlayerBuildingAsset(building.asset_key || building.slug, ownerCosmetics, building.asset_url)!}
                           alt={building.name}
                           width={22}
                           height={22}
@@ -371,7 +373,7 @@ export default memo(function RegionPanel({
               {Object.entries(queuedBuildingCounts).map(([slug, count]) => {
                 const building = buildings.find((entry) => entry.slug === slug);
                 const label = building?.name ?? slug;
-                const asset = getBuildingAsset(building?.asset_key || slug);
+                const asset = getPlayerBuildingAsset(building?.asset_key || slug, myCosmetics, building?.asset_url);
                 return (
                   <div
                     key={slug}
@@ -478,9 +480,9 @@ export default memo(function RegionPanel({
                   className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-[22px] border border-amber-400/10 bg-amber-500/10 px-3 py-3 text-left text-sm transition-colors hover:bg-amber-500/15 disabled:opacity-40"
                 >
                   <span className="flex min-w-0 items-center gap-3">
-                    {getBuildingAsset(building.asset_key || building.slug) && (
+                    {getPlayerBuildingAsset(building.asset_key || building.slug, ownerCosmetics, building.asset_url) && (
                       <Image
-                        src={getBuildingAsset(building.asset_key || building.slug)!}
+                        src={getPlayerBuildingAsset(building.asset_key || building.slug, ownerCosmetics, building.asset_url)!}
                         alt={building.name}
                         width={32}
                         height={32}
@@ -545,7 +547,7 @@ export default memo(function RegionPanel({
               <Separator className="my-5 bg-white/10" />
               <h4 className="flex items-center gap-2 text-sm font-medium text-cyan-300">
                 <Image
-                  src={getUnitAsset(region.unit_type ?? "default")}
+                  src={getPlayerUnitAsset(region.unit_type ?? "default", myCosmetics, getUnitConfig(region.unit_type ?? "")?.asset_url)}
                   alt=""
                   width={18}
                   height={18}
@@ -565,7 +567,7 @@ export default memo(function RegionPanel({
                     >
                       <div className="flex min-w-0 items-center gap-3">
                         <Image
-                          src={getUnitAsset(unit.asset_key || unit.slug)}
+                          src={getPlayerUnitAsset(unit.asset_key || unit.slug, myCosmetics, unit.asset_url)}
                           alt={unit.name}
                           width={28}
                           height={28}
