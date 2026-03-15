@@ -110,6 +110,7 @@ export default function LobbyPage() {
     lobbyId,
     lobbyPlayers,
     lobbyFull,
+    lobbyMaxPlayers,
     allReady,
     queueSeconds,
     setReady,
@@ -208,8 +209,8 @@ export default function LobbyPage() {
 
   const mins = Math.floor(queueSeconds / 60);
   const secs = String(queueSeconds % 60).padStart(2, "0");
-  const maxPlayers = lobbyPlayers.length >= 2 ? lobbyPlayers.length : 2;
-  const emptySlots = Math.max(0, maxPlayers - lobbyPlayers.length);
+  const maxPlayers = lobbyMaxPlayers;
+  const emptySlots = lobbyFull ? 0 : Math.max(0, maxPlayers - lobbyPlayers.length);
   const hostUserId = lobbyPlayers.length > 0 ? lobbyPlayers[0].user_id : null;
   const readyCount = lobbyPlayers.filter((p) => p.is_ready).length;
   const myReady = lobbyPlayers.some(p => p.user_id === myUserId && p.is_ready);

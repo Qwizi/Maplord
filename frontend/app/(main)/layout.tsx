@@ -471,10 +471,10 @@ function QueueBannerInline() {
 
   // Toast when lobby full
   useEffect(() => {
-    if (lobbyFull && !lobbyToastRef.current) {
+    if (lobbyFull && !lobbyToastRef.current && !myReady) {
       try { const a = new Audio("/assets/audio/gui/int_message_alert.ogg"); a.volume = 0.7; a.play().catch(() => {}); } catch {}
       lobbyToastRef.current = toast.success("Mecz znaleziony!", {
-        description: "Kliknij Gotowy aby potwierdzić (2:00)",
+        description: "Kliknij Gotowy aby potwierdzić",
         duration: 120000,
         action: {
           label: "Gotowy!",
@@ -489,7 +489,7 @@ function QueueBannerInline() {
       toast.dismiss(lobbyToastRef.current);
       lobbyToastRef.current = null;
     }
-  }, [lobbyFull, setReady]);
+  }, [lobbyFull, myReady, setReady]);
 
   // Update toast with countdown
   useEffect(() => {

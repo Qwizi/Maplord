@@ -76,6 +76,7 @@ interface MatchmakingContextValue {
   leaveQueue: () => void;
   // Lobby state
   lobbyId: string | null;
+  lobbyMaxPlayers: number;
   lobbyPlayers: LobbyPlayer[];
   lobbyFull: boolean;
   allReady: boolean;
@@ -113,6 +114,7 @@ export function MatchmakingProvider({ children }: { children: ReactNode }) {
 
   // Lobby state
   const [lobbyId, setLobbyId] = useState<string | null>(null);
+  const [lobbyMaxPlayers, setLobbyMaxPlayers] = useState(2);
   const [lobbyPlayers, setLobbyPlayers] = useState<LobbyPlayer[]>([]);
   const [lobbyFull, setLobbyFull] = useState(false);
   const [allReady, setAllReady] = useState(false);
@@ -201,8 +203,13 @@ export function MatchmakingProvider({ children }: { children: ReactNode }) {
       case "lobby_created": {
         const lid = msg.lobby_id as string;
         setLobbyId(lid);
+        if (msg.max_players) setLobbyMaxPlayers(msg.max_players as number);
         setLobbyPlayers(msg.players as LobbyPlayer[]);
         setPlayersInQueue((msg.players as LobbyPlayer[]).length);
+        // Sync timer from server created_at
+        if (msg.created_at) {
+          setQueueJoinedAt(Math.floor((msg.created_at as number) * 1000));
+        }
         // Save lobbyId to session for reconnect
         const session = loadQueueSession();
         if (session) {
@@ -395,7 +402,7 @@ export function MatchmakingProvider({ children }: { children: ReactNode }) {
   const value: MatchmakingContextValue = {
     inQueue, playersInQueue, matchId, activeMatchId, queueSeconds, gameModeSlug,
     fillBots, setFillBots, instantBot, setInstantBot, joinQueue, leaveQueue,
-    lobbyId, lobbyPlayers, lobbyFull, allReady, setReady,
+    lobbyId, lobbyMaxPlayers, lobbyPlayers, lobbyFull, allReady, setReady,
     lobbyChatMessages, sendLobbyChat, voiceToken, voiceUrl, readyCountdown,
   };
 

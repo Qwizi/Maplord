@@ -982,6 +982,7 @@ class LobbyInternalController(ControllerBase):
             'host_user_id': str(lobby.host_user_id),
             'players': [_lobby_player_dict(p) for p in players],
             'full_at': lobby.full_at.timestamp() if lobby.full_at else None,
+            'created_at': lobby.created_at.timestamp(),
         }
 
     @route.get('/active/{user_id}/')

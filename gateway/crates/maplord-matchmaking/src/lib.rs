@@ -5,7 +5,7 @@ use redis::AsyncCommands;
 use serde_json::json;
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 /// How long to wait before filling with bots (seconds).
 const BOT_FILL_TIMEOUT_SECS: u64 = 30;
@@ -155,6 +155,7 @@ impl MatchmakingManager {
                     "lobby_id": state.lobby_id,
                     "max_players": state.max_players,
                     "players": state.players,
+                    "created_at": state.created_at,
                 })));
                 if state.status == "full" || state.status == "ready" {
                     let _ = tx.send(MatchmakingMessage::Json(json!({
@@ -217,11 +218,14 @@ impl MatchmakingManager {
         let lobby_id = result.lobby_id.clone();
 
         // Send lobby state to this user
+        let created_at = self.django.get_lobby(&lobby_id).await
+            .ok().and_then(|s| s.created_at);
         let _ = tx.send(MatchmakingMessage::Json(json!({
             "type": "lobby_created",
             "lobby_id": result.lobby_id,
             "max_players": result.max_players,
             "players": result.players,
+            "created_at": created_at,
         })));
 
         if result.created {
@@ -414,6 +418,7 @@ impl MatchmakingManager {
                     "lobby_id": state.lobby_id,
                     "max_players": state.max_players,
                     "players": state.players,
+                    "created_at": state.created_at,
                 }));
                 if state.status == "full" || state.status == "ready" {
                     self.send_to_user_in_lobby(&lobby_id, user_id, &json!({
@@ -617,5 +622,128 @@ impl MatchmakingManager {
             "token": token,
             "url": url,
         }));
+    }
+
+    // ── Pub/Sub event handler ────────────────────────────────────────
+
+    /// Handle an event from Redis pub/sub (published by Django/Celery).
+    async fn handle_pubsub_event(&self, event: serde_json::Value) {
+        let event_type = event.get("type").and_then(|v| v.as_str()).unwrap_or("");
+        let lobby_id = match event.get("lobby_id").and_then(|v| v.as_str()) {
+            Some(id) => id.to_string(),
+            None => return,
+        };
+
+        info!("Pub/sub event: {event_type} for lobby {lobby_id}");
+
+        match event_type {
+            "players_kicked" => {
+                let kicked_ids: Vec<String> = event
+                    .get("kicked_user_ids")
+                    .and_then(|v| serde_json::from_value(v.clone()).ok())
+                    .unwrap_or_default();
+
+                // Notify kicked players and close their connections
+                for uid in &kicked_ids {
+                    self.send_to_user_in_lobby(&lobby_id, uid, &json!({
+                        "type": "lobby_cancelled",
+                        "lobby_id": lobby_id,
+                        "reason": "ready_timeout",
+                    }));
+                    // Close their WS
+                    if let Some(connections) = self.lobby_connections.get(&lobby_id) {
+                        for conn in connections.iter() {
+                            if conn.user_id == *uid {
+                                let _ = conn.sender.send(MatchmakingMessage::Close);
+                            }
+                        }
+                    }
+                    // Clean up Redis mapping
+                    self.redis_del_user_lobby(uid).await;
+                }
+
+                // Remove kicked connections from local state
+                if let Some(mut connections) = self.lobby_connections.get_mut(&lobby_id) {
+                    connections.retain(|c| !kicked_ids.contains(&c.user_id));
+                }
+
+                // Send updated lobby state to remaining players
+                if let Ok(state) = self.django.get_lobby(&lobby_id).await {
+                    self.broadcast_to_lobby(&lobby_id, &json!({
+                        "type": "lobby_created",
+                        "lobby_id": state.lobby_id,
+                        "max_players": state.max_players,
+                        "players": state.players,
+                        "created_at": state.created_at,
+                    }), None);
+                }
+            }
+            "lobby_cancelled" => {
+                self.broadcast_to_lobby(&lobby_id, &json!({
+                    "type": "lobby_cancelled",
+                    "lobby_id": lobby_id,
+                    "reason": event.get("reason").and_then(|v| v.as_str()).unwrap_or("timeout"),
+                }), None);
+                self.close_lobby_connections(&lobby_id);
+
+                // Clean up Redis for all users
+                if let Some((_, connections)) = self.lobby_connections.remove(&lobby_id) {
+                    for conn in &connections {
+                        self.redis_del_user_lobby(&conn.user_id).await;
+                    }
+                }
+            }
+            _ => {
+                warn!("Unknown pub/sub event type: {event_type}");
+            }
+        }
+    }
+
+    /// Spawn a background task that subscribes to Redis pub/sub for lobby events.
+    pub fn spawn_pubsub_listener(self: &Arc<Self>, redis_url: &str) {
+        let mgr = Arc::clone(self);
+        let url = redis_url.to_string();
+
+        tokio::spawn(async move {
+            loop {
+                match Self::run_pubsub_loop(&mgr, &url).await {
+                    Ok(_) => info!("Pub/sub loop ended, reconnecting..."),
+                    Err(e) => error!("Pub/sub error: {e}, reconnecting in 2s..."),
+                }
+                tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+            }
+        });
+    }
+
+    async fn run_pubsub_loop(mgr: &Arc<Self>, redis_url: &str) -> Result<(), String> {
+        let client = redis::Client::open(redis_url)
+            .map_err(|e| format!("Redis client error: {e}"))?;
+        let mut conn = client.get_async_pubsub().await
+            .map_err(|e| format!("Redis pubsub error: {e}"))?;
+
+        conn.subscribe("lobby:events").await
+            .map_err(|e| format!("Subscribe error: {e}"))?;
+
+        info!("Subscribed to lobby:events pub/sub channel");
+
+        let mut stream = conn.on_message();
+        use futures::StreamExt;
+
+        while let Some(msg) = stream.next().await {
+            let payload: String = match msg.get_payload() {
+                Ok(p) => p,
+                Err(e) => {
+                    warn!("Failed to get pub/sub payload: {e}");
+                    continue;
+                }
+            };
+
+            match serde_json::from_str::<serde_json::Value>(&payload) {
+                Ok(event) => mgr.handle_pubsub_event(event).await,
+                Err(e) => warn!("Failed to parse pub/sub event: {e}"),
+            }
+        }
+
+        Ok(())
     }
 }

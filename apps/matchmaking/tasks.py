@@ -13,11 +13,12 @@ def cleanup_stale_lobbies():
     """Periodic cleanup of stale lobbies.
 
     1. Full lobbies past ready timeout: kick unready non-host players,
-       revert to waiting so host can find new opponents.
+       revert to waiting. Publishes events so gateway can notify via WS.
     2. Waiting lobbies older than 10 minutes: cancel.
     3. Empty lobbies (no players): cancel.
     """
-    from apps.matchmaking.models import Lobby, LobbyPlayer
+    from apps.matchmaking.models import Lobby
+    from apps.matchmaking.events import publish_lobby_event
     from django.db.models import Count
 
     now = timezone.now()
@@ -31,14 +32,13 @@ def cleanup_stale_lobbies():
         full_at__lt=now - timedelta(seconds=READY_TIMEOUT_SECONDS),
     )
     for lobby in expired_full:
-        # Kick players who didn't accept (not ready AND not the host)
         unready = lobby.players.filter(is_ready=False).exclude(user_id=lobby.host_user_id)
+        kicked_user_ids = list(unready.values_list('user_id', flat=True))
         kick_count = unready.count()
         unready.delete()
 
         if kick_count > 0:
             kicked += kick_count
-            # Reset lobby to waiting, clear full_at, reset ready states
             lobby.status = Lobby.Status.WAITING
             lobby.full_at = None
             lobby.save(update_fields=['status', 'full_at'])
@@ -47,18 +47,26 @@ def cleanup_stale_lobbies():
                 f"Lobby {lobby.id}: kicked {kick_count} unready player(s), "
                 f"reverted to waiting"
             )
+            # Notify gateway via pub/sub
+            publish_lobby_event(
+                'players_kicked',
+                str(lobby.id),
+                kicked_user_ids=[str(uid) for uid in kicked_user_ids],
+            )
 
-        # If no players left at all, cancel
         if lobby.players.count() == 0:
             lobby.status = Lobby.Status.CANCELLED
             lobby.save(update_fields=['status'])
             cancelled += 1
+            publish_lobby_event('lobby_cancelled', str(lobby.id), reason='empty')
 
     # 2. Waiting lobbies older than 10 minutes
     stale_waiting = Lobby.objects.filter(
         status=Lobby.Status.WAITING,
         created_at__lt=now - timedelta(minutes=10),
     )
+    for lobby in stale_waiting:
+        publish_lobby_event('lobby_cancelled', str(lobby.id), reason='stale')
     cancelled += stale_waiting.update(status=Lobby.Status.CANCELLED)
 
     # 3. Empty lobbies
@@ -68,6 +76,8 @@ def cleanup_stale_lobbies():
         .annotate(player_count=Count('players'))
         .filter(player_count=0)
     )
+    for lobby in empty_lobbies:
+        publish_lobby_event('lobby_cancelled', str(lobby.id), reason='empty')
     cancelled += empty_lobbies.update(status=Lobby.Status.CANCELLED)
 
     if kicked > 0 or cancelled > 0:

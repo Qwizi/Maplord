@@ -135,7 +135,7 @@ CELERY_BEAT_SCHEDULE = {
     },
     'cleanup-stale-lobbies': {
         'task': 'apps.matchmaking.tasks.cleanup_stale_lobbies',
-        'schedule': 60,  # every minute
+        'schedule': 30,  # every 30 seconds
     },
 }
 

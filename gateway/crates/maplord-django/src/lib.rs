@@ -281,6 +281,8 @@ pub struct LobbyStateResult {
     pub host_user_id: String,
     pub players: Vec<LobbyPlayerInfo>,
     pub full_at: Option<f64>,
+    #[serde(default)]
+    pub created_at: Option<f64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
