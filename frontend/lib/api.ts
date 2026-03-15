@@ -1107,3 +1107,99 @@ export async function oauthAuthorize(
     token,
   });
 }
+
+// --- Map Editor ---
+
+export interface CustomMapOut {
+  id: string;
+  name: string;
+  description: string;
+  author_id: string;
+  author_username: string;
+  is_published: boolean;
+  province_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CustomProvinceOut {
+  id: string;
+  name: string;
+  color: string;
+  geometry: GeoJSONGeometry;
+  centroid: [number, number] | null;
+  properties: Record<string, unknown>;
+}
+
+export interface GeoJSONGeometry {
+  type: string;
+  coordinates: number[][][];
+}
+
+export interface CustomMapDetail extends CustomMapOut {
+  provinces: CustomProvinceOut[];
+}
+
+export async function getMyCustomMaps(token: string): Promise<CustomMapOut[]> {
+  return fetchAPI<CustomMapOut[]>("/map-editor/maps/", { token });
+}
+
+export async function createCustomMap(
+  token: string,
+  data: { name: string; description?: string }
+): Promise<CustomMapOut> {
+  return fetchAPI<CustomMapOut>("/map-editor/maps/", {
+    method: "POST",
+    token,
+    body: JSON.stringify(data),
+  });
+}
+
+export async function getCustomMap(token: string, mapId: string): Promise<CustomMapDetail> {
+  return fetchAPI<CustomMapDetail>(`/map-editor/maps/${mapId}/`, { token });
+}
+
+export async function updateCustomMap(
+  token: string,
+  mapId: string,
+  data: { name?: string; description?: string; is_published?: boolean }
+): Promise<CustomMapOut> {
+  return fetchAPI<CustomMapOut>(`/map-editor/maps/${mapId}/`, {
+    method: "PATCH",
+    token,
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteCustomMap(token: string, mapId: string): Promise<void> {
+  await fetchAPI(`/map-editor/maps/${mapId}/`, { method: "DELETE", token });
+}
+
+export async function createProvince(
+  token: string,
+  mapId: string,
+  data: { name: string; color?: string; geometry: GeoJSONGeometry; properties?: Record<string, unknown> }
+): Promise<CustomProvinceOut> {
+  return fetchAPI<CustomProvinceOut>(`/map-editor/maps/${mapId}/provinces/`, {
+    method: "POST",
+    token,
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateProvince(
+  token: string,
+  mapId: string,
+  provinceId: string,
+  data: { name?: string; color?: string; geometry?: GeoJSONGeometry; properties?: Record<string, unknown> }
+): Promise<CustomProvinceOut> {
+  return fetchAPI<CustomProvinceOut>(`/map-editor/maps/${mapId}/provinces/${provinceId}/`, {
+    method: "PATCH",
+    token,
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteProvince(token: string, mapId: string, provinceId: string): Promise<void> {
+  await fetchAPI(`/map-editor/maps/${mapId}/provinces/${provinceId}/`, { method: "DELETE", token });
+}
