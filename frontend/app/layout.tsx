@@ -6,6 +6,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { Toaster } from "@/components/ui/sonner";
 import { ChatProvider } from "@/hooks/useChat";
 import ChatWidget from "@/components/chat/ChatWidget";
+import { SerwistProvider } from "./serwist-provider";
 
 const uiSans = localFont({
   src: [
@@ -87,13 +88,15 @@ export default function RootLayout({
       <body
         className={`${uiSans.variable} ${displayFont.variable} antialiased`}
       >
-        <AuthProvider>
-          <ChatProvider>
-            {children}
-            <ChatWidget />
-            <Toaster />
-          </ChatProvider>
-        </AuthProvider>
+        <SerwistProvider swUrl="/serwist/sw.js">
+          <AuthProvider>
+            <ChatProvider>
+              {children}
+              <ChatWidget />
+              <Toaster />
+            </ChatProvider>
+          </AuthProvider>
+        </SerwistProvider>
       </body>
     </html>
   );

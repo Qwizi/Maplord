@@ -38,7 +38,10 @@ import {
   Store,
   Hammer,
   Trophy,
+  Bell,
+  X,
 } from "lucide-react";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 const MODE_ICONS: Record<string, typeof Users> = {
   "standard-1v1": Swords,
@@ -56,6 +59,7 @@ export default function DashboardPage() {
     lobbyId,
   } = useMatchmaking();
   const router = useRouter();
+  const { showPrompt, subscribe, dismiss } = usePushNotifications(true);
 
   const [recentMatches, setRecentMatches] = useState<Match[]>([]);
   const [gameModes, setGameModes] = useState<GameModeListItem[]>([]);
@@ -174,6 +178,29 @@ export default function DashboardPage() {
 
   return (
     <div ref={containerRef} className="space-y-3 md:space-y-6 -mx-4 md:mx-0 -mt-2 md:mt-0">
+
+      {/* ═══ PUSH NOTIFICATION PROMPT ═══ */}
+      {showPrompt && (
+        <div className="mx-4 md:mx-0 flex items-center gap-3 rounded-xl border border-blue-400/20 bg-blue-500/10 px-4 py-3">
+          <Bell className="h-5 w-5 shrink-0 text-blue-400" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-foreground">Włącz powiadomienia</p>
+            <p className="text-xs text-muted-foreground">Dostaniesz info gdy lobby się zapełni</p>
+          </div>
+          <button
+            onClick={() => { subscribe(); }}
+            className="shrink-0 rounded-lg bg-blue-500/20 px-3 py-1.5 text-xs font-medium text-blue-300 hover:bg-blue-500/30 transition-colors"
+          >
+            Włącz
+          </button>
+          <button
+            onClick={dismiss}
+            className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {/* ═══ HEADER ═══ */}
       <div className="px-4 md:px-0">

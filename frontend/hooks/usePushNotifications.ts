@@ -13,7 +13,9 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return arr;
 }
 
-export function usePushNotifications() {
+const PUSH_DISMISSED_KEY = "maplord_push_dismissed";
+
+export function usePushNotifications(autoPrompt = false) {
   const [permission, setPermission] = useState<NotificationPermission>("default");
   const [subscribed, setSubscribed] = useState(false);
   const initRef = useRef(false);
@@ -58,7 +60,8 @@ export function usePushNotifications() {
 
       setSubscribed(true);
       return true;
-    } catch {
+    } catch (err) {
+      console.error("Push subscribe failed:", err);
       return false;
     }
   }, []);
@@ -80,5 +83,18 @@ export function usePushNotifications() {
     }
   }, []);
 
-  return { permission, subscribed, subscribe, unsubscribe };
+  const dismiss = useCallback(() => {
+    sessionStorage.setItem(PUSH_DISMISSED_KEY, "1");
+  }, []);
+
+  // Whether to show the prompt banner
+  const showPrompt =
+    autoPrompt &&
+    permission === "default" &&
+    !subscribed &&
+    typeof window !== "undefined" &&
+    "Notification" in window &&
+    !sessionStorage.getItem(PUSH_DISMISSED_KEY);
+
+  return { permission, subscribed, subscribe, unsubscribe, dismiss, showPrompt };
 }

@@ -1,17 +1,28 @@
 import json
 import logging
+import os
+import tempfile
 
 from django.conf import settings
 from pywebpush import webpush, WebPushException
 
 logger = logging.getLogger(__name__)
 
+# Write VAPID private key PEM to a temp file once at module load
+# (pywebpush expects a file path, not a PEM string)
+_vapid_key_path = None
+if settings.VAPID_PRIVATE_KEY:
+    _f = tempfile.NamedTemporaryFile(mode="w", suffix=".pem", delete=False)
+    _f.write(settings.VAPID_PRIVATE_KEY)
+    _f.close()
+    _vapid_key_path = _f.name
+
 
 def send_push(user_id: str, title: str, body: str, url: str = "/dashboard", tag: str = ""):
     """Send push notification to all subscriptions for a user."""
     from apps.accounts.models import PushSubscription
 
-    if not settings.VAPID_PRIVATE_KEY:
+    if not _vapid_key_path:
         return
 
     payload = json.dumps({
@@ -29,7 +40,7 @@ def send_push(user_id: str, title: str, body: str, url: str = "/dashboard", tag:
             webpush(
                 subscription_info=sub.to_webpush_dict(),
                 data=payload,
-                vapid_private_key=settings.VAPID_PRIVATE_KEY,
+                vapid_private_key=_vapid_key_path,
                 vapid_claims={"sub": settings.VAPID_MAILTO},
             )
         except WebPushException as e:

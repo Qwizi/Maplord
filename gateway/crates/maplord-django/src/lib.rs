@@ -739,6 +739,15 @@ impl DjangoClient {
         .await
     }
 
+    pub async fn notify_lobby_full(&self, lobby_id: &str) {
+        #[derive(Serialize)]
+        struct Req { lobby_id: String }
+        let _: Result<serde_json::Value, _> = self.post(
+            "/api/v1/internal/lobby/notify-lobby-full/",
+            &Req { lobby_id: lobby_id.to_string() },
+        ).await;
+    }
+
     pub async fn get_lobby(&self, lobby_id: &str) -> Result<LobbyStateResult, DjangoError> {
         self.get(&format!("/api/v1/internal/lobby/get/{lobby_id}/"))
             .await

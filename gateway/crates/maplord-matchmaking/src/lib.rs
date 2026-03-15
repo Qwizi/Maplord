@@ -260,6 +260,11 @@ impl MatchmakingManager {
                 self.broadcast_to_lobby(&lobby_id, &full_msg, None);
                 // Also send to joining user (not yet in lobby_connections)
                 let _ = tx.send(MatchmakingMessage::Json(full_msg));
+
+                // Send push notification (fire-and-forget)
+                let django = self.django.clone();
+                let lid = lobby_id.clone();
+                tokio::spawn(async move { django.notify_lobby_full(&lid).await });
             }
         }
 
@@ -534,6 +539,11 @@ impl MatchmakingManager {
                             "lobby_id": lobby_id,
                             "players": state.players,
                         }), None);
+
+                        // Send push notification (fire-and-forget)
+                        let django = self.django.clone();
+                        let lid = lobby_id.to_string();
+                        tokio::spawn(async move { django.notify_lobby_full(&lid).await });
                     }
                     if state.status == "ready" || all_ready {
                         self.broadcast_to_lobby(lobby_id, &json!({
