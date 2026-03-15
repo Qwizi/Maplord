@@ -1127,3 +1127,39 @@ class LobbyInternalController(ControllerBase):
                     'players': [_lobby_player_dict(p) for p in players],
                     'full_at': None,
                 }
+
+    @route.post('/notify-lobby-full/')
+    def notify_lobby_full(self, request):
+        if not check_internal_secret(request):
+            return self.create_response({'error': 'Unauthorized'}, status_code=403)
+
+        import json as _json
+        body = _json.loads(request.body)
+        lobby_id = body.get('lobby_id')
+        if not lobby_id:
+            return self.create_response({'error': 'lobby_id required'}, status_code=400)
+
+        from apps.matchmaking.models import Lobby
+
+        try:
+            lobby = Lobby.objects.prefetch_related('players__user').get(id=lobby_id)
+        except Lobby.DoesNotExist:
+            return self.create_response({'error': 'Lobby not found'}, status_code=404)
+
+        human_ids = [
+            str(lp.user_id)
+            for lp in lobby.players.all()
+            if not lp.is_bot
+        ]
+
+        if human_ids:
+            from apps.accounts.push import send_push_to_users
+            send_push_to_users(
+                human_ids,
+                title="Lobby pełne!",
+                body="Wszyscy gracze dołączyli. Zaakceptuj gotowość!",
+                url=f"/lobby/{lobby_id}",
+                tag=f"lobby-full-{lobby_id}",
+            )
+
+        return {'ok': True, 'notified': len(human_ids)}

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 
 import "./globals.css";
@@ -6,6 +6,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { Toaster } from "@/components/ui/sonner";
 import { ChatProvider } from "@/hooks/useChat";
 import ChatWidget from "@/components/chat/ChatWidget";
+import { SerwistProvider } from "./serwist-provider";
 
 const uiSans = localFont({
   src: [
@@ -65,6 +66,16 @@ const displayFont = localFont({
 export const metadata: Metadata = {
   title: "MapLord",
   description: "Real-time strategy game on a world map",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "MapLord",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0a0a0a",
+  maximumScale: 1,
 };
 
 export default function RootLayout({
@@ -77,13 +88,15 @@ export default function RootLayout({
       <body
         className={`${uiSans.variable} ${displayFont.variable} antialiased`}
       >
-        <AuthProvider>
-          <ChatProvider>
-            {children}
-            <ChatWidget />
-            <Toaster />
-          </ChatProvider>
-        </AuthProvider>
+        <SerwistProvider swUrl="/serwist/sw.js">
+          <AuthProvider>
+            <ChatProvider>
+              {children}
+              <ChatWidget />
+              <Toaster />
+            </ChatProvider>
+          </AuthProvider>
+        </SerwistProvider>
       </body>
     </html>
   );
