@@ -128,7 +128,7 @@ async fn main() {
     );
 
     // Create matchmaking manager
-    let matchmaking = Arc::new(MatchmakingManager::new(django.clone()));
+    let matchmaking = Arc::new(MatchmakingManager::new(django.clone(), redis_conn.clone()));
 
     // Create game connections registry
     let game_connections = new_game_connections();

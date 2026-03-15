@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -24,6 +24,7 @@ import {
   Store,
   Trophy,
   UserCircle,
+  Users,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { MatchmakingProvider, useMatchmaking } from "@/hooks/useMatchmaking";
 import { getMyWallet, type WalletOut } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 // ---------------------------------------------------------------------------
 // Nav item definitions
 // ---------------------------------------------------------------------------
@@ -168,6 +170,7 @@ const BREADCRUMB_LABELS: Record<string, string> = {
   developers: "Deweloperzy",
   profile: "Profil",
   settings: "Ustawienia",
+  lobby: "Lobby",
   match: "Mecz",
   replay: "Powtórka",
   docs: "Dokumentacja",
@@ -456,12 +459,45 @@ function QueueGuard({ children, pathname }: { children: ReactNode; pathname: str
 // ---------------------------------------------------------------------------
 
 function QueueBannerInline() {
-  const { inQueue, playersInQueue, queueSeconds, leaveQueue, matchId } = useMatchmaking();
+  const { inQueue, lobbyId, lobbyPlayers, lobbyFull, allReady, queueSeconds, leaveQueue, matchId, setReady } = useMatchmaking();
+  const { user } = useAuth();
   const router = useRouter();
+  const myReady = lobbyPlayers.some(p => p.user_id === user?.id && p.is_ready);
+  const lobbyToastRef = useRef<string | number | null>(null);
 
   useEffect(() => {
     if (matchId) router.push(`/game/${matchId}`);
   }, [matchId, router]);
+
+  // Toast when lobby full
+  useEffect(() => {
+    if (lobbyFull && !lobbyToastRef.current) {
+      try { const a = new Audio("/assets/audio/gui/int_message_alert.ogg"); a.volume = 0.7; a.play().catch(() => {}); } catch {}
+      lobbyToastRef.current = toast.success("Mecz znaleziony!", {
+        description: "Kliknij Gotowy aby potwierdzić",
+        duration: 30000,
+        action: {
+          label: "Gotowy!",
+          onClick: () => setReady(),
+        },
+        classNames: {
+          actionButton: "!bg-green-500 !text-white !font-bold !rounded-lg !px-4 !py-2 !text-sm hover:!bg-green-400 !border-0",
+        },
+      });
+    }
+    if (!lobbyFull && lobbyToastRef.current) {
+      toast.dismiss(lobbyToastRef.current);
+      lobbyToastRef.current = null;
+    }
+  }, [lobbyFull, setReady]);
+
+  // Dismiss toast on cancel / leave
+  useEffect(() => {
+    if (!inQueue && lobbyToastRef.current) {
+      toast.dismiss(lobbyToastRef.current);
+      lobbyToastRef.current = null;
+    }
+  }, [inQueue]);
 
   if (!inQueue) return null;
 
@@ -470,10 +506,60 @@ function QueueBannerInline() {
 
   return (
     <div className="flex items-center gap-2 md:gap-2.5 ml-auto">
+      {/* Player avatars — click to go to lobby page */}
+      {lobbyPlayers.length > 0 && (
+        <Link
+          href={lobbyId ? `/lobby/${lobbyId}` : "#"}
+          className="flex -space-x-2 transition-opacity hover:opacity-80"
+        >
+          {lobbyPlayers.map((player) => (
+            <div
+              key={player.user_id}
+              title={player.username}
+              className={cn(
+                "flex h-7 w-7 items-center justify-center rounded-full border-2 text-[10px] font-bold uppercase",
+                player.is_ready
+                  ? "border-green-500 bg-green-500/20 text-green-400"
+                  : "border-border bg-secondary text-muted-foreground",
+                player.is_bot && "opacity-70"
+              )}
+            >
+              {player.username.charAt(0)}
+            </div>
+          ))}
+        </Link>
+      )}
+
       <div className="flex items-center gap-1.5 rounded-full bg-primary/10 border border-primary/20 pl-2.5 pr-1 py-1 md:pl-3 md:pr-1.5 md:py-1">
         <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
         <span className="text-xs md:text-sm font-semibold text-primary tabular-nums">{mins}:{secs}</span>
-        <span className="hidden md:inline text-xs text-primary/70">· {playersInQueue} w kolejce</span>
+        <span className="hidden md:inline text-xs text-primary/70">· {lobbyPlayers.length} graczy</span>
+
+        {/* Ready button — show when lobby is full */}
+        {lobbyFull && !allReady && !myReady && (
+          <Button
+            size="xs"
+            onClick={setReady}
+            className="ml-1 rounded-full bg-green-500 text-white hover:bg-green-400 active:scale-[0.95] font-bold"
+          >
+            Gotowy!
+          </Button>
+        )}
+        {lobbyFull && !allReady && myReady && (
+          <span className="ml-1 text-[10px] text-green-400 font-semibold">Oczekiwanie...</span>
+        )}
+
+        {/* Lobby link */}
+        {lobbyId && (
+          <Link
+            href={`/lobby/${lobbyId}`}
+            className="flex items-center justify-center h-5 w-5 md:h-6 md:w-6 rounded-full bg-primary/20 text-primary hover:bg-primary/30 transition-colors ml-0.5 active:scale-[0.9]"
+            title="Lobby"
+          >
+            <Users className="h-3 w-3" />
+          </Link>
+        )}
+
         <button
           onClick={leaveQueue}
           className="flex items-center justify-center h-5 w-5 md:h-6 md:w-6 rounded-full bg-primary/20 text-primary hover:bg-destructive/20 hover:text-destructive transition-colors ml-0.5 active:scale-[0.9]"
