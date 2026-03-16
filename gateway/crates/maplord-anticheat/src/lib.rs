@@ -149,12 +149,238 @@ const MAX_ACTION_LOG_SIZE: i64 = 10_000;
 // AnticheatEngine
 // ---------------------------------------------------------------------------
 
+/// Pure in-memory detection state — all profile tracking with no I/O.
+/// Extracted as a separate struct so unit tests can exercise detection logic
+/// without requiring a live Redis `ConnectionManager`.
+pub(crate) struct Detectors {
+    pub(crate) profiles: HashMap<String, PlayerProfile>,
+}
+
+impl Detectors {
+    pub(crate) fn new() -> Self {
+        Self {
+            profiles: HashMap::new(),
+        }
+    }
+
+    pub(crate) fn profile(&mut self, player_id: &str) -> &mut PlayerProfile {
+        self.profiles
+            .entry(player_id.to_string())
+            .or_insert_with(PlayerProfile::new)
+    }
+
+    pub(crate) fn check_action_flood(
+        &mut self,
+        player_id: &str,
+        action_count: u32,
+        tick: i64,
+    ) -> Option<Violation> {
+        let profile = self.profile(player_id);
+        profile.actions_per_tick.push(action_count);
+
+        if profile.actions_per_tick.len() < FLOOD_WINDOW {
+            return None;
+        }
+
+        let window = &profile.actions_per_tick[profile.actions_per_tick.len() - FLOOD_WINDOW..];
+        let all_above = window.iter().all(|&count| count >= FLOOD_THRESHOLD);
+
+        if all_above {
+            let avg: f64 =
+                window.iter().map(|&c| c as f64).sum::<f64>() / FLOOD_WINDOW as f64;
+            Some(Violation {
+                kind: ViolationKind::ActionFlood,
+                player_id: player_id.to_string(),
+                tick,
+                severity: 15,
+                detail: format!(
+                    "Sustained {avg:.0} actions/tick over {FLOOD_WINDOW} ticks (threshold {FLOOD_THRESHOLD})"
+                ),
+            })
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn check_impossible_timing(
+        &mut self,
+        player_id: &str,
+        action_count: usize,
+        tick: i64,
+    ) -> Option<Violation> {
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+
+        let profile = self.profile(player_id);
+
+        for i in 0..action_count {
+            let ts = now_ms.saturating_sub((action_count - 1 - i) as u64);
+            profile.action_timestamps_ms.push(ts);
+        }
+
+        if profile.action_timestamps_ms.len() > 256 {
+            let drain = profile.action_timestamps_ms.len() - 128;
+            profile.action_timestamps_ms.drain(..drain);
+        }
+
+        let timestamps = &profile.action_timestamps_ms;
+        if timestamps.len() < TIMING_WINDOW + 1 {
+            return None;
+        }
+
+        let recent = &timestamps[timestamps.len() - TIMING_WINDOW - 1..];
+        let mut fast_count = 0u32;
+        for w in recent.windows(2) {
+            let interval = w[1].saturating_sub(w[0]);
+            if interval < MIN_ACTION_INTERVAL_MS {
+                fast_count += 1;
+            }
+        }
+
+        if fast_count >= (TIMING_WINDOW as u32 * 8 / 10) {
+            Some(Violation {
+                kind: ViolationKind::ImpossibleTiming,
+                player_id: player_id.to_string(),
+                tick,
+                severity: 20,
+                detail: format!(
+                    "{fast_count}/{TIMING_WINDOW} action intervals below {MIN_ACTION_INTERVAL_MS}ms"
+                ),
+            })
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn check_repetitive_pattern(
+        &mut self,
+        player_id: &str,
+        actions: &[&Action],
+        tick: i64,
+    ) -> Option<Violation> {
+        let profile = self.profile(player_id);
+
+        for action in actions {
+            let sig = action_signature(action);
+            profile.recent_action_sigs.push(sig);
+        }
+
+        if profile.recent_action_sigs.len() > 256 {
+            let drain = profile.recent_action_sigs.len() - 128;
+            profile.recent_action_sigs.drain(..drain);
+        }
+
+        let sigs = &profile.recent_action_sigs;
+        let min_len = REPETITION_SEQ_LEN * REPETITION_MIN_REPEATS;
+        if sigs.len() < min_len {
+            return None;
+        }
+
+        let tail = &sigs[sigs.len() - min_len..];
+        let pattern = &tail[..REPETITION_SEQ_LEN];
+        let mut repeats = 0usize;
+        for chunk in tail.chunks_exact(REPETITION_SEQ_LEN) {
+            if chunk == pattern {
+                repeats += 1;
+            }
+        }
+
+        if repeats >= REPETITION_MIN_REPEATS {
+            Some(Violation {
+                kind: ViolationKind::RepetitivePattern,
+                player_id: player_id.to_string(),
+                tick,
+                severity: 25,
+                detail: format!(
+                    "Identical {REPETITION_SEQ_LEN}-action sequence repeated {repeats} times"
+                ),
+            })
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn check_fog_of_war(
+        player_id: &str,
+        action: &Action,
+        tick: i64,
+        regions: &HashMap<String, Region>,
+        neighbor_map: &HashMap<String, Vec<String>>,
+    ) -> Option<Violation> {
+        if action.action_type != "attack" {
+            return None;
+        }
+
+        let target_id = action.target_region_id.as_deref()?;
+
+        let visible = compute_player_visibility(player_id, regions, neighbor_map);
+
+        if !visible.contains(target_id) {
+            Some(Violation {
+                kind: ViolationKind::FogOfWarAbuse,
+                player_id: player_id.to_string(),
+                tick,
+                severity: 35,
+                detail: format!("Attacked region {target_id} which is outside visibility range"),
+            })
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn violation_score(&self, player_id: &str) -> u32 {
+        self.profiles
+            .get(player_id)
+            .map(|p| p.violation_score)
+            .unwrap_or(0)
+    }
+
+    pub(crate) fn apply_violation_score(&mut self, player_id: &str, severity: u32) {
+        let profile = self.profile(player_id);
+        profile.violation_score = profile.violation_score.saturating_add(severity);
+    }
+
+    pub(crate) fn worst_verdict_for_score(
+        &mut self,
+        player_id: &str,
+        detail: &str,
+    ) -> AnticheatVerdict {
+        let profile = self.profile(player_id);
+        if profile.violation_score >= CANCEL_THRESHOLD {
+            AnticheatVerdict::CancelMatch {
+                reason: format!(
+                    "Player {player_id} accumulated violation score {} (threshold {CANCEL_THRESHOLD})",
+                    profile.violation_score
+                ),
+            }
+        } else if profile.violation_score >= FLAG_THRESHOLD {
+            AnticheatVerdict::FlagPlayer {
+                player_id: player_id.to_string(),
+                reason: format!(
+                    "{detail} — score {} (threshold {FLAG_THRESHOLD})",
+                    profile.violation_score
+                ),
+            }
+        } else if profile.violation_score >= WARN_THRESHOLD && profile.warnings_issued < 3 {
+            profile.warnings_issued += 1;
+            AnticheatVerdict::Warn {
+                player_id: player_id.to_string(),
+                reason: detail.to_string(),
+            }
+        } else {
+            AnticheatVerdict::Allow
+        }
+    }
+}
+
 /// Real-time anti-cheat engine — one instance per active match.
 pub struct AnticheatEngine {
     match_id: String,
     redis: ConnectionManager,
-    profiles: HashMap<String, PlayerProfile>,
-    /// Monotonic counter incremented each time we record action timestamps.
+    detectors: Detectors,
+    /// Wall-clock ms at match start, used to compute relative action timestamps.
     match_start_ms: u64,
 }
 
@@ -168,7 +394,7 @@ impl AnticheatEngine {
         Self {
             match_id,
             redis,
-            profiles: HashMap::new(),
+            detectors: Detectors::new(),
             match_start_ms: now,
         }
     }
@@ -178,9 +404,7 @@ impl AnticheatEngine {
     }
 
     fn profile(&mut self, player_id: &str) -> &mut PlayerProfile {
-        self.profiles
-            .entry(player_id.to_string())
-            .or_insert_with(PlayerProfile::new)
+        self.detectors.profile(player_id)
     }
 
     // -----------------------------------------------------------------------
@@ -296,19 +520,19 @@ impl AnticheatEngine {
 
         for (player_id, player_actions) in &per_player {
             // 1. Action flood detection
-            if let Some(v) = self.check_action_flood(player_id, player_actions.len() as u32, tick)
+            if let Some(v) = self.detectors.check_action_flood(player_id, player_actions.len() as u32, tick)
             {
                 violations.push(v);
             }
 
             // 2. Impossible timing detection
-            if let Some(v) = self.check_impossible_timing(player_id, player_actions.len(), tick) {
+            if let Some(v) = self.detectors.check_impossible_timing(player_id, player_actions.len(), tick) {
                 violations.push(v);
             }
 
             // 3. Repetitive pattern detection
             if let Some(v) =
-                self.check_repetitive_pattern(player_id, player_actions, tick)
+                self.detectors.check_repetitive_pattern(player_id, player_actions, tick)
             {
                 violations.push(v);
             }
@@ -316,7 +540,7 @@ impl AnticheatEngine {
             // 4. Fog-of-war abuse detection (deduplicated: max 1 per tick per player)
             let mut fog_count = 0u32;
             for action in player_actions {
-                if self.check_fog_of_war(player_id, action, tick, regions, neighbor_map).is_some() {
+                if Detectors::check_fog_of_war(player_id, action, tick, regions, neighbor_map).is_some() {
                     fog_count += 1;
                 }
             }
