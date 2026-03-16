@@ -19,11 +19,15 @@ DATABASES = {
     }
 }
 
-# Remove geo app and django.contrib.gis to avoid GDAL/PostGIS requirement
-INSTALLED_APPS = [
-    app for app in INSTALLED_APPS  # noqa: F405
-    if app not in ('django.contrib.gis', 'apps.geo')
-]
+# Keep all apps including django.contrib.gis and apps.geo so migration
+# dependency chains resolve. The MIGRATION_MODULES override below redirects
+# geo to test-only migrations that use plain fields instead of PostGIS types.
+# (INSTALLED_APPS is inherited unchanged from config.settings)
+
+# Override geo app migrations to use test-friendly (non-spatial) migrations
+MIGRATION_MODULES = {
+    'geo': 'config.test_geo_migrations',
+}
 
 ROOT_URLCONF = 'config.test_urls'
 
