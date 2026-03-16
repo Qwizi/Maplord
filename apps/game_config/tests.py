@@ -38,11 +38,12 @@ class GameSettingsTests(TestCase):
         obj = GameSettings.get()
         self.assertEqual(obj.tick_interval_ms, 1000)
 
-    def test_multiple_instances_possible(self):
-        """GameSettings.get() is the canonical accessor; raw save is allowed."""
+    def test_multiple_raw_saves_allowed(self):
+        """GameSettings uses UUID PK — raw save() doesn't enforce singleton.
+        The practical enforcement is via GameSettings.get() always returning first()."""
         GameSettings.get()  # create first
         second = GameSettings(elo_k_factor=64)
-        second.save()  # model allows multiple rows — get() always returns first
+        second.save()
         self.assertEqual(GameSettings.objects.count(), 2)
 
     def test_str_representation(self):
