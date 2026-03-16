@@ -4,18 +4,16 @@ can run against a plain PostgreSQL instance.
 """
 from config.settings import *  # noqa: F401, F403
 
-# Use standard PostgreSQL backend instead of PostGIS
+# Use standard PostgreSQL backend instead of PostGIS.
+# DATABASE NAME is 'maplord' — Django will create 'test_maplord' as the test DB.
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'maplord_test',
+        'NAME': 'maplord',
         'USER': 'maplord',
         'PASSWORD': 'maplord',
         'HOST': 'localhost',
         'PORT': '5432',
-        'TEST': {
-            'NAME': 'maplord_test',
-        },
     }
 }
 
