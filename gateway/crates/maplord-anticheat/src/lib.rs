@@ -606,197 +606,6 @@ impl AnticheatEngine {
     }
 
     // -----------------------------------------------------------------------
-    // Detector: Action Flood
-    // -----------------------------------------------------------------------
-
-    fn check_action_flood(
-        &mut self,
-        player_id: &str,
-        action_count: u32,
-        tick: i64,
-    ) -> Option<Violation> {
-        let profile = self.profile(player_id);
-        profile.actions_per_tick.push(action_count);
-
-        // Only check if we have enough history
-        if profile.actions_per_tick.len() < FLOOD_WINDOW {
-            return None;
-        }
-
-        // Check last N ticks
-        let window = &profile.actions_per_tick[profile.actions_per_tick.len() - FLOOD_WINDOW..];
-        let all_above = window.iter().all(|&count| count >= FLOOD_THRESHOLD);
-
-        if all_above {
-            let avg: f64 =
-                window.iter().map(|&c| c as f64).sum::<f64>() / FLOOD_WINDOW as f64;
-            Some(Violation {
-                kind: ViolationKind::ActionFlood,
-                player_id: player_id.to_string(),
-                tick,
-                severity: 15,
-                detail: format!(
-                    "Sustained {avg:.0} actions/tick over {FLOOD_WINDOW} ticks (threshold {FLOOD_THRESHOLD})"
-                ),
-            })
-        } else {
-            None
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // Detector: Impossible Timing
-    // -----------------------------------------------------------------------
-
-    fn check_impossible_timing(
-        &mut self,
-        player_id: &str,
-        action_count: usize,
-        tick: i64,
-    ) -> Option<Violation> {
-        let now_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as u64;
-
-        let profile = self.profile(player_id);
-
-        // Record one timestamp per action (approximate — all in same tick)
-        // Spread within the tick interval for more realistic measurement
-        for i in 0..action_count {
-            let ts = now_ms.saturating_sub((action_count - 1 - i) as u64);
-            profile.action_timestamps_ms.push(ts);
-        }
-
-        // Keep bounded
-        if profile.action_timestamps_ms.len() > 256 {
-            let drain = profile.action_timestamps_ms.len() - 128;
-            profile.action_timestamps_ms.drain(..drain);
-        }
-
-        // Check intervals between recent timestamps
-        let timestamps = &profile.action_timestamps_ms;
-        if timestamps.len() < TIMING_WINDOW + 1 {
-            return None;
-        }
-
-        let recent = &timestamps[timestamps.len() - TIMING_WINDOW - 1..];
-        let mut fast_count = 0u32;
-        for w in recent.windows(2) {
-            let interval = w[1].saturating_sub(w[0]);
-            if interval < MIN_ACTION_INTERVAL_MS {
-                fast_count += 1;
-            }
-        }
-
-        // If most intervals are below threshold — suspicious
-        if fast_count >= (TIMING_WINDOW as u32 * 8 / 10) {
-            Some(Violation {
-                kind: ViolationKind::ImpossibleTiming,
-                player_id: player_id.to_string(),
-                tick,
-                severity: 20,
-                detail: format!(
-                    "{fast_count}/{TIMING_WINDOW} action intervals below {MIN_ACTION_INTERVAL_MS}ms"
-                ),
-            })
-        } else {
-            None
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // Detector: Repetitive Pattern
-    // -----------------------------------------------------------------------
-
-    fn check_repetitive_pattern(
-        &mut self,
-        player_id: &str,
-        actions: &[&Action],
-        tick: i64,
-    ) -> Option<Violation> {
-        let profile = self.profile(player_id);
-
-        // Create simple hash signature for each action
-        for action in actions {
-            let sig = action_signature(action);
-            profile.recent_action_sigs.push(sig);
-        }
-
-        // Keep bounded
-        if profile.recent_action_sigs.len() > 256 {
-            let drain = profile.recent_action_sigs.len() - 128;
-            profile.recent_action_sigs.drain(..drain);
-        }
-
-        let sigs = &profile.recent_action_sigs;
-        let min_len = REPETITION_SEQ_LEN * REPETITION_MIN_REPEATS;
-        if sigs.len() < min_len {
-            return None;
-        }
-
-        // Check if the last N sequences are identical
-        let tail = &sigs[sigs.len() - min_len..];
-        let pattern = &tail[..REPETITION_SEQ_LEN];
-        let mut repeats = 0usize;
-        for chunk in tail.chunks_exact(REPETITION_SEQ_LEN) {
-            if chunk == pattern {
-                repeats += 1;
-            }
-        }
-
-        if repeats >= REPETITION_MIN_REPEATS {
-            Some(Violation {
-                kind: ViolationKind::RepetitivePattern,
-                player_id: player_id.to_string(),
-                tick,
-                severity: 25,
-                detail: format!(
-                    "Identical {REPETITION_SEQ_LEN}-action sequence repeated {repeats} times"
-                ),
-            })
-        } else {
-            None
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // Detector: Fog-of-War Abuse
-    // -----------------------------------------------------------------------
-
-    fn check_fog_of_war(
-        &mut self,
-        player_id: &str,
-        action: &Action,
-        tick: i64,
-        regions: &HashMap<String, Region>,
-        neighbor_map: &HashMap<String, Vec<String>>,
-    ) -> Option<Violation> {
-        // Only check attack actions (move is between own regions)
-        if action.action_type != "attack" {
-            return None;
-        }
-
-        let target_id = action.target_region_id.as_deref()?;
-
-        // Build the set of regions this player can see:
-        // own regions + neighbors of own regions (+ buildings with extra vision)
-        let visible = compute_player_visibility(player_id, regions, neighbor_map);
-
-        if !visible.contains(target_id) {
-            Some(Violation {
-                kind: ViolationKind::FogOfWarAbuse,
-                player_id: player_id.to_string(),
-                tick,
-                severity: 35,
-                detail: format!("Attacked region {target_id} which is outside visibility range"),
-            })
-        } else {
-            None
-        }
-    }
-
-    // -----------------------------------------------------------------------
     // Cleanup
     // -----------------------------------------------------------------------
 
@@ -885,4 +694,492 @@ fn worse_verdict(a: AnticheatVerdict, b: AnticheatVerdict) -> AnticheatVerdict {
         }
     }
     if severity(&b) > severity(&a) { b } else { a }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use maplord_engine::Action;
+
+    // -----------------------------------------------------------------------
+    // Shared test helpers
+    // -----------------------------------------------------------------------
+
+    fn attack_action(player_id: &str, source: &str, target: &str) -> Action {
+        Action {
+            action_type: "attack".into(),
+            player_id: Some(player_id.to_string()),
+            source_region_id: Some(source.to_string()),
+            target_region_id: Some(target.to_string()),
+            ..Default::default()
+        }
+    }
+
+    fn move_action(player_id: &str, source: &str, target: &str) -> Action {
+        Action {
+            action_type: "move".into(),
+            player_id: Some(player_id.to_string()),
+            source_region_id: Some(source.to_string()),
+            target_region_id: Some(target.to_string()),
+            ..Default::default()
+        }
+    }
+
+    fn make_region(owner: Option<&str>, vision_range: i64) -> Region {
+        Region {
+            owner_id: owner.map(str::to_string),
+            vision_range,
+            ..Default::default()
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Detectors::new
+    // -----------------------------------------------------------------------
+
+    mod detectors_new {
+        use super::*;
+
+        #[test]
+        fn starts_with_empty_profiles() {
+            let d = Detectors::new();
+
+            assert!(d.profiles.is_empty(), "new Detectors should have no profiles");
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // check_action_flood
+    // -----------------------------------------------------------------------
+
+    mod check_action_flood {
+        use super::*;
+
+        #[test]
+        fn returns_none_before_window_is_full() {
+            let mut d = Detectors::new();
+
+            // FLOOD_WINDOW = 5; feed 4 ticks
+            for tick in 0..4 {
+                let result = d.check_action_flood("p1", FLOOD_THRESHOLD + 1, tick);
+                assert!(result.is_none(), "should not fire before window is full (tick {tick})");
+            }
+        }
+
+        #[test]
+        fn returns_none_for_normal_action_rate() {
+            let mut d = Detectors::new();
+
+            // Send exactly at threshold minus one for FLOOD_WINDOW ticks
+            for tick in 0..FLOOD_WINDOW as i64 {
+                let result = d.check_action_flood("p1", FLOOD_THRESHOLD - 1, tick);
+                assert!(result.is_none(), "below-threshold rate should not fire (tick {tick})");
+            }
+        }
+
+        #[test]
+        fn detects_sustained_action_flood() {
+            let mut d = Detectors::new();
+
+            // Fill the window with high counts
+            let mut last = None;
+            for tick in 0..FLOOD_WINDOW as i64 {
+                last = d.check_action_flood("p1", FLOOD_THRESHOLD + 5, tick);
+            }
+
+            assert!(
+                last.is_some(),
+                "sustained high action rate should produce a violation after {FLOOD_WINDOW} ticks"
+            );
+            assert_eq!(
+                last.unwrap().kind,
+                ViolationKind::ActionFlood,
+                "violation kind should be ActionFlood"
+            );
+        }
+
+        #[test]
+        fn flood_violation_carries_correct_player_id() {
+            let mut d = Detectors::new();
+
+            let mut last = None;
+            for tick in 0..FLOOD_WINDOW as i64 {
+                last = d.check_action_flood("player-abc", FLOOD_THRESHOLD + 1, tick);
+            }
+
+            assert_eq!(last.unwrap().player_id, "player-abc");
+        }
+
+        #[test]
+        fn resets_when_rate_drops_below_threshold() {
+            let mut d = Detectors::new();
+
+            // Fill 4 ticks at high rate, then one tick at low rate — window is broken
+            for tick in 0..4 {
+                d.check_action_flood("p1", FLOOD_THRESHOLD + 1, tick);
+            }
+            // Low tick breaks the window
+            d.check_action_flood("p1", 1, 4);
+
+            // Fill a full new window all above threshold — should fire now
+            let mut last = None;
+            for tick in 5..(5 + FLOOD_WINDOW as i64) {
+                last = d.check_action_flood("p1", FLOOD_THRESHOLD + 1, tick);
+            }
+
+            assert!(
+                last.is_some(),
+                "flood should re-trigger after a clean window at high rate"
+            );
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // check_impossible_timing
+    // -----------------------------------------------------------------------
+
+    mod check_impossible_timing {
+        use super::*;
+
+        #[test]
+        fn returns_none_with_insufficient_history() {
+            let mut d = Detectors::new();
+
+            // TIMING_WINDOW = 10; push only 5 actions
+            let result = d.check_impossible_timing("p1", 5, 1);
+
+            assert!(result.is_none(), "not enough history to evaluate timing yet");
+        }
+
+        #[test]
+        fn detects_flood_of_actions_in_single_tick() {
+            // Feed TIMING_WINDOW+2 actions all in one tick — all timestamps will be
+            // within 1ms of each other (since the spread is action_count-1 ms).
+            let mut d = Detectors::new();
+
+            // First call sets up timestamps: 11 actions → timestamps spread across 10ms
+            let result = d.check_impossible_timing("p1", TIMING_WINDOW + 2, 1);
+
+            // All intervals will be 1ms, which is < MIN_ACTION_INTERVAL_MS (50ms)
+            assert!(
+                result.is_some(),
+                "11 actions in one tick should trigger impossible timing"
+            );
+            assert_eq!(result.unwrap().kind, ViolationKind::ImpossibleTiming);
+        }
+
+        #[test]
+        fn allows_normal_one_action_per_tick() {
+            let mut d = Detectors::new();
+
+            // Single action per tick — timestamps will be spread by real wall-clock differences
+            // between iterations. With 1 action/call the spread subtraction does nothing
+            // so timestamps equal current wall time on each call. We need > TIMING_WINDOW+1
+            // samples and real-time gaps will be >> 50ms between loop iterations over
+            // multiple ticks. However this test is unit-level so just check no false positive
+            // on small counts.
+            let mut last = None;
+            for tick in 0..5 {
+                last = d.check_impossible_timing("p1", 1, tick);
+            }
+
+            // With only 5 samples (< TIMING_WINDOW+1 = 11), should be None
+            assert!(last.is_none(), "fewer than TIMING_WINDOW+1 samples should return None");
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // check_repetitive_pattern
+    // -----------------------------------------------------------------------
+
+    mod check_repetitive_pattern {
+        use super::*;
+
+        fn make_seq(player_id: &str, index: usize) -> Action {
+            // Distinct actions so we can control pattern content
+            Action {
+                action_type: format!("attack_{index}"),
+                player_id: Some(player_id.to_string()),
+                source_region_id: Some(format!("src_{index}")),
+                target_region_id: Some(format!("tgt_{index}")),
+                ..Default::default()
+            }
+        }
+
+        #[test]
+        fn returns_none_before_minimum_pattern_length() {
+            let mut d = Detectors::new();
+            let actions: Vec<Action> = (0..REPETITION_SEQ_LEN).map(|i| make_seq("p1", i)).collect();
+            let refs: Vec<&Action> = actions.iter().collect();
+
+            // Only one sequence — not enough to detect repetition
+            let result = d.check_repetitive_pattern("p1", &refs, 1);
+
+            assert!(result.is_none(), "single sequence should not trigger repetition detection");
+        }
+
+        #[test]
+        fn detects_exact_repeated_sequence() {
+            let mut d = Detectors::new();
+
+            // Build REPETITION_SEQ_LEN distinct actions as a pattern
+            let pattern_actions: Vec<Action> = (0..REPETITION_SEQ_LEN).map(|i| make_seq("p1", i)).collect();
+            let pattern_refs: Vec<&Action> = pattern_actions.iter().collect();
+
+            // Submit the same pattern REPETITION_MIN_REPEATS times
+            let mut last = None;
+            for rep in 0..REPETITION_MIN_REPEATS as i64 {
+                last = d.check_repetitive_pattern("p1", &pattern_refs, rep);
+            }
+
+            assert!(
+                last.is_some(),
+                "exact pattern repeated {REPETITION_MIN_REPEATS} times should trigger"
+            );
+            assert_eq!(last.unwrap().kind, ViolationKind::RepetitivePattern);
+        }
+
+        #[test]
+        fn does_not_trigger_for_varied_actions() {
+            let mut d = Detectors::new();
+
+            // Each tick has a unique action — no repetition
+            for tick in 0..(REPETITION_SEQ_LEN * REPETITION_MIN_REPEATS) as i64 {
+                let unique_action = make_seq("p1", tick as usize);
+                let refs = vec![&unique_action];
+                let result = d.check_repetitive_pattern("p1", &refs, tick);
+                assert!(result.is_none(), "varied actions should not trigger repetition (tick {tick})");
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // check_fog_of_war (pure static method on Detectors)
+    // -----------------------------------------------------------------------
+
+    mod check_fog_of_war {
+        use super::*;
+
+        fn build_linear_map() -> (HashMap<String, Region>, HashMap<String, Vec<String>>) {
+            // A — B — C — D
+            // Player owns A (vision_range=1, so can see B)
+            let mut regions = HashMap::new();
+            regions.insert("A".into(), make_region(Some("p1"), 1));
+            regions.insert("B".into(), make_region(None, 0));
+            regions.insert("C".into(), make_region(None, 0));
+            regions.insert("D".into(), make_region(None, 0));
+
+            let mut neighbors = HashMap::new();
+            neighbors.insert("A".into(), vec!["B".into()]);
+            neighbors.insert("B".into(), vec!["A".into(), "C".into()]);
+            neighbors.insert("C".into(), vec!["B".into(), "D".into()]);
+            neighbors.insert("D".into(), vec!["C".into()]);
+
+            (regions, neighbors)
+        }
+
+        #[test]
+        fn allows_attack_on_visible_neighbor() {
+            let (regions, neighbors) = build_linear_map();
+            let action = attack_action("p1", "A", "B");
+
+            let result = Detectors::check_fog_of_war("p1", &action, 1, &regions, &neighbors);
+
+            assert!(result.is_none(), "attack on adjacent visible region should be allowed");
+        }
+
+        #[test]
+        fn flags_attack_on_region_outside_visibility() {
+            let (regions, neighbors) = build_linear_map();
+            // D is 3 hops away, outside vision_range=1 (+1 hop BFS = 2 visible regions)
+            let action = attack_action("p1", "A", "D");
+
+            let result = Detectors::check_fog_of_war("p1", &action, 1, &regions, &neighbors);
+
+            assert!(result.is_some(), "attack on region 3 hops away should be flagged");
+            assert_eq!(result.unwrap().kind, ViolationKind::FogOfWarAbuse);
+        }
+
+        #[test]
+        fn ignores_non_attack_actions() {
+            let (regions, neighbors) = build_linear_map();
+            // Move to D — even though D is outside vision, only attacks are checked
+            let action = move_action("p1", "A", "D");
+
+            let result = Detectors::check_fog_of_war("p1", &action, 1, &regions, &neighbors);
+
+            assert!(result.is_none(), "non-attack actions should not trigger fog-of-war check");
+        }
+
+        #[test]
+        fn allows_attack_on_owned_region() {
+            let (regions, neighbors) = build_linear_map();
+            // Add a second owned region
+            let mut regions = regions;
+            regions.insert("E".into(), make_region(Some("p1"), 0));
+            let mut neighbors = neighbors;
+            neighbors.get_mut("A").unwrap().push("E".into());
+            neighbors.insert("E".into(), vec!["A".into()]);
+
+            let action = attack_action("p1", "A", "E");
+
+            let result = Detectors::check_fog_of_war("p1", &action, 1, &regions, &neighbors);
+
+            assert!(result.is_none(), "attack on own visible region should be allowed");
+        }
+
+        #[test]
+        fn returns_none_when_action_has_no_target() {
+            let (regions, neighbors) = build_linear_map();
+            let action = Action {
+                action_type: "attack".into(),
+                player_id: Some("p1".into()),
+                source_region_id: Some("A".into()),
+                target_region_id: None, // no target
+                ..Default::default()
+            };
+
+            let result = Detectors::check_fog_of_war("p1", &action, 1, &regions, &neighbors);
+
+            assert!(result.is_none(), "attack with no target should not produce a violation");
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Violation score escalation via Detectors::worst_verdict_for_score
+    // -----------------------------------------------------------------------
+
+    mod violation_score_escalation {
+        use super::*;
+
+        #[test]
+        fn returns_allow_when_score_is_zero() {
+            let mut d = Detectors::new();
+
+            let verdict = d.worst_verdict_for_score("p1", "some detail");
+
+            assert_eq!(verdict, AnticheatVerdict::Allow);
+        }
+
+        #[test]
+        fn returns_warn_at_warn_threshold() {
+            let mut d = Detectors::new();
+            d.apply_violation_score("p1", WARN_THRESHOLD);
+
+            let verdict = d.worst_verdict_for_score("p1", "suspicious");
+
+            assert!(
+                matches!(verdict, AnticheatVerdict::Warn { .. }),
+                "score at WARN_THRESHOLD should produce Warn verdict, got: {verdict:?}"
+            );
+        }
+
+        #[test]
+        fn returns_flag_at_flag_threshold() {
+            let mut d = Detectors::new();
+            d.apply_violation_score("p1", FLAG_THRESHOLD);
+
+            let verdict = d.worst_verdict_for_score("p1", "cheating");
+
+            assert!(
+                matches!(verdict, AnticheatVerdict::FlagPlayer { .. }),
+                "score at FLAG_THRESHOLD should produce FlagPlayer verdict, got: {verdict:?}"
+            );
+        }
+
+        #[test]
+        fn returns_cancel_at_cancel_threshold() {
+            let mut d = Detectors::new();
+            d.apply_violation_score("p1", CANCEL_THRESHOLD);
+
+            let verdict = d.worst_verdict_for_score("p1", "severe");
+
+            assert!(
+                matches!(verdict, AnticheatVerdict::CancelMatch { .. }),
+                "score at CANCEL_THRESHOLD should produce CancelMatch verdict, got: {verdict:?}"
+            );
+        }
+
+        #[test]
+        fn caps_warn_at_three_warnings() {
+            let mut d = Detectors::new();
+            d.apply_violation_score("p1", WARN_THRESHOLD);
+
+            // Issue 3 warnings — all should produce Warn
+            for _ in 0..3 {
+                let v = d.worst_verdict_for_score("p1", "detail");
+                assert!(matches!(v, AnticheatVerdict::Warn { .. }));
+            }
+
+            // Fourth call at same score — warnings_issued == 3, should not Warn again
+            let fourth = d.worst_verdict_for_score("p1", "detail");
+            assert_eq!(
+                fourth,
+                AnticheatVerdict::Allow,
+                "fourth warning at same score should be silenced"
+            );
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // worse_verdict ordering
+    // -----------------------------------------------------------------------
+
+    mod worse_verdict {
+        use super::*;
+
+        #[test]
+        fn cancel_beats_flag() {
+            let a = AnticheatVerdict::FlagPlayer {
+                player_id: "p1".into(),
+                reason: "r".into(),
+            };
+            let b = AnticheatVerdict::CancelMatch {
+                reason: "r".into(),
+            };
+
+            let result = worse_verdict(a, b);
+
+            assert!(matches!(result, AnticheatVerdict::CancelMatch { .. }));
+        }
+
+        #[test]
+        fn flag_beats_warn() {
+            let a = AnticheatVerdict::Warn {
+                player_id: "p1".into(),
+                reason: "r".into(),
+            };
+            let b = AnticheatVerdict::FlagPlayer {
+                player_id: "p1".into(),
+                reason: "r".into(),
+            };
+
+            let result = worse_verdict(a, b);
+
+            assert!(matches!(result, AnticheatVerdict::FlagPlayer { .. }));
+        }
+
+        #[test]
+        fn allow_loses_to_warn() {
+            let a = AnticheatVerdict::Allow;
+            let b = AnticheatVerdict::Warn {
+                player_id: "p1".into(),
+                reason: "r".into(),
+            };
+
+            let result = worse_verdict(a, b);
+
+            assert!(matches!(result, AnticheatVerdict::Warn { .. }));
+        }
+
+        #[test]
+        fn equal_severity_keeps_first() {
+            let a = AnticheatVerdict::Allow;
+            let b = AnticheatVerdict::Allow;
+
+            let result = worse_verdict(a, b);
+
+            assert_eq!(result, AnticheatVerdict::Allow);
+        }
+    }
 }

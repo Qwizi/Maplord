@@ -173,8 +173,8 @@ mod tests {
 
         #[test]
         fn returns_error_for_expired_token() {
-            // exp one second in the past
-            let token = make_token("user-99", now_secs() - 1, TEST_SECRET);
+            // exp 120 seconds in the past — well beyond the 60-second default leeway
+            let token = make_token("user-99", now_secs() - 120, TEST_SECRET);
 
             let result = validate_token(&token, TEST_SECRET);
 
