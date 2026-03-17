@@ -97,11 +97,12 @@ class GeoController:
         GY_MIN = 7184.4125
         GY_MAX = 3.248962 * TEX_H + GY_MIN   # 23195.30
 
-        # Map game coords to canvas. Scale X and Y independently so
-        # the texture matches the polygon coords. The slight distortion is
-        # imperceptible but alignment is pixel-perfect.
-        scale_x = canvas_size / (GX_MAX - GX_MIN)
-        scale_y = canvas_size / (GY_MAX - GY_MIN)
+        # Map game coords to canvas preserving aspect ratio.
+        # Use a uniform scale so the map isn't distorted.
+        scale = min(canvas_size / (GX_MAX - GX_MIN),
+                    canvas_size / (GY_MAX - GY_MIN))
+        scale_x = scale
+        scale_y = scale
 
         def project(gx, gy):
             px = round((gx - GX_MIN) * scale_x, 2)
