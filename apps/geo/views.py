@@ -154,10 +154,10 @@ class GeoController:
         result = {
             "regions": out_regions,
             "bounds": {
-                "min_x": 0.0,
-                "min_y": 0.0,
-                "max_x": float(canvas_size),
-                "max_y": float(canvas_size),
+                "min_x": wt_tl[0],
+                "min_y": wt_tl[1],
+                "max_x": wt_br[0],
+                "max_y": wt_br[1],
             },
             "world_texture": {
                 "x": wt_tl[0],
