@@ -7,21 +7,12 @@ import type { GameRegion, ActiveEffect } from "@/hooks/useGameSocket";
 import type { UnitType } from "@/lib/api";
 import { getPlayerBuildingAsset, getPlayerUnitAsset, getUnitAsset } from "@/lib/gameAssets";
 import { resolveAnimConfig, type CosmeticValue } from "@/lib/animationConfig";
+import type { TroopAnimation } from "@/lib/gameTypes";
 
 // ── Types ────────────────────────────────────────────────────
 
-export interface TroopAnimation {
-  id: string;
-  sourceId: string;
-  targetId: string;
-  color: string;
-  units: number;
-  unitType?: string | null;
-  type: "attack" | "move";
-  startTime: number;
-  durationMs?: number;
-  playerId?: string;
-}
+// Re-export for backwards compatibility
+export type { TroopAnimation } from "@/lib/gameTypes";
 
 interface InternalAnim {
   id: string;

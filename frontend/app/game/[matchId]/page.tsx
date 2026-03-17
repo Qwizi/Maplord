@@ -8,7 +8,6 @@ import { useGameSocket } from "@/hooks/useGameSocket";
 import { useAudio, MUSIC_TRACKS } from "@/hooks/useAudio";
 import {
   getRegionsGraph,
-  getRegionTilesUrl,
   getConfig,
   type RegionGraphEntry,
   type BuildingType,
@@ -18,9 +17,10 @@ import {
 import { loadAssetOverrides } from "@/lib/assetOverrides";
 import { getSeaTravelRange, getTravelDistance } from "@/lib/gameTravel.js";
 import dynamic from "next/dynamic";
-import type { TroopAnimation } from "@/components/map/GameMap";
+import type { TroopAnimation } from "@/lib/gameTypes";
+import { useShapesData } from "@/hooks/useShapesData";
 const ANIMATION_DURATION_MS = 2200;
-const GameMap = dynamic(() => import("@/components/map/GameMap"), { ssr: false });
+const GameCanvas = dynamic(() => import("@/components/map/GameCanvas"), { ssr: false });
 import GameHUD from "@/components/game/GameHUD";
 import RegionPanel from "@/components/game/RegionPanel";
 import ActionBar, { type TargetEntry } from "@/components/game/ActionBar";
@@ -136,6 +136,7 @@ export default function GamePage({
   const [musicPickerOpen, setMusicPickerOpen] = useState(false);
 
   const [regionGraph, setRegionGraph] = useState<RegionGraphEntry[]>([]);
+  const { shapesData } = useShapesData(matchId);
   const [buildings, setBuildings] = useState<BuildingType[]>([]);
   const [unitsConfig, setUnitsConfig] = useState<UnitType[]>([]);
   const [abilitiesConfig, setAbilitiesConfig] = useState<AbilityType[]>([]);
@@ -234,14 +235,12 @@ export default function GamePage({
   }, [status]);
 
   // Build neighbor lookup and centroid map from the lightweight graph
-  const { neighborMap, centroids } = useMemo(() => {
-    const neighborMap: Record<string, string[]> = {};
-    const centroids: Record<string, [number, number]> = {};
+  const neighborMap = useMemo(() => {
+    const map: Record<string, string[]> = {};
     for (const entry of regionGraph) {
-      neighborMap[entry.id] = entry.neighbor_ids;
-      if (entry.centroid) centroids[entry.id] = entry.centroid;
+      map[entry.id] = entry.neighbor_ids;
     }
-    return { neighborMap, centroids };
+    return map;
   }, [regionGraph]);
 
   const tutorialHighlightRegions = useMemo(() => {
@@ -1512,10 +1511,9 @@ export default function GamePage({
       )}
 
       {/* Map */}
-      <GameMap
-          tilesUrl={getRegionTilesUrl(matchId)}
+      <GameCanvas
+          shapesData={shapesData}
           dimmedRegions={dimmedRegions}
-          centroids={centroids}
           regions={regions}
           players={players}
           selectedRegion={selectedRegion}
@@ -1527,9 +1525,6 @@ export default function GamePage({
           buildingIcons={buildingIcons}
           activeEffects={gameState?.active_effects}
           nukeBlackout={nukeBlackout}
-          tutorialHighlightRegions={tutorialHighlightRegions}
-          speakingPlayerIds={speakingPlayerIds}
-          unitsConfig={unitsConfig}
           onMapReady={handleMapReady}
         />
 
