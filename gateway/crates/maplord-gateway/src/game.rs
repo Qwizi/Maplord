@@ -2142,6 +2142,11 @@ async fn mark_player_disconnected(
         return;
     }
 
+    let disc_now_secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+    let disc_weather = maplord_engine::compute_weather(disc_now_secs);
     let tick_msg = json!({
         "type": "game_tick",
         "tick": current_tick,
@@ -2154,6 +2159,7 @@ async fn mark_player_disconnected(
         "buildings_queue": state_mgr.get_all_buildings().await.unwrap_or_default(),
         "unit_queue": state_mgr.get_all_unit_queue().await.unwrap_or_default(),
         "transit_queue": state_mgr.get_all_transit_queue().await.unwrap_or_default(),
+        "weather": disc_weather,
     });
     broadcast_to_match(match_id, &tick_msg, &state.game_connections);
 }
@@ -2467,6 +2473,11 @@ async fn finish_match_with_current_state(
     let _ = state_mgr.set_meta_field("status", "finished").await;
     let _ = state.django.update_match_status(match_id, "finished").await;
 
+    let finish_now_secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+    let finish_weather = maplord_engine::compute_weather(finish_now_secs);
     let tick_msg = json!({
         "type": "game_tick",
         "tick": current_tick,
@@ -2476,6 +2487,7 @@ async fn finish_match_with_current_state(
         "buildings_queue": state_mgr.get_all_buildings().await.unwrap_or_default(),
         "unit_queue": state_mgr.get_all_unit_queue().await.unwrap_or_default(),
         "transit_queue": state_mgr.get_all_transit_queue().await.unwrap_or_default(),
+        "weather": finish_weather,
     });
     broadcast_to_match(match_id, &tick_msg, &state.game_connections);
 
