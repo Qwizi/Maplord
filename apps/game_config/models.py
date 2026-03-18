@@ -102,7 +102,7 @@ class BuildingType(models.Model):
     # Constraints
     max_per_region = models.PositiveIntegerField(default=1, help_text='Max buildings of this type per region')
     requires_coastal = models.BooleanField(default=False, help_text='Only buildable in coastal regions')
-    
+
     # Passive bonuses
     defense_bonus = models.FloatField(default=0.0, help_text='Defense bonus for region (e.g. 0.2 = 20%)')
     vision_range = models.PositiveIntegerField(default=0, help_text='Extra vision range in regions')
@@ -170,6 +170,16 @@ class UnitType(models.Model):
                   'Example: {"1": {"attack": 3.0, "defense": 2.5}, "2": {"attack": 4.0}}. '
                   'Supported keys: attack, defense, speed, production_cost, production_time_ticks, manpower_cost'
     )
+
+    # Advanced unit attributes
+    is_stealth = models.BooleanField(default=False, help_text='Unit is invisible to enemies until it attacks')
+    path_damage = models.FloatField(default=0.0, help_text='Fraction of damage dealt to provinces along flight path (bomber)')
+    aoe_damage = models.FloatField(default=0.0, help_text='Fraction of damage dealt to neighboring provinces of target (artillery)')
+    blockade_port = models.BooleanField(default=False, help_text='Blocks enemy port production when stationed nearby')
+    intercept_air = models.BooleanField(default=False, help_text='Automatically intercepts enemy air units passing through')
+    can_station_anywhere = models.BooleanField(default=False, help_text='Does not require producer building to station in region')
+    lifetime_ticks = models.PositiveIntegerField(default=0, help_text='Auto-destruct after N ticks (0 = permanent)')
+    combat_target = models.CharField(max_length=10, default='ground', choices=[('air', 'Air'), ('ground', 'Ground'), ('both', 'Both')], help_text='What this unit targets in combat')
 
     is_active = models.BooleanField(default=True)
     order = models.PositiveIntegerField(default=0)

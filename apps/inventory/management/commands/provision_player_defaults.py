@@ -33,44 +33,51 @@ class Command(BaseCommand):
 
         provisioned = 0
         for user in users:
-            # ── Clean slate: remove old inventory/instances/decks for starter items ──
-            starter_item_ids = [item.id for item in items.values()]
-            UserInventory.objects.filter(user=user, item_id__in=starter_item_ids).delete()
-            ItemInstance.objects.filter(owner=user, item_id__in=starter_item_ids).delete()
+            # Check if current default deck was modified
+            old_default = Deck.objects.filter(user=user, is_default=True).first()
+            if old_default:
+                old_item_slugs = set(
+                    DeckItem.objects.filter(deck=old_default)
+                    .values_list('item__slug', flat=True)
+                )
+                expected_slugs = set(items.keys())
 
-            # Remove old default deck and its items
-            old_decks = Deck.objects.filter(user=user, is_default=True)
-            for old_deck in old_decks:
-                DeckItem.objects.filter(deck=old_deck).delete()
-                old_deck.delete()
+                if old_item_slugs != expected_slugs:
+                    # Modified — preserve as custom deck
+                    old_default.name = 'Talia gracza'
+                    old_default.is_default = False
+                    old_default.is_editable = True
+                    old_default.save(update_fields=['name', 'is_default', 'is_editable'])
+                else:
+                    # Unmodified — delete
+                    DeckItem.objects.filter(deck=old_default).delete()
+                    old_default.delete()
 
-            # ── Wallet ──
+            # Clean up old non-editable defaults (safety)
+            Deck.objects.filter(user=user, is_default=True, is_editable=False).delete()
+
+            # Ensure starter items in inventory
+            instance_map = {}
+            for slug, item in items.items():
+                if item.is_stackable:
+                    UserInventory.objects.get_or_create(user=user, item=item, defaults={'quantity': 1})
+                else:
+                    inst, _ = ItemInstance.objects.get_or_create(
+                        item=item, owner=user,
+                        defaults={'pattern_seed': 0, 'wear': 0.0, 'stattrak': False, 'first_owner': user}
+                    )
+                    instance_map[slug] = inst
+
+            # Wallet
             wallet, _ = Wallet.objects.get_or_create(user=user, defaults={'gold': STARTER_GOLD})
             if wallet.gold < STARTER_GOLD:
                 wallet.gold = STARTER_GOLD
                 wallet.save(update_fields=['gold'])
 
-            # ── Create starter items ──
-            instance_map = {}  # slug → ItemInstance (for non-stackable)
+            # Create locked default deck
+            deck = Deck.objects.create(user=user, name=DEFAULT_DECK_NAME, is_default=True, is_editable=False)
             for slug, item in items.items():
-                if item.is_stackable:
-                    UserInventory.objects.create(user=user, item=item, quantity=1)
-                else:
-                    inst = ItemInstance.objects.create(
-                        item=item, owner=user,
-                        pattern_seed=0, wear=0.0, stattrak=False,
-                        first_owner=user,
-                    )
-                    instance_map[slug] = inst
-
-            # ── Create default deck with all starter items ──
-            deck = Deck.objects.create(user=user, name=DEFAULT_DECK_NAME, is_default=True)
-            for slug, item in items.items():
-                instance = instance_map.get(slug)
-                DeckItem.objects.create(
-                    deck=deck, item=item, quantity=1,
-                    instance=instance,
-                )
+                DeckItem.objects.create(deck=deck, item=item, quantity=1, instance=instance_map.get(slug))
 
             provisioned += 1
 

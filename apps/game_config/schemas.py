@@ -107,6 +107,14 @@ class UnitTypeOutSchema(Schema):
     movement_type: str
     max_level: int
     level_stats: dict
+    is_stealth: bool
+    path_damage: float
+    aoe_damage: float
+    blockade_port: bool
+    intercept_air: bool
+    can_station_anywhere: bool
+    lifetime_ticks: int
+    combat_target: str
     order: int
     asset_url: Optional[str] = None
 

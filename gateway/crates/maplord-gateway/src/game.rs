@@ -1827,6 +1827,7 @@ async fn initialize_game(
             active_match_boosts: Vec::new(),
             ability_levels: p.ability_levels.clone(),
             building_levels: p.building_levels.clone(),
+            unit_levels: p.unit_levels.clone(),
             cosmetics: p.cosmetics.clone(),
         };
         players.insert(p.user_id.clone(), player);

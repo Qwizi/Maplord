@@ -76,6 +76,23 @@ function getAnimationPower(
   return carrierCount * scale;
 }
 
+function getAvailableUnits(
+  units: Record<string, number> | undefined,
+  unitType: string,
+  unitConfigBySlug: Record<string, { manpower_cost?: number }>
+): number {
+  const raw = units?.[unitType] ?? 0;
+  if (unitType !== "infantry") return raw;
+  // Subtract infantry reserved as crew for embarked units (tanks, etc.)
+  const reserved = Object.entries(units ?? {})
+    .filter(([type]) => type !== "infantry")
+    .reduce((sum, [type, count]) => {
+      const scale = Math.max(1, unitConfigBySlug[type]?.manpower_cost ?? 1);
+      return sum + count * scale;
+    }, 0);
+  return Math.max(0, raw - reserved);
+}
+
 function intOrZero(value: unknown) {
   return typeof value === "number" ? value : Number(value || 0) || 0;
 }
@@ -911,7 +928,7 @@ export default function GamePage({
 
         if (!isTargetReachableForUnitType(regionId, unitType)) return;
 
-        const available = sourceRegion.units?.[unitType] ?? 0;
+        const available = getAvailableUnits(sourceRegion.units, unitType, unitConfigBySlug);
         const unitsToSend = Math.max(1, Math.floor(available * (unitPercent / 100)));
         if (unitsToSend < 1) return;
 
@@ -977,7 +994,7 @@ export default function GamePage({
 
       if (!isTargetReachableForUnitType(regionId, unitType)) return;
 
-      const units = source.units?.[unitType] ?? 0;
+      const units = getAvailableUnits(source.units, unitType, unitConfigBySlug);
       if (units < 1) return;
 
       // Send ALL units (MAX)
@@ -995,6 +1012,7 @@ export default function GamePage({
       getPreferredReachableUnitType,
       isTargetReachableForUnitType,
       dispatchTroops,
+      unitConfigBySlug,
     ]
   );
 

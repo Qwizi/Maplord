@@ -31,9 +31,13 @@ def _consume_default_deck(user) -> dict:
     ability_scrolls: dict[str, int] = {'ab_shield': 999}
     ability_levels: dict[str, int] = {'ab_shield': 1}
 
-    unlocked_buildings: list[str] = []
-    building_levels: dict[str, int] = {}
+    # Default: all active buildings unlocked at level 1
+    from apps.game_config.models import BuildingType as BuildingTypeModel
+    all_building_slugs = list(BuildingTypeModel.objects.filter(is_active=True).values_list('slug', flat=True))
+    unlocked_buildings: list[str] = list(all_building_slugs)
+    building_levels: dict[str, int] = {slug: 1 for slug in all_building_slugs}
     unlocked_units: list[str] = []
+    unit_levels: dict[str, int] = {}
     active_boosts: list[dict] = []
     instance_ids: list[str] = []
 
@@ -46,6 +50,7 @@ def _consume_default_deck(user) -> dict:
             'unlocked_buildings': unlocked_buildings,
             'building_levels': building_levels,
             'unlocked_units': unlocked_units,
+            'unit_levels': unit_levels,
             'ability_scrolls': ability_scrolls,
             'ability_levels': ability_levels,
             'active_boosts': active_boosts,
@@ -85,8 +90,12 @@ def _consume_default_deck(user) -> dict:
                             building_levels.get(item.blueprint_ref, 0), item.level
                         )
                 elif item.item_type == Item.ItemType.BLUEPRINT_UNIT:
-                    if item.blueprint_ref and item.blueprint_ref not in unlocked_units:
-                        unlocked_units.append(item.blueprint_ref)
+                    if item.blueprint_ref:
+                        if item.blueprint_ref not in unlocked_units:
+                            unlocked_units.append(item.blueprint_ref)
+                        unit_levels[item.blueprint_ref] = max(
+                            unit_levels.get(item.blueprint_ref, 0), item.level
+                        )
 
                 # Track instance IDs for post-match StatTrak updates
                 if not item.is_stackable and deck_item.instance_id:
@@ -134,12 +143,12 @@ def _consume_default_deck(user) -> dict:
                     'slug': item.slug,
                     'params': {**(item.boost_params or {}), 'level': item.level},
                 })
-                ability_scrolls[item.slug] = 1
 
     return {
         'unlocked_buildings': unlocked_buildings,
         'building_levels': building_levels,
         'unlocked_units': unlocked_units,
+        'unit_levels': unit_levels,
         'ability_scrolls': ability_scrolls,
         'ability_levels': ability_levels,
         'active_boosts': active_boosts,
@@ -427,6 +436,14 @@ class MatchmakingInternalController(ControllerBase):
                 'manpower_cost': int(ut.manpower_cost),
                 'max_level': ut.max_level,
                 'level_stats': ut.level_stats or {},
+                'is_stealth': ut.is_stealth,
+                'path_damage': ut.path_damage,
+                'aoe_damage': ut.aoe_damage,
+                'blockade_port': ut.blockade_port,
+                'intercept_air': ut.intercept_air,
+                'can_station_anywhere': ut.can_station_anywhere,
+                'lifetime_ticks': ut.lifetime_ticks,
+                'combat_target': ut.combat_target,
             }
             for ut in UnitType.objects.select_related('produced_by').filter(is_active=True)
         }
@@ -618,6 +635,14 @@ def _create_match_from_users(users, game_mode):
             'manpower_cost': int(ut.manpower_cost),
             'max_level': ut.max_level,
             'level_stats': ut.level_stats or {},
+            'is_stealth': ut.is_stealth,
+            'path_damage': ut.path_damage,
+            'aoe_damage': ut.aoe_damage,
+            'blockade_port': ut.blockade_port,
+            'intercept_air': ut.intercept_air,
+            'can_station_anywhere': ut.can_station_anywhere,
+            'lifetime_ticks': ut.lifetime_ticks,
+            'combat_target': ut.combat_target,
         }
         for ut in UnitType.objects.select_related('produced_by').filter(is_active=True)
     }

@@ -141,6 +141,7 @@ class DeckOutSchema(Schema):
     id: uuid.UUID
     name: str
     is_default: bool
+    is_editable: bool
     items: list[DeckItemOutSchema] = []
 
     class Config:

@@ -65,7 +65,7 @@ class AuthController:
                 if item:
                     UserInventory.objects.get_or_create(user=user, item=item, defaults={'quantity': 1})
 
-            deck = Deck.objects.create(user=user, name='Domyślna talia', is_default=True)
+            deck = Deck.objects.create(user=user, name='Domyślna talia', is_default=True, is_editable=False)
             for slug in STARTER_SLUGS:
                 item = Item.objects.filter(slug=slug).first()
                 if item:

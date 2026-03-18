@@ -65,7 +65,17 @@ export default memo(function ActionBar({
     [sourceRegion.units]
   );
   const availableUnitsByType = sourceRegion.units ?? {};
-  const liveMaxUnits = availableUnitsByType[selectedUnitType] ?? 0;
+  const liveMaxUnits = useMemo(() => {
+    const raw = availableUnitsByType[selectedUnitType] ?? 0;
+    if (selectedUnitType !== "infantry") return raw;
+    const reserved = Object.entries(availableUnitsByType)
+      .filter(([type]) => type !== "infantry")
+      .reduce((sum, [type, count]) => {
+        const scale = Math.max(1, unitConfigMap.get(type)?.manpower_cost ?? 1);
+        return sum + count * scale;
+      }, 0);
+    return Math.max(0, raw - reserved);
+  }, [availableUnitsByType, selectedUnitType, unitConfigMap]);
   const hasAttack = targets.some((target) => target.isAttack);
   const accentClass = hasAttack ? "border-destructive/30" : "border-primary/30";
 

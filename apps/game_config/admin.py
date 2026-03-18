@@ -96,7 +96,7 @@ class GameModeAdmin(ModelAdmin):
 class UnitTypeInline(TabularInline):
     model = UnitType
     extra = 0
-    fields = ('name', 'slug', 'icon', 'attack', 'defense', 'speed', 'attack_range', 'sea_range', 'sea_hop_distance_km', 'movement_type', 'production_cost', 'production_time_ticks', 'is_active')
+    fields = ('name', 'slug', 'icon', 'attack', 'defense', 'speed', 'attack_range', 'sea_range', 'sea_hop_distance_km', 'movement_type', 'production_cost', 'production_time_ticks', 'is_active', 'combat_target', 'is_stealth', 'can_station_anywhere', 'intercept_air')
 
 
 @admin.register(BuildingType)

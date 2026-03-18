@@ -860,6 +860,15 @@ impl GameEngine {
                     target_region_id, &ability_config, regions,
                 ));
             }
+            "ab_flash" => {
+                events.extend(self.execute_flash(
+                    player_id,
+                    target_region_id,
+                    &ability_config,
+                    scaled_duration,
+                    active_effects,
+                ));
+            }
             _ => {}
         }
 
@@ -1082,6 +1091,63 @@ impl GameEngine {
         });
     }
 
+    fn execute_flash(
+        &self,
+        player_id: &str,
+        target_region_id: &str,
+        config: &AbilityConfig,
+        scaled_duration: i64,
+        active_effects: &mut Vec<ActiveEffect>,
+    ) -> Vec<Event> {
+        let radius = config
+            .effect_params
+            .get("radius")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(2) as usize;
+
+        // BFS to find all regions within the flash radius, including the target itself.
+        let mut affected: Vec<String> = Vec::new();
+        let mut visited = std::collections::HashSet::new();
+        visited.insert(target_region_id.to_string());
+        let mut queue = VecDeque::new();
+        queue.push_back((target_region_id.to_string(), 0usize));
+
+        while let Some((current, depth)) = queue.pop_front() {
+            if depth > 0 {
+                affected.push(current.clone());
+            }
+            if depth >= radius {
+                continue;
+            }
+            if let Some(neighbors) = self.neighbor_map.get(&current) {
+                for neighbor in neighbors {
+                    if !visited.contains(neighbor) {
+                        visited.insert(neighbor.clone());
+                        queue.push_back((neighbor.clone(), depth + 1));
+                    }
+                }
+            }
+        }
+
+        let ticks = scaled_duration;
+        active_effects.push(ActiveEffect {
+            effect_type: "ab_flash".into(),
+            source_player_id: player_id.to_string(),
+            target_region_id: target_region_id.to_string(),
+            affected_region_ids: affected.clone(),
+            ticks_remaining: ticks,
+            total_ticks: ticks,
+            params: config.effect_params.clone(),
+        });
+
+        vec![Event::FlashEffect {
+            source_player_id: player_id.to_string(),
+            target_region_id: target_region_id.to_string(),
+            affected_region_ids: affected,
+            ticks_remaining: ticks,
+        }]
+    }
+
     fn execute_conscription(
         &self,
         target_region_id: &str,
@@ -1143,6 +1209,16 @@ impl GameEngine {
             if active_effects[i].effect_type == "ab_pr_submarine" {
                 events.push(Event::AbilityEffectTick {
                     effect_type: "ab_pr_submarine".into(),
+                    target_region_id: active_effects[i].target_region_id.clone(),
+                    affected_region_ids: active_effects[i].affected_region_ids.clone(),
+                    ticks_remaining: active_effects[i].ticks_remaining,
+                });
+            }
+
+            // Flash: emit tick event every tick so the frontend maintains fog-of-war overlay.
+            if active_effects[i].effect_type == "ab_flash" {
+                events.push(Event::AbilityEffectTick {
+                    effect_type: "ab_flash".into(),
                     target_region_id: active_effects[i].target_region_id.clone(),
                     affected_region_ids: active_effects[i].affected_region_ids.clone(),
                     ticks_remaining: active_effects[i].ticks_remaining,
@@ -1804,7 +1880,7 @@ impl GameEngine {
             }
         };
 
-        // If target now belongs to attacker, just move units there
+        // If target now belongs to attacker, just move units there.
         if target.owner_id.as_deref() == Some(&item.player_id) {
             let target = regions.get_mut(&item.target_region_id).unwrap();
             receive_units_in_region(target, &item.unit_type, item.units, self);
@@ -1868,10 +1944,188 @@ impl GameEngine {
             }
         }
 
-        let attacker_attack = unit_config.attack;
+        // ----------------------------------------------------------------
+        // Phase 1 — Air Combat
+        //
+        // Classify the attacking unit as air or ground.  The defending
+        // region may contain SAM units (intercept_air=true) which fight
+        // alongside defending air units against incoming air attackers.
+        // Bombers (combat_target="ground") survive phase 1 to join phase 2.
+        // ----------------------------------------------------------------
+
+        // Determine attacker category from unit config.
+        let attacker_is_air = unit_config.movement_type == "air";
+        let attacker_targets_air = unit_config.combat_target == "air";
+
+        // Effective attacker count after phase-1 air combat (may be reduced).
+        let mut effective_attacker_units = item.units;
+
+        if attacker_is_air {
+            // Collect defending air units + SAM ground units as air-phase defenders.
+            let target_snap = match regions.get(&item.target_region_id) {
+                Some(r) => r,
+                None => return events,
+            };
+
+            let mut air_defender_power = 0.0f64;
+            for (def_unit_type, &count) in &target_snap.units {
+                let def_cfg = self.get_unit_config(def_unit_type);
+                let is_air_defender =
+                    def_cfg.movement_type == "air" || def_cfg.intercept_air;
+                if is_air_defender {
+                    let scale = self.get_unit_scale(def_unit_type);
+                    air_defender_power +=
+                        count as f64 * scale as f64 * def_cfg.defense * (1.0 + defender_bonus + defense_building);
+                }
+            }
+
+            if air_defender_power > 0.0 {
+                let unit_scale = self.get_unit_scale(&item.unit_type);
+                let mut air_attacker_power =
+                    effective_attacker_units as f64
+                        * unit_scale as f64
+                        * unit_config.attack
+                        * (1.0 + attacker_bonus)
+                        * (1.0 + attack_bonus_sum);
+
+                let mut rng = rand::thread_rng();
+                let air_att_roll =
+                    air_attacker_power * (1.0 + rng.gen_range(-randomness..=randomness));
+                let air_def_roll =
+                    air_defender_power * (1.0 + rng.gen_range(-randomness..=randomness));
+
+                if air_att_roll >= air_def_roll {
+                    // Attacker wins air combat — take casualties proportional to defender strength.
+                    let casualty_ratio =
+                        (air_defender_power / air_attacker_power.max(1.0) * self.settings.casualty_factor)
+                            .min(1.0);
+                    let lost = (effective_attacker_units as f64 * casualty_ratio).round() as i64;
+                    effective_attacker_units = (effective_attacker_units - lost).max(0);
+                } else {
+                    // Defender wins air combat — all incoming air units destroyed.
+                    effective_attacker_units = 0;
+                }
+
+                // Remove defending air units and SAM that were consumed in air combat.
+                // SAM units fire once then are unchanged; only air-to-air units take losses.
+                // Simple model: surviving ratio mirrors attacker casualties inverted.
+                let air_def_casualty =
+                    (air_attacker_power / air_defender_power.max(1.0) * self.settings.casualty_factor)
+                        .min(1.0);
+                let target_mut = regions.get_mut(&item.target_region_id).unwrap();
+                let mut new_units: HashMap<String, i64> = HashMap::new();
+                for (def_unit_type, &count) in &target_mut.units {
+                    let def_cfg = self.get_unit_config(def_unit_type);
+                    // Only air-to-air defenders (not SAM ground) take losses in air combat.
+                    let takes_air_losses = def_cfg.movement_type == "air";
+                    if takes_air_losses {
+                        let remaining =
+                            (count as f64 * (1.0 - air_def_casualty)).round() as i64;
+                        if remaining > 0 {
+                            new_units.insert(def_unit_type.clone(), remaining);
+                        }
+                    } else {
+                        new_units.insert(def_unit_type.clone(), count);
+                    }
+                }
+                target_mut.units = new_units;
+                sync_region_unit_meta(target_mut, self);
+            }
+
+            // Fighters (combat_target="air") do not proceed to ground combat.
+            if attacker_targets_air && effective_attacker_units == 0 {
+                events.push(Event::AttackFailed {
+                    source_region_id: item.source_region_id.clone(),
+                    target_region_id: item.target_region_id.clone(),
+                    player_id: item.player_id.clone(),
+                    units: item.units,
+                    unit_type: item.unit_type.clone(),
+                    defender_surviving: regions
+                        .get(&item.target_region_id)
+                        .map(|r| r.unit_count)
+                        .unwrap_or(0),
+                });
+                return events;
+            }
+            if attacker_targets_air {
+                // Fighters that survive air combat do not attack ground — they return.
+                if effective_attacker_units > 0 {
+                    if let Some(source) = regions.get_mut(&item.source_region_id) {
+                        receive_units_in_region(
+                            source,
+                            &item.unit_type,
+                            effective_attacker_units,
+                            self,
+                        );
+                    }
+                }
+                return events;
+            }
+
+            // Bombers with no survivors after air combat: attack fails.
+            if effective_attacker_units == 0 {
+                events.push(Event::AttackFailed {
+                    source_region_id: item.source_region_id.clone(),
+                    target_region_id: item.target_region_id.clone(),
+                    player_id: item.player_id.clone(),
+                    units: item.units,
+                    unit_type: item.unit_type.clone(),
+                    defender_surviving: regions
+                        .get(&item.target_region_id)
+                        .map(|r| r.unit_count)
+                        .unwrap_or(0),
+                });
+                return events;
+            }
+        }
+
+        // ----------------------------------------------------------------
+        // Path damage — applied before ground combat resolves.
+        // Units with path_damage > 0 bombard the target on approach,
+        // killing some defending units before the main assault.
+        // ----------------------------------------------------------------
+        if unit_config.path_damage > 0.0 && effective_attacker_units > 0 {
+            let target_mut = regions.get_mut(&item.target_region_id).unwrap();
+            let total_defenders: i64 = target_mut.units.values().sum();
+            if total_defenders > 0 {
+                let kill_fraction =
+                    (unit_config.path_damage * effective_attacker_units as f64 / total_defenders as f64)
+                        .min(0.5); // cap at 50% so path damage never trivially wins alone
+                let mut new_units: HashMap<String, i64> = HashMap::new();
+                let mut total_killed = 0i64;
+                for (ut, &count) in &target_mut.units {
+                    let killed = (count as f64 * kill_fraction).round() as i64;
+                    let remaining = (count - killed).max(0);
+                    total_killed += killed;
+                    if remaining > 0 {
+                        new_units.insert(ut.clone(), remaining);
+                    }
+                }
+                target_mut.units = new_units;
+                sync_region_unit_meta(target_mut, self);
+                events.push(Event::PathDamage {
+                    target_region_id: item.target_region_id.clone(),
+                    player_id: item.player_id.clone(),
+                    units_killed: total_killed,
+                });
+            }
+        }
+
+        // ----------------------------------------------------------------
+        // Phase 2 — Ground Combat
+        //
+        // Surviving attackers (ground units, or bombers that passed phase 1)
+        // fight the remaining ground defenders.
+        // ----------------------------------------------------------------
+
+        let target = match regions.get(&item.target_region_id) {
+            Some(r) => r,
+            None => return events,
+        };
+
         let unit_scale = self.get_unit_scale(&item.unit_type);
         let mut attacker_power =
-            item.units as f64 * unit_scale as f64 * attacker_attack * (1.0 + attacker_bonus);
+            effective_attacker_units as f64 * unit_scale as f64 * unit_config.attack * (1.0 + attacker_bonus);
         attacker_power *= 1.0 + attack_bonus_sum;
         let defender_power =
             self.get_region_defender_power(target, defender_bonus + defense_building);
@@ -1882,9 +2136,12 @@ impl GameEngine {
         let defender_roll =
             defender_power * (1.0 + rng.gen_range(-randomness..=randomness));
 
+        // Track total damage dealt by attacker for AOE calculation.
+        let total_attacker_damage = attacker_power;
+
         if attacker_roll > defender_roll {
             let surviving_effective = (unit_scale as f64).max(
-                (item.units as f64
+                (effective_attacker_units as f64
                     * unit_scale as f64
                     * (1.0 - defender_power / attacker_power.max(1.0) * self.settings.casualty_factor))
                     as f64,
@@ -1897,8 +2154,8 @@ impl GameEngine {
             target.units.clear();
             receive_units_in_region(target, &item.unit_type, surviving, self);
 
-            // Attacker: all defending units were wiped out; record losses for both sides.
-            let attacker_lost = (item.units - surviving).max(0) as u32;
+            // Attacker: record losses for both sides.
+            let attacker_lost = (effective_attacker_units - surviving).max(0) as u32;
             if let Some(player) = players.get_mut(&item.player_id) {
                 player.total_units_lost =
                     player.total_units_lost.saturating_add(attacker_lost);
@@ -1971,6 +2228,62 @@ impl GameEngine {
                 unit_type: item.unit_type.clone(),
                 defender_surviving: surviving_defenders,
             });
+        }
+
+        // ----------------------------------------------------------------
+        // AOE Damage — artillery and other area-effect units deal splash
+        // damage to enemy-owned neighbors of the target province.
+        // ----------------------------------------------------------------
+        if unit_config.aoe_damage > 0.0 {
+            let aoe_factor = unit_config.aoe_damage * total_attacker_damage;
+            // Collect neighbor IDs while immutably borrowing the neighbor_map.
+            let neighbor_ids: Vec<String> = self
+                .neighbor_map
+                .get(&item.target_region_id)
+                .cloned()
+                .unwrap_or_default();
+
+            let mut affected_neighbors: Vec<String> = Vec::new();
+            for nid in &neighbor_ids {
+                let neighbor_owner = regions.get(nid).and_then(|r| r.owner_id.clone());
+                // Only damage regions owned by a different (enemy) player.
+                let is_enemy = match &neighbor_owner {
+                    Some(oid) => oid != &item.player_id,
+                    None => false,
+                };
+                if is_enemy {
+                    affected_neighbors.push(nid.clone());
+                }
+            }
+
+            for nid in &affected_neighbors {
+                if let Some(neighbor) = regions.get_mut(nid) {
+                    let total: i64 = neighbor.units.values().sum();
+                    if total == 0 {
+                        continue;
+                    }
+                    let kill_fraction = (aoe_factor / total as f64).min(0.8);
+                    let mut new_units: HashMap<String, i64> = HashMap::new();
+                    for (ut, &count) in &neighbor.units {
+                        let remaining =
+                            (count as f64 * (1.0 - kill_fraction)).round() as i64;
+                        if remaining > 0 {
+                            new_units.insert(ut.clone(), remaining);
+                        }
+                    }
+                    neighbor.units = new_units;
+                    sync_region_unit_meta(neighbor, self);
+                }
+            }
+
+            if !affected_neighbors.is_empty() {
+                events.push(Event::AoeDamage {
+                    source_region_id: item.target_region_id.clone(),
+                    affected_region_ids: affected_neighbors,
+                    player_id: item.player_id.clone(),
+                    damage_factor: aoe_factor,
+                });
+            }
         }
 
         events
@@ -2505,6 +2818,10 @@ fn can_station_unit(region: &Region, unit_type: &str, engine: &GameEngine) -> bo
     let config = engine.get_unit_config(unit_type);
     if config.movement_type == "sea" && !region.is_coastal {
         return false;
+    }
+    // Units with can_station_anywhere skip the building requirement check.
+    if config.can_station_anywhere {
+        return true;
     }
     // Special units require their production building to station;
     // without one they are dropped and their infantry backing remains.

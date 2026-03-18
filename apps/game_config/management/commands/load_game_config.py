@@ -88,7 +88,7 @@ class Command(BaseCommand):
 
         if not options["skip_provinces"]:
             self.stdout.write("\nRunning import_provinces --clear ...")
-            call_command("import_provinces", clear=True, stdout=self.stdout, stderr=self.stderr)
+            call_command("import_provinces_v2", clear=True, stdout=self.stdout, stderr=self.stderr)
 
         self.stdout.write("\nSeeding economy data (items, recipes)...")
         call_command("seed_economy_data", stdout=self.stdout, stderr=self.stderr)

@@ -435,6 +435,9 @@ class DeckController:
         """
         deck = get_object_or_404(Deck, id=deck_id, user=request.user)
 
+        if not deck.is_editable:
+            return self.create_response({'error': 'Domyślna talia nie może być edytowana. Utwórz nową talię.'}, status_code=403)
+
         with transaction.atomic():
             if payload.name is not None:
                 deck.name = payload.name
@@ -530,7 +533,11 @@ class DeckController:
                 # Replace deck items
                 DeckItem.objects.filter(deck=deck).delete()
                 for item, qty in validated_items:
-                    DeckItem.objects.create(deck=deck, item=item, quantity=qty)
+                    instance = None
+                    if not item.is_stackable:
+                        from apps.inventory.models import ItemInstance
+                        instance = ItemInstance.objects.filter(owner=request.user, item=item).first()
+                    DeckItem.objects.create(deck=deck, item=item, quantity=qty, instance=instance)
 
         return (
             Deck.objects.prefetch_related('items__item', 'items__item__category')
@@ -541,6 +548,8 @@ class DeckController:
     def delete_deck(self, request, deck_id: str):
         """Delete a deck."""
         deck = get_object_or_404(Deck, id=deck_id, user=request.user)
+        if not deck.is_editable:
+            return self.create_response({'error': 'Domyślna talia nie może być usunięta.'}, status_code=403)
         deck.delete()
         return {'ok': True}
 

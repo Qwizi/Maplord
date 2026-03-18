@@ -275,6 +275,26 @@ pub struct UnitConfig {
     pub max_level: i64,
     #[serde(default)]
     pub level_stats: HashMap<String, serde_json::Value>,
+    #[serde(default)]
+    pub is_stealth: bool,
+    #[serde(default)]
+    pub path_damage: f64,
+    #[serde(default)]
+    pub aoe_damage: f64,
+    #[serde(default)]
+    pub blockade_port: bool,
+    #[serde(default)]
+    pub intercept_air: bool,
+    #[serde(default)]
+    pub can_station_anywhere: bool,
+    #[serde(default)]
+    pub lifetime_ticks: i64,
+    #[serde(default = "default_combat_target")]
+    pub combat_target: String,
+}
+
+fn default_combat_target() -> String {
+    "ground".to_string()
 }
 
 /// Ability config — mirrors Django AbilityType snapshot.
@@ -430,6 +450,9 @@ pub struct Player {
     /// Building max levels from deck: building_slug → max level (1-3).
     #[serde(default)]
     pub building_levels: HashMap<String, i64>,
+    /// Unit max levels from deck: unit_slug -> max level (1-3).
+    #[serde(default)]
+    pub unit_levels: HashMap<String, i64>,
     /// Visual cosmetics metadata — passed through to clients, never processed by the engine.
     #[serde(default)]
     pub cosmetics: HashMap<String, serde_json::Value>,
@@ -722,5 +745,28 @@ pub enum Event {
         building_type: String,
         player_id: String,
         new_level: i64,
+    },
+    /// Emitted when AOE units (e.g. artillery) deal splash damage to neighboring provinces.
+    #[serde(rename = "aoe_damage")]
+    AoeDamage {
+        source_region_id: String,
+        affected_region_ids: Vec<String>,
+        player_id: String,
+        damage_factor: f64,
+    },
+    /// Emitted when a unit with path_damage > 0 softens the target before arrival.
+    #[serde(rename = "path_damage")]
+    PathDamage {
+        target_region_id: String,
+        player_id: String,
+        units_killed: i64,
+    },
+    /// Emitted when the flash ability creates a disorientation effect.
+    #[serde(rename = "flash_effect")]
+    FlashEffect {
+        source_player_id: String,
+        target_region_id: String,
+        affected_region_ids: Vec<String>,
+        ticks_remaining: i64,
     },
 }
