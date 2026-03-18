@@ -29,6 +29,7 @@ interface AuthContextType {
   loading: boolean;
   isBanned: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithTokens: (access: string, refresh: string) => Promise<void>;
   register: (
     username: string,
     email: string,
@@ -123,6 +124,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsBanned(false);
   };
 
+  const loginWithTokens = async (access: string, refresh: string) => {
+    setTokens(access, refresh);
+    const me = await getMe(access);
+    if (me.is_banned) {
+      clearTokens();
+      throw new BannedError();
+    }
+    setUser(me);
+    setToken(access);
+    setIsBanned(false);
+  };
+
   const register = async (
     username: string,
     email: string,
@@ -146,7 +159,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadUser]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, isBanned, login, register, logout, refreshUser, token }}>
+    <AuthContext.Provider value={{ user, loading, isBanned, login, loginWithTokens, register, logout, refreshUser, token }}>
       {children}
     </AuthContext.Provider>
   );

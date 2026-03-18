@@ -122,6 +122,39 @@ export async function getMe(token: string): Promise<User> {
   return fetchAPI<User>("/auth/me", { token });
 }
 
+// --- Social Auth ---
+
+export interface SocialAuthURL {
+  url: string;
+}
+
+export interface SocialAuthTokens {
+  access: string;
+  refresh: string;
+  is_new_user: boolean;
+}
+
+export async function getSocialAuthURL(
+  provider: 'google' | 'discord',
+  redirectUri: string
+): Promise<SocialAuthURL> {
+  return fetchAPI<SocialAuthURL>(
+    `/auth/social/${provider}/authorize?redirect_uri=${encodeURIComponent(redirectUri)}`
+  );
+}
+
+export async function socialAuthCallback(
+  provider: 'google' | 'discord',
+  code: string,
+  redirectUri: string,
+  state?: string | null
+): Promise<SocialAuthTokens> {
+  return fetchAPI<SocialAuthTokens>(`/auth/social/${provider}/callback`, {
+    method: 'POST',
+    body: JSON.stringify({ code, redirect_uri: redirectUri, state }),
+  });
+}
+
 // --- Push Notifications ---
 
 export async function getVapidKey(): Promise<string> {

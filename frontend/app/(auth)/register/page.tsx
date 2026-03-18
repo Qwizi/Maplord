@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import AuthScreen from "@/components/auth/AuthScreen";
+import SocialLoginButtons from "@/components/auth/SocialLoginButtons";
 import { toast } from "sonner";
 import { APIError } from "@/lib/api";
 
@@ -227,6 +228,8 @@ export default function RegisterPage() {
             {isSubmitting ? "Rejestracja..." : "Utwórz konto"}
           </Button>
         </form>
+
+        <SocialLoginButtons />
       </div>
     </AuthScreen>
   );
