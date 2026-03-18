@@ -418,11 +418,7 @@ mod tests {
             unit_types: HashMap::new(),
             ability_types: HashMap::new(),
             default_unit_type_slug: Some("infantry".into()),
-            min_capital_distance: 3,
-            elo_k_factor: 32,
-            match_duration_limit_minutes: 0,
-            weather_enabled: true,
-            day_night_enabled: true,
+            ..Default::default()
         };
 
         let brain = BotBrain {
@@ -499,11 +495,7 @@ mod tests {
             unit_types: HashMap::new(),
             ability_types: HashMap::new(),
             default_unit_type_slug: Some("infantry".into()),
-            min_capital_distance: 3,
-            elo_k_factor: 32,
-            match_duration_limit_minutes: 0,
-            weather_enabled: true,
-            day_night_enabled: true,
+            ..Default::default()
         };
 
         let brain = BotBrain {
@@ -551,11 +543,7 @@ mod tests {
             unit_types: HashMap::new(),
             ability_types: HashMap::new(),
             default_unit_type_slug: Some("infantry".into()),
-            min_capital_distance: 3,
-            elo_k_factor: 32,
-            match_duration_limit_minutes: 0,
-            weather_enabled: true,
-            day_night_enabled: true,
+            ..Default::default()
         }
     }
 

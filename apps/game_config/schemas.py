@@ -38,6 +38,20 @@ class GameSettingsOutSchema(Schema):
     starting_regions: int
     weather_enabled: bool
     day_night_enabled: bool
+    night_defense_modifier: float
+    dawn_dusk_defense_modifier: float
+    storm_randomness_modifier: float
+    fog_randomness_modifier: float
+    rain_randomness_modifier: float
+    storm_energy_modifier: float
+    rain_energy_modifier: float
+    storm_unit_gen_modifier: float
+    rain_unit_gen_modifier: float
+    disconnect_grace_seconds: int
+    max_build_queue_per_region: int
+    max_unit_queue_per_region: int
+    casualty_factor: float
+    snapshot_interval_ticks: int
 
     class Config:
         from_attributes = True
@@ -138,6 +152,20 @@ class GameModeOutSchema(Schema):
     neutral_region_units: int
     weather_enabled: bool
     day_night_enabled: bool
+    night_defense_modifier: float
+    dawn_dusk_defense_modifier: float
+    storm_randomness_modifier: float
+    fog_randomness_modifier: float
+    rain_randomness_modifier: float
+    storm_energy_modifier: float
+    rain_energy_modifier: float
+    storm_unit_gen_modifier: float
+    rain_unit_gen_modifier: float
+    disconnect_grace_seconds: int
+    max_build_queue_per_region: int
+    max_unit_queue_per_region: int
+    casualty_factor: float
+    snapshot_interval_ticks: int
     elo_k_factor: int
     map_config_id: Optional[uuid.UUID] = None
     is_active: bool

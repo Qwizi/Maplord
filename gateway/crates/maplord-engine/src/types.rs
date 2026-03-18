@@ -46,6 +46,38 @@ pub struct GameSettings {
     pub weather_enabled: bool,
     #[serde(default = "default_true")]
     pub day_night_enabled: bool,
+
+    // Weather gameplay modifiers
+    #[serde(default = "default_night_defense_modifier")]
+    pub night_defense_modifier: f64,
+    #[serde(default = "default_dawn_dusk_defense_modifier")]
+    pub dawn_dusk_defense_modifier: f64,
+    #[serde(default = "default_storm_randomness_modifier")]
+    pub storm_randomness_modifier: f64,
+    #[serde(default = "default_fog_randomness_modifier")]
+    pub fog_randomness_modifier: f64,
+    #[serde(default = "default_rain_randomness_modifier")]
+    pub rain_randomness_modifier: f64,
+    #[serde(default = "default_storm_energy_modifier")]
+    pub storm_energy_modifier: f64,
+    #[serde(default = "default_rain_energy_modifier")]
+    pub rain_energy_modifier: f64,
+    #[serde(default = "default_storm_unit_gen_modifier")]
+    pub storm_unit_gen_modifier: f64,
+    #[serde(default = "default_rain_unit_gen_modifier")]
+    pub rain_unit_gen_modifier: f64,
+
+    // Gameplay limits
+    #[serde(default = "default_disconnect_grace_seconds")]
+    pub disconnect_grace_seconds: u64,
+    #[serde(default = "default_max_build_queue_per_region")]
+    pub max_build_queue_per_region: u64,
+    #[serde(default = "default_max_unit_queue_per_region")]
+    pub max_unit_queue_per_region: u64,
+    #[serde(default = "default_casualty_factor")]
+    pub casualty_factor: f64,
+    #[serde(default = "default_snapshot_interval_ticks")]
+    pub snapshot_interval_ticks: u64,
 }
 
 fn default_true() -> bool { true }
@@ -62,6 +94,62 @@ fn default_starting_units() -> i64 { 10 }
 fn default_neutral_region_units() -> i64 { 3 }
 fn default_min_capital_distance() -> i64 { 3 }
 fn default_elo_k_factor() -> i64 { 32 }
+fn default_night_defense_modifier() -> f64 { 1.15 }
+fn default_dawn_dusk_defense_modifier() -> f64 { 1.05 }
+fn default_storm_randomness_modifier() -> f64 { 1.4 }
+fn default_fog_randomness_modifier() -> f64 { 1.25 }
+fn default_rain_randomness_modifier() -> f64 { 1.1 }
+fn default_storm_energy_modifier() -> f64 { 0.85 }
+fn default_rain_energy_modifier() -> f64 { 0.95 }
+fn default_storm_unit_gen_modifier() -> f64 { 0.90 }
+fn default_rain_unit_gen_modifier() -> f64 { 0.95 }
+fn default_disconnect_grace_seconds() -> u64 { 180 }
+fn default_max_build_queue_per_region() -> u64 { 3 }
+fn default_max_unit_queue_per_region() -> u64 { 4 }
+fn default_casualty_factor() -> f64 { 0.5 }
+fn default_snapshot_interval_ticks() -> u64 { 30 }
+
+impl Default for GameSettings {
+    fn default() -> Self {
+        Self {
+            tick_interval_ms: default_tick_interval(),
+            capital_selection_time_seconds: default_capital_selection_time(),
+            base_unit_generation_rate: default_base_unit_generation_rate(),
+            capital_generation_bonus: default_capital_generation_bonus(),
+            starting_energy: default_starting_energy(),
+            base_energy_per_tick: default_base_energy_per_tick(),
+            region_energy_per_tick: default_region_energy_per_tick(),
+            attacker_advantage: 0.0,
+            defender_advantage: default_defender_advantage(),
+            combat_randomness: default_combat_randomness(),
+            starting_units: default_starting_units(),
+            neutral_region_units: default_neutral_region_units(),
+            building_types: HashMap::new(),
+            unit_types: HashMap::new(),
+            ability_types: HashMap::new(),
+            default_unit_type_slug: None,
+            min_capital_distance: default_min_capital_distance(),
+            elo_k_factor: default_elo_k_factor(),
+            match_duration_limit_minutes: 0,
+            weather_enabled: true,
+            day_night_enabled: true,
+            night_defense_modifier: default_night_defense_modifier(),
+            dawn_dusk_defense_modifier: default_dawn_dusk_defense_modifier(),
+            storm_randomness_modifier: default_storm_randomness_modifier(),
+            fog_randomness_modifier: default_fog_randomness_modifier(),
+            rain_randomness_modifier: default_rain_randomness_modifier(),
+            storm_energy_modifier: default_storm_energy_modifier(),
+            rain_energy_modifier: default_rain_energy_modifier(),
+            storm_unit_gen_modifier: default_storm_unit_gen_modifier(),
+            rain_unit_gen_modifier: default_rain_unit_gen_modifier(),
+            disconnect_grace_seconds: default_disconnect_grace_seconds(),
+            max_build_queue_per_region: default_max_build_queue_per_region(),
+            max_unit_queue_per_region: default_max_unit_queue_per_region(),
+            casualty_factor: default_casualty_factor(),
+            snapshot_interval_ticks: default_snapshot_interval_ticks(),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BuildingConfig {

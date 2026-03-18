@@ -870,7 +870,7 @@ async fn game_loop(
 
     let mut engine = GameEngine::new(settings.clone(), neighbor_map.clone());
     let mut anticheat = AnticheatEngine::new(match_id.to_string(), state_mgr.redis());
-    let snapshot_interval = 30u64;
+    let snapshot_interval = settings.snapshot_interval_ticks;
     let mut next_tick_at = tokio::time::Instant::now() + tick_interval;
 
     // Save initial state snapshot (tick 0)
@@ -980,7 +980,7 @@ async fn game_loop(
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs() as i64;
-            let early_weather = maplord_engine::compute_weather_with_flags(early_now_secs, settings.weather_enabled, settings.day_night_enabled);
+            let early_weather = maplord_engine::compute_weather_with_settings(early_now_secs, &settings);
             let game_over_msg = json!({
                 "type": "game_tick",
                 "tick": tick,
@@ -1103,7 +1103,7 @@ async fn game_loop(
                     .duration_since(UNIX_EPOCH)
                     .unwrap_or_default()
                     .as_secs() as i64;
-                let cheat_weather = maplord_engine::compute_weather_with_flags(cheat_now_secs, settings.weather_enabled, settings.day_night_enabled);
+                let cheat_weather = maplord_engine::compute_weather_with_settings(cheat_now_secs, &settings);
                 let flag_msg = json!({
                     "type": "game_tick",
                     "tick": tick,
@@ -1167,7 +1167,7 @@ async fn game_loop(
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs() as i64;
-        let weather = maplord_engine::compute_weather_with_flags(now_secs, settings.weather_enabled, settings.day_night_enabled);
+        let weather = maplord_engine::compute_weather_with_settings(now_secs, &settings);
         engine.set_weather(&weather);
 
         let mut events = engine.process_tick(
@@ -1269,7 +1269,7 @@ async fn game_loop(
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
                     .as_secs() as i64;
-                let extra_weather = maplord_engine::compute_weather_with_flags(extra_now_secs, settings.weather_enabled, settings.day_night_enabled);
+                let extra_weather = maplord_engine::compute_weather_with_settings(extra_now_secs, &settings);
                 engine.set_weather(&extra_weather);
 
                 let mut extra_events = engine.process_tick(
@@ -1773,7 +1773,7 @@ async fn initialize_game(
         )
         .await?;
     state_mgr
-        .set_meta_field("disconnect_grace_seconds", "180")
+        .set_meta_field("disconnect_grace_seconds", &settings.disconnect_grace_seconds.to_string())
         .await?;
     if !settings.weather_enabled {
         state_mgr.set_meta_field("weather_enabled", "0").await?;

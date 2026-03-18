@@ -39,6 +39,24 @@ class GameSettings(models.Model):
     weather_enabled = models.BooleanField(default=True, help_text='Enable weather effects (rain, fog, storm)')
     day_night_enabled = models.BooleanField(default=True, help_text='Enable day/night cycle')
 
+    # Weather gameplay modifiers
+    night_defense_modifier = models.FloatField(default=1.15, help_text='Defense multiplier at night (e.g. 1.15 = +15%)')
+    dawn_dusk_defense_modifier = models.FloatField(default=1.05, help_text='Defense multiplier at dawn/dusk (e.g. 1.05 = +5%)')
+    storm_randomness_modifier = models.FloatField(default=1.4, help_text='Combat randomness multiplier during storms (e.g. 1.4 = +40%)')
+    fog_randomness_modifier = models.FloatField(default=1.25, help_text='Combat randomness multiplier during fog (e.g. 1.25 = +25%)')
+    rain_randomness_modifier = models.FloatField(default=1.1, help_text='Combat randomness multiplier during rain (e.g. 1.1 = +10%)')
+    storm_energy_modifier = models.FloatField(default=0.85, help_text='Energy generation multiplier during storms (e.g. 0.85 = -15%)')
+    rain_energy_modifier = models.FloatField(default=0.95, help_text='Energy generation multiplier during rain (e.g. 0.95 = -5%)')
+    storm_unit_gen_modifier = models.FloatField(default=0.90, help_text='Unit generation multiplier during storms (e.g. 0.90 = -10%)')
+    rain_unit_gen_modifier = models.FloatField(default=0.95, help_text='Unit generation multiplier during rain (e.g. 0.95 = -5%)')
+
+    # Gameplay limits
+    disconnect_grace_seconds = models.PositiveIntegerField(default=180, help_text='Seconds before disconnected player is eliminated')
+    max_build_queue_per_region = models.PositiveIntegerField(default=3, help_text='Max simultaneous build orders per region')
+    max_unit_queue_per_region = models.PositiveIntegerField(default=4, help_text='Max simultaneous unit production orders per region')
+    casualty_factor = models.FloatField(default=0.5, help_text='Portion of power difference that kills units (0-1)')
+    snapshot_interval_ticks = models.PositiveIntegerField(default=30, help_text='Save state snapshot every N ticks')
+
     # ELO
     elo_k_factor = models.PositiveIntegerField(default=32, help_text='K-factor for ELO calculation')
 
@@ -205,6 +223,24 @@ class GameMode(models.Model):
     # Weather & day/night
     weather_enabled = models.BooleanField(default=True, help_text='Enable weather effects (rain, fog, storm)')
     day_night_enabled = models.BooleanField(default=True, help_text='Enable day/night cycle')
+
+    # Weather gameplay modifiers
+    night_defense_modifier = models.FloatField(default=1.15, help_text='Defense multiplier at night (e.g. 1.15 = +15%)')
+    dawn_dusk_defense_modifier = models.FloatField(default=1.05, help_text='Defense multiplier at dawn/dusk (e.g. 1.05 = +5%)')
+    storm_randomness_modifier = models.FloatField(default=1.4, help_text='Combat randomness multiplier during storms (e.g. 1.4 = +40%)')
+    fog_randomness_modifier = models.FloatField(default=1.25, help_text='Combat randomness multiplier during fog (e.g. 1.25 = +25%)')
+    rain_randomness_modifier = models.FloatField(default=1.1, help_text='Combat randomness multiplier during rain (e.g. 1.1 = +10%)')
+    storm_energy_modifier = models.FloatField(default=0.85, help_text='Energy generation multiplier during storms (e.g. 0.85 = -15%)')
+    rain_energy_modifier = models.FloatField(default=0.95, help_text='Energy generation multiplier during rain (e.g. 0.95 = -5%)')
+    storm_unit_gen_modifier = models.FloatField(default=0.90, help_text='Unit generation multiplier during storms (e.g. 0.90 = -10%)')
+    rain_unit_gen_modifier = models.FloatField(default=0.95, help_text='Unit generation multiplier during rain (e.g. 0.95 = -5%)')
+
+    # Gameplay limits
+    disconnect_grace_seconds = models.PositiveIntegerField(default=180, help_text='Seconds before disconnected player is eliminated')
+    max_build_queue_per_region = models.PositiveIntegerField(default=3, help_text='Max simultaneous build orders per region')
+    max_unit_queue_per_region = models.PositiveIntegerField(default=4, help_text='Max simultaneous unit production orders per region')
+    casualty_factor = models.FloatField(default=0.5, help_text='Portion of power difference that kills units (0-1)')
+    snapshot_interval_ticks = models.PositiveIntegerField(default=30, help_text='Save state snapshot every N ticks')
 
     # ELO
     elo_k_factor = models.PositiveIntegerField(default=32, help_text='K-factor for ELO calculation')

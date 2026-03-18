@@ -5,8 +5,7 @@ pub use types::*;
 use rand::Rng;
 use std::collections::{HashMap, VecDeque};
 
-const MAX_BUILD_QUEUE_PER_REGION: usize = 3;
-const MAX_UNIT_QUEUE_PER_REGION: usize = 4;
+// Build/unit queue limits now come from self.settings.max_build_queue_per_region / max_unit_queue_per_region
 
 /// Default unit type configs used as fallback when settings don't provide them.
 fn default_unit_types() -> HashMap<String, UnitConfig> {
@@ -82,26 +81,52 @@ fn default_unit_types() -> HashMap<String, UnitConfig> {
     m
 }
 
-/// Compute the current weather state from a UTC Unix timestamp.
-///
-/// Day/night cycle: based on UTC hour (06:00–18:00 = day).
-/// Weather conditions: deterministic cycle using day-of-year and hour
-/// to produce predictable but varied conditions.
-///
-/// When `weather_enabled` is false, condition is always "clear" with no modifiers.
-/// When `day_night_enabled` is false, phase is always "day" with full visibility.
+/// Compute the current weather state from a UTC Unix timestamp using default settings.
 pub fn compute_weather(timestamp_secs: i64) -> WeatherState {
-    compute_weather_with_flags(timestamp_secs, true, true)
+    let defaults = GameSettings {
+        weather_enabled: true,
+        day_night_enabled: true,
+        night_defense_modifier: 1.15,
+        dawn_dusk_defense_modifier: 1.05,
+        storm_randomness_modifier: 1.4,
+        fog_randomness_modifier: 1.25,
+        rain_randomness_modifier: 1.1,
+        storm_energy_modifier: 0.85,
+        rain_energy_modifier: 0.95,
+        storm_unit_gen_modifier: 0.90,
+        rain_unit_gen_modifier: 0.95,
+        ..Default::default()
+    };
+    compute_weather_with_settings(timestamp_secs, &defaults)
 }
 
-/// Compute weather with explicit toggle flags.
+/// Compute weather with explicit toggle flags (backwards compat).
 pub fn compute_weather_with_flags(timestamp_secs: i64, weather_enabled: bool, day_night_enabled: bool) -> WeatherState {
+    let settings = GameSettings {
+        weather_enabled,
+        day_night_enabled,
+        night_defense_modifier: 1.15,
+        dawn_dusk_defense_modifier: 1.05,
+        storm_randomness_modifier: 1.4,
+        fog_randomness_modifier: 1.25,
+        rain_randomness_modifier: 1.1,
+        storm_energy_modifier: 0.85,
+        rain_energy_modifier: 0.95,
+        storm_unit_gen_modifier: 0.90,
+        rain_unit_gen_modifier: 0.95,
+        ..Default::default()
+    };
+    compute_weather_with_settings(timestamp_secs, &settings)
+}
+
+/// Compute weather using full game settings for all configurable modifiers.
+pub fn compute_weather_with_settings(timestamp_secs: i64, settings: &GameSettings) -> WeatherState {
     // Time of day: 0.0 = midnight, 0.5 = noon
     let secs_in_day = ((timestamp_secs % 86400) + 86400) % 86400;
     let time_of_day = secs_in_day as f64 / 86400.0;
 
     // Phase — forced to "day" when day/night is disabled
-    let phase = if day_night_enabled {
+    let phase = if settings.day_night_enabled {
         match time_of_day {
             t if t < 0.21 => "night",    // 00:00–05:00
             t if t < 0.29 => "dawn",     // 05:00–07:00
@@ -114,7 +139,7 @@ pub fn compute_weather_with_flags(timestamp_secs: i64, weather_enabled: bool, da
     };
 
     // Weather condition — forced to "clear" when weather is disabled
-    let (condition, cloud_coverage) = if weather_enabled {
+    let (condition, cloud_coverage) = if settings.weather_enabled {
         let day_of_year = (timestamp_secs / 86400) % 365;
         let hour = secs_in_day / 3600;
         let weather_seed = ((day_of_year * 7 + hour * 3) % 20) as f64;
@@ -150,29 +175,29 @@ pub fn compute_weather_with_flags(timestamp_secs: i64, weather_enabled: bool, da
     };
     let visibility = base_visibility * weather_visibility;
 
-    // Gameplay modifiers
+    // Gameplay modifiers — use configurable values from settings
     let defense_modifier = match phase {
-        "night" => 1.15,   // defenders get +15% bonus at night
-        "dawn" | "dusk" => 1.05,
+        "night" => settings.night_defense_modifier,
+        "dawn" | "dusk" => settings.dawn_dusk_defense_modifier,
         _ => 1.0,
     };
 
     let randomness_modifier = match condition {
-        "storm" => 1.4,    // storms add +40% combat chaos
-        "fog" => 1.25,     // fog adds +25%
-        "rain" => 1.1,     // rain adds +10%
+        "storm" => settings.storm_randomness_modifier,
+        "fog" => settings.fog_randomness_modifier,
+        "rain" => settings.rain_randomness_modifier,
         _ => 1.0,
     };
 
     let energy_modifier = match condition {
-        "storm" => 0.85,   // storms reduce energy by 15%
-        "rain" => 0.95,    // rain reduces by 5%
+        "storm" => settings.storm_energy_modifier,
+        "rain" => settings.rain_energy_modifier,
         _ => 1.0,
     };
 
     let unit_gen_modifier = match condition {
-        "storm" => 0.90,   // storms reduce unit gen by 10%
-        "rain" => 0.95,    // rain by 5%
+        "storm" => settings.storm_unit_gen_modifier,
+        "rain" => settings.rain_unit_gen_modifier,
         _ => 1.0,
     };
 
@@ -1504,7 +1529,7 @@ impl GameEngine {
             .iter()
             .filter(|q| q.region_id == *region_id)
             .count();
-        if total_region_queue >= MAX_BUILD_QUEUE_PER_REGION {
+        if total_region_queue >= self.settings.max_build_queue_per_region as usize {
             return vec![reject_action(
                 player_id,
                 "Region ma juz maksymalna liczbe budow w kolejce",
@@ -1679,7 +1704,7 @@ impl GameEngine {
             .filter(|q| q.region_id == *region_id)
             .map(|q| q.quantity.unwrap_or(1))
             .sum();
-        if total_region_queue >= MAX_UNIT_QUEUE_PER_REGION as i64 {
+        if total_region_queue >= self.settings.max_unit_queue_per_region as i64 {
             return vec![reject_action(
                 player_id,
                 "Region ma juz maksymalna liczbe jednostek w produkcji",
@@ -1861,7 +1886,7 @@ impl GameEngine {
             let surviving_effective = (unit_scale as f64).max(
                 (item.units as f64
                     * unit_scale as f64
-                    * (1.0 - defender_power / attacker_power.max(1.0) * 0.5))
+                    * (1.0 - defender_power / attacker_power.max(1.0) * self.settings.casualty_factor))
                     as f64,
             );
             let surviving =
@@ -1909,7 +1934,7 @@ impl GameEngine {
             }
         } else {
             let remaining_ratio =
-                (1.0 - attacker_power / defender_power.max(1.0) * 0.5).max(0.0);
+                (1.0 - attacker_power / defender_power.max(1.0) * self.settings.casualty_factor).max(0.0);
 
             let target = regions.get_mut(&item.target_region_id).unwrap();
             let mut reduced_units: HashMap<String, i64> = HashMap::new();
@@ -2699,27 +2724,12 @@ mod tests {
         );
 
         GameSettings {
-            tick_interval_ms: 1000,
-            capital_selection_time_seconds: 30,
-            base_unit_generation_rate: 1.0,
-            capital_generation_bonus: 2.0,
-            starting_energy: 120,
-            base_energy_per_tick: 2.0,
-            region_energy_per_tick: 0.35,
-            attacker_advantage: 0.0,
-            defender_advantage: 0.1,
-            combat_randomness: 0.0, // deterministic for tests
-            starting_units: 10,
-            neutral_region_units: 3,
             building_types,
             unit_types,
             ability_types: HashMap::new(),
             default_unit_type_slug: Some("infantry".into()),
-            min_capital_distance: 3,
-            elo_k_factor: 32,
-            match_duration_limit_minutes: 0,
-            weather_enabled: true,
-            day_night_enabled: true,
+            combat_randomness: 0.0, // deterministic for tests
+            ..Default::default()
         }
     }
 

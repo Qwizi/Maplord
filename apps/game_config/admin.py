@@ -15,6 +15,16 @@ class GameSettingsAdmin(ModelAdmin):
         ('Combat', {'fields': ('attacker_advantage', 'defender_advantage', 'combat_randomness')}),
         ('Starting Conditions', {'fields': ('starting_units', 'starting_regions')}),
         ('Weather & Day/Night', {'fields': ('weather_enabled', 'day_night_enabled')}),
+        ('Weather Modifiers', {
+            'fields': (
+                'night_defense_modifier', 'dawn_dusk_defense_modifier',
+                'storm_randomness_modifier', 'fog_randomness_modifier', 'rain_randomness_modifier',
+                'storm_energy_modifier', 'rain_energy_modifier',
+                'storm_unit_gen_modifier', 'rain_unit_gen_modifier',
+            ),
+            'classes': ('collapse',),
+        }),
+        ('Gameplay Limits', {'fields': ('disconnect_grace_seconds', 'max_build_queue_per_region', 'max_unit_queue_per_region', 'casualty_factor', 'snapshot_interval_ticks')}),
         ('ELO', {'fields': ('elo_k_factor',)}),
     )
 
@@ -44,6 +54,16 @@ class GameModeAdmin(ModelAdmin):
         ('Combat', {'fields': ('attacker_advantage', 'defender_advantage', 'combat_randomness')}),
         ('Starting Conditions', {'fields': ('starting_units', 'starting_regions', 'neutral_region_units')}),
         ('Weather & Day/Night', {'fields': ('weather_enabled', 'day_night_enabled')}),
+        ('Weather Modifiers', {
+            'fields': (
+                'night_defense_modifier', 'dawn_dusk_defense_modifier',
+                'storm_randomness_modifier', 'fog_randomness_modifier', 'rain_randomness_modifier',
+                'storm_energy_modifier', 'rain_energy_modifier',
+                'storm_unit_gen_modifier', 'rain_unit_gen_modifier',
+            ),
+            'classes': ('collapse',),
+        }),
+        ('Gameplay Limits', {'fields': ('disconnect_grace_seconds', 'max_build_queue_per_region', 'max_unit_queue_per_region', 'casualty_factor', 'snapshot_interval_ticks')}),
         ('ELO', {'fields': ('elo_k_factor',)}),
     )
 
