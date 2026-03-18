@@ -42,8 +42,13 @@ pub struct GameSettings {
     pub elo_k_factor: i64,
     #[serde(default)]
     pub match_duration_limit_minutes: u64,
+    #[serde(default = "default_true")]
+    pub weather_enabled: bool,
+    #[serde(default = "default_true")]
+    pub day_night_enabled: bool,
 }
 
+fn default_true() -> bool { true }
 fn default_tick_interval() -> u64 { 1000 }
 fn default_capital_selection_time() -> u64 { 30 }
 fn default_base_unit_generation_rate() -> f64 { 1.0 }
@@ -289,8 +294,6 @@ pub struct Player {
     #[serde(default)]
     pub cosmetics: HashMap<String, serde_json::Value>,
 }
-
-fn default_true() -> bool { true }
 
 /// Region state stored in Redis.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]

@@ -421,6 +421,8 @@ mod tests {
             min_capital_distance: 3,
             elo_k_factor: 32,
             match_duration_limit_minutes: 0,
+            weather_enabled: true,
+            day_night_enabled: true,
         };
 
         let brain = BotBrain {
@@ -500,6 +502,8 @@ mod tests {
             min_capital_distance: 3,
             elo_k_factor: 32,
             match_duration_limit_minutes: 0,
+            weather_enabled: true,
+            day_night_enabled: true,
         };
 
         let brain = BotBrain {
@@ -550,6 +554,8 @@ mod tests {
             min_capital_distance: 3,
             elo_k_factor: 32,
             match_duration_limit_minutes: 0,
+            weather_enabled: true,
+            day_night_enabled: true,
         }
     }
 

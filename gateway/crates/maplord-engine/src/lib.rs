@@ -87,36 +87,51 @@ fn default_unit_types() -> HashMap<String, UnitConfig> {
 /// Day/night cycle: based on UTC hour (06:00–18:00 = day).
 /// Weather conditions: deterministic cycle using day-of-year and hour
 /// to produce predictable but varied conditions.
+///
+/// When `weather_enabled` is false, condition is always "clear" with no modifiers.
+/// When `day_night_enabled` is false, phase is always "day" with full visibility.
 pub fn compute_weather(timestamp_secs: i64) -> WeatherState {
+    compute_weather_with_flags(timestamp_secs, true, true)
+}
+
+/// Compute weather with explicit toggle flags.
+pub fn compute_weather_with_flags(timestamp_secs: i64, weather_enabled: bool, day_night_enabled: bool) -> WeatherState {
     // Time of day: 0.0 = midnight, 0.5 = noon
     let secs_in_day = ((timestamp_secs % 86400) + 86400) % 86400;
     let time_of_day = secs_in_day as f64 / 86400.0;
 
-    // Phase
-    let phase = match time_of_day {
-        t if t < 0.21 => "night",    // 00:00–05:00
-        t if t < 0.29 => "dawn",     // 05:00–07:00
-        t if t < 0.75 => "day",      // 07:00–18:00
-        t if t < 0.83 => "dusk",     // 18:00–20:00
-        _ => "night",                 // 20:00–00:00
+    // Phase — forced to "day" when day/night is disabled
+    let phase = if day_night_enabled {
+        match time_of_day {
+            t if t < 0.21 => "night",    // 00:00–05:00
+            t if t < 0.29 => "dawn",     // 05:00–07:00
+            t if t < 0.75 => "day",      // 07:00–18:00
+            t if t < 0.83 => "dusk",     // 18:00–20:00
+            _ => "night",                 // 20:00–00:00
+        }
+    } else {
+        "day"
     };
 
-    // Deterministic weather condition from day-of-year + hour
-    // Creates a slowly changing cycle that repeats every ~7 days
-    let day_of_year = (timestamp_secs / 86400) % 365;
-    let hour = secs_in_day / 3600;
-    let weather_seed = ((day_of_year * 7 + hour * 3) % 20) as f64;
+    // Weather condition — forced to "clear" when weather is disabled
+    let (condition, cloud_coverage) = if weather_enabled {
+        let day_of_year = (timestamp_secs / 86400) % 365;
+        let hour = secs_in_day / 3600;
+        let weather_seed = ((day_of_year * 7 + hour * 3) % 20) as f64;
 
-    let (condition, cloud_coverage) = if weather_seed < 8.0 {
-        ("clear", weather_seed * 0.05)             // 40% clear
-    } else if weather_seed < 13.0 {
-        ("cloudy", 0.4 + (weather_seed - 8.0) * 0.08) // 25% cloudy
-    } else if weather_seed < 16.0 {
-        ("rain", 0.7 + (weather_seed - 13.0) * 0.05)  // 15% rain
-    } else if weather_seed < 18.0 {
-        ("fog", 0.5 + (weather_seed - 16.0) * 0.1)    // 10% fog
+        if weather_seed < 8.0 {
+            ("clear", weather_seed * 0.05)             // 40% clear
+        } else if weather_seed < 13.0 {
+            ("cloudy", 0.4 + (weather_seed - 8.0) * 0.08) // 25% cloudy
+        } else if weather_seed < 16.0 {
+            ("rain", 0.7 + (weather_seed - 13.0) * 0.05)  // 15% rain
+        } else if weather_seed < 18.0 {
+            ("fog", 0.5 + (weather_seed - 16.0) * 0.1)    // 10% fog
+        } else {
+            ("storm", 0.9 + (weather_seed - 18.0) * 0.05) // 10% storm
+        }
     } else {
-        ("storm", 0.9 + (weather_seed - 18.0) * 0.05) // 10% storm
+        ("clear", 0.0)
     };
 
     // Visibility: day=high, night=lower, fog/storm=lower
@@ -2703,6 +2718,8 @@ mod tests {
             min_capital_distance: 3,
             elo_k_factor: 32,
             match_duration_limit_minutes: 0,
+            weather_enabled: true,
+            day_night_enabled: true,
         }
     }
 

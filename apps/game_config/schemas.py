@@ -36,6 +36,8 @@ class GameSettingsOutSchema(Schema):
     combat_randomness: float
     starting_units: int
     starting_regions: int
+    weather_enabled: bool
+    day_night_enabled: bool
 
     class Config:
         from_attributes = True
@@ -134,6 +136,8 @@ class GameModeOutSchema(Schema):
     starting_units: int
     starting_regions: int
     neutral_region_units: int
+    weather_enabled: bool
+    day_night_enabled: bool
     elo_k_factor: int
     map_config_id: Optional[uuid.UUID] = None
     is_active: bool

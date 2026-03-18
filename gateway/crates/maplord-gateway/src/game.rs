@@ -27,6 +27,14 @@ pub fn new_game_connections() -> GameConnections {
     Arc::new(DashMap::new())
 }
 
+/// Read weather/day-night flags from match meta and compute weather.
+async fn compute_weather_from_meta(state_mgr: &GameStateManager, now_secs: i64) -> maplord_engine::WeatherState {
+    let meta = state_mgr.get_meta().await.unwrap_or_default();
+    let weather_enabled = meta.get("weather_enabled").map(|v| v != "0").unwrap_or(true);
+    let day_night_enabled = meta.get("day_night_enabled").map(|v| v != "0").unwrap_or(true);
+    maplord_engine::compute_weather_with_flags(now_secs, weather_enabled, day_night_enabled)
+}
+
 #[derive(Deserialize)]
 pub struct TokenQuery {
     pub token: Option<String>,
@@ -189,7 +197,7 @@ async fn handle_game_socket(socket: WebSocket, match_id: String, user_id: String
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs() as i64;
-        let current_weather = maplord_engine::compute_weather(now_secs);
+        let current_weather = compute_weather_from_meta(&state_mgr, now_secs).await;
         let msg = json!({"type": "game_state", "state": full_state, "weather": current_weather});
         let _ = tx.try_send(Message::Text(msg.to_string().into()));
     }
@@ -972,7 +980,7 @@ async fn game_loop(
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs() as i64;
-            let early_weather = maplord_engine::compute_weather(early_now_secs);
+            let early_weather = maplord_engine::compute_weather_with_flags(early_now_secs, settings.weather_enabled, settings.day_night_enabled);
             let game_over_msg = json!({
                 "type": "game_tick",
                 "tick": tick,
@@ -1095,7 +1103,7 @@ async fn game_loop(
                     .duration_since(UNIX_EPOCH)
                     .unwrap_or_default()
                     .as_secs() as i64;
-                let cheat_weather = maplord_engine::compute_weather(cheat_now_secs);
+                let cheat_weather = maplord_engine::compute_weather_with_flags(cheat_now_secs, settings.weather_enabled, settings.day_night_enabled);
                 let flag_msg = json!({
                     "type": "game_tick",
                     "tick": tick,
@@ -1159,7 +1167,7 @@ async fn game_loop(
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs() as i64;
-        let weather = maplord_engine::compute_weather(now_secs);
+        let weather = maplord_engine::compute_weather_with_flags(now_secs, settings.weather_enabled, settings.day_night_enabled);
         engine.set_weather(&weather);
 
         let mut events = engine.process_tick(
@@ -1261,7 +1269,7 @@ async fn game_loop(
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
                     .as_secs() as i64;
-                let extra_weather = maplord_engine::compute_weather(extra_now_secs);
+                let extra_weather = maplord_engine::compute_weather_with_flags(extra_now_secs, settings.weather_enabled, settings.day_night_enabled);
                 engine.set_weather(&extra_weather);
 
                 let mut extra_events = engine.process_tick(
@@ -1623,7 +1631,7 @@ async fn eliminate_player(
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs() as i64;
-    let elim_weather = maplord_engine::compute_weather(elim_now_secs);
+    let elim_weather = compute_weather_from_meta(state_mgr, elim_now_secs).await;
     let tick_msg = json!({
         "type": "game_tick",
         "tick": current_tick,
@@ -1767,6 +1775,12 @@ async fn initialize_game(
     state_mgr
         .set_meta_field("disconnect_grace_seconds", "180")
         .await?;
+    if !settings.weather_enabled {
+        state_mgr.set_meta_field("weather_enabled", "0").await?;
+    }
+    if !settings.day_night_enabled {
+        state_mgr.set_meta_field("day_night_enabled", "0").await?;
+    }
     if match_data.is_tutorial {
         state_mgr.set_meta_field("is_tutorial", "1").await?;
     }
@@ -2146,7 +2160,7 @@ async fn mark_player_disconnected(
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs() as i64;
-    let disc_weather = maplord_engine::compute_weather(disc_now_secs);
+    let disc_weather = compute_weather_from_meta(state_mgr, disc_now_secs).await;
     let tick_msg = json!({
         "type": "game_tick",
         "tick": current_tick,
@@ -2477,7 +2491,7 @@ async fn finish_match_with_current_state(
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs() as i64;
-    let finish_weather = maplord_engine::compute_weather(finish_now_secs);
+    let finish_weather = compute_weather_from_meta(state_mgr, finish_now_secs).await;
     let tick_msg = json!({
         "type": "game_tick",
         "tick": current_tick,

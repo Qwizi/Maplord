@@ -14,6 +14,7 @@ class GameSettingsAdmin(ModelAdmin):
         ('Unit Generation', {'fields': ('base_unit_generation_rate', 'capital_generation_bonus')}),
         ('Combat', {'fields': ('attacker_advantage', 'defender_advantage', 'combat_randomness')}),
         ('Starting Conditions', {'fields': ('starting_units', 'starting_regions')}),
+        ('Weather & Day/Night', {'fields': ('weather_enabled', 'day_night_enabled')}),
         ('ELO', {'fields': ('elo_k_factor',)}),
     )
 
@@ -42,6 +43,7 @@ class GameModeAdmin(ModelAdmin):
         ('Economy', {'fields': ('starting_energy', 'base_energy_per_tick', 'region_energy_per_tick', 'base_unit_generation_rate', 'capital_generation_bonus')}),
         ('Combat', {'fields': ('attacker_advantage', 'defender_advantage', 'combat_randomness')}),
         ('Starting Conditions', {'fields': ('starting_units', 'starting_regions', 'neutral_region_units')}),
+        ('Weather & Day/Night', {'fields': ('weather_enabled', 'day_night_enabled')}),
         ('ELO', {'fields': ('elo_k_factor',)}),
     )
 

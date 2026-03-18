@@ -477,6 +477,8 @@ class MatchmakingInternalController(ControllerBase):
                 'min_capital_distance': map_config.min_capital_distance if map_config else 3,
                 'elo_k_factor': src.elo_k_factor,
                 'match_duration_limit_minutes': src.match_duration_limit_minutes,
+                'weather_enabled': src.weather_enabled,
+                'day_night_enabled': src.day_night_enabled,
             },
         )
 
@@ -641,6 +643,8 @@ def _create_match_from_users(users, game_mode):
             'min_capital_distance': map_config.min_capital_distance if map_config else 3,
             'elo_k_factor': src.elo_k_factor,
             'match_duration_limit_minutes': src.match_duration_limit_minutes,
+            'weather_enabled': src.weather_enabled,
+            'day_night_enabled': src.day_night_enabled,
         },
     )
 

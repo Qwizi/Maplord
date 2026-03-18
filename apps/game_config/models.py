@@ -35,6 +35,10 @@ class GameSettings(models.Model):
         default=3, help_text='Garrison units in unowned (neutral) regions'
     )
 
+    # Weather & day/night
+    weather_enabled = models.BooleanField(default=True, help_text='Enable weather effects (rain, fog, storm)')
+    day_night_enabled = models.BooleanField(default=True, help_text='Enable day/night cycle')
+
     # ELO
     elo_k_factor = models.PositiveIntegerField(default=32, help_text='K-factor for ELO calculation')
 
@@ -197,6 +201,10 @@ class GameMode(models.Model):
     neutral_region_units = models.PositiveIntegerField(
         default=3, help_text='Garrison units in unowned (neutral) regions'
     )
+
+    # Weather & day/night
+    weather_enabled = models.BooleanField(default=True, help_text='Enable weather effects (rain, fog, storm)')
+    day_night_enabled = models.BooleanField(default=True, help_text='Enable day/night cycle')
 
     # ELO
     elo_k_factor = models.PositiveIntegerField(default=32, help_text='K-factor for ELO calculation')
