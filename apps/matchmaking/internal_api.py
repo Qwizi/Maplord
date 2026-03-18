@@ -496,12 +496,14 @@ class MatchmakingInternalController(ControllerBase):
             },
         )
 
-        # Apply module overrides to settings_snapshot
-        from apps.game_config.modules import get_modules_snapshot
+        # Apply game module overrides to settings_snapshot
+        from apps.game_config.modules import get_modules_snapshot, get_all_module_configs
         modules_dict, flat_overrides = get_modules_snapshot(src)
         snapshot = match.settings_snapshot
         snapshot.update(flat_overrides)
         snapshot['modules'] = modules_dict
+        # Include system module configs so gateway has access to anticheat/chat/etc settings
+        snapshot['system_modules'] = get_all_module_configs()
         match.settings_snapshot = snapshot
         match.save(update_fields=['settings_snapshot'])
 
@@ -685,12 +687,13 @@ def _create_match_from_users(users, game_mode):
         },
     )
 
-    # Apply module overrides to settings_snapshot
-    from apps.game_config.modules import get_modules_snapshot
+    # Apply game module overrides to settings_snapshot
+    from apps.game_config.modules import get_modules_snapshot, get_all_module_configs
     modules_dict, flat_overrides = get_modules_snapshot(src)
     snapshot = match.settings_snapshot
     snapshot.update(flat_overrides)
     snapshot['modules'] = modules_dict
+    snapshot['system_modules'] = get_all_module_configs()
     match.settings_snapshot = snapshot
     match.save(update_fields=['settings_snapshot'])
 

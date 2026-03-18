@@ -79,9 +79,13 @@ pub struct GameSettings {
     #[serde(default = "default_snapshot_interval_ticks")]
     pub snapshot_interval_ticks: u64,
 
-    // Module system
+    // Game module system (weather, combat, economy, etc.)
     #[serde(default)]
     pub modules: HashMap<String, ModuleConfig>,
+
+    // System module configs (anticheat, chat, matchmaking, etc.)
+    #[serde(default)]
+    pub system_modules: HashMap<String, SystemModuleSnapshot>,
 }
 
 /// Configuration for a single game module.
@@ -91,6 +95,39 @@ pub struct ModuleConfig {
     pub enabled: bool,
     #[serde(default)]
     pub config: HashMap<String, serde_json::Value>,
+}
+
+/// Snapshot of a system module's state and config.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SystemModuleSnapshot {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub config: HashMap<String, serde_json::Value>,
+}
+
+impl GameSettings {
+    /// Check if a system module is enabled.
+    pub fn is_system_module_enabled(&self, slug: &str) -> bool {
+        self.system_modules
+            .get(slug)
+            .map(|m| m.enabled)
+            .unwrap_or(true) // fail-open
+    }
+
+    /// Get a system module config value as a specific type.
+    pub fn system_module_config<T: serde::de::DeserializeOwned>(
+        &self,
+        slug: &str,
+        key: &str,
+        default: T,
+    ) -> T {
+        self.system_modules
+            .get(slug)
+            .and_then(|m| m.config.get(key))
+            .and_then(|v| serde_json::from_value(v.clone()).ok())
+            .unwrap_or(default)
+    }
 }
 
 fn default_true() -> bool { true }
@@ -161,6 +198,7 @@ impl Default for GameSettings {
             casualty_factor: default_casualty_factor(),
             snapshot_interval_ticks: default_snapshot_interval_ticks(),
             modules: HashMap::new(),
+            system_modules: HashMap::new(),
         }
     }
 }

@@ -1,6 +1,7 @@
 from django.contrib import admin
 from unfold.admin import ModelAdmin, TabularInline
 from unfold.decorators import display
+from apps.game_config.forms import SystemModuleForm
 from apps.game_config.models import (
     GameSettings, BuildingType, UnitType, MapConfig, GameMode, AbilityType,
     GameModule, GameSettingsModuleOverride, GameModeModuleOverride,
@@ -205,6 +206,7 @@ class GameModuleAdmin(ModelAdmin):
 
 @admin.register(SystemModule)
 class SystemModuleAdmin(ModelAdmin):
+    form = SystemModuleForm
     list_display = ('icon', 'name', 'slug', 'display_enabled', 'display_layers', 'display_core', 'order')
     list_filter = ('enabled', 'is_core', 'affects_backend', 'affects_frontend', 'affects_gateway')
     list_filter_submit = True
@@ -213,15 +215,23 @@ class SystemModuleAdmin(ModelAdmin):
     search_fields = ('name', 'slug')
     prepopulated_fields = {'slug': ('name',)}
     warn_unsaved_form = True
-    fieldsets = (
-        (None, {'fields': ('name', 'slug', 'description', 'icon', 'order')}),
-        ('State', {'fields': ('enabled', 'is_core')}),
-        ('Affected Layers', {'fields': ('affects_backend', 'affects_frontend', 'affects_gateway')}),
-        ('Configuration', {
+
+    def get_fieldsets(self, request, obj=None):
+        base = [
+            (None, {'fields': ('name', 'slug', 'description', 'icon', 'order')}),
+            ('State', {'fields': ('enabled', 'is_core')}),
+            ('Affected Layers', {'fields': ('affects_backend', 'affects_frontend', 'affects_gateway')}),
+        ]
+        # Build dynamic config fields from config_schema
+        if obj and obj.config_schema:
+            cfg_fields = [f'cfg__{f["key"]}' for f in obj.config_schema if f.get('key')]
+            if cfg_fields:
+                base.append(('Module Configuration', {'fields': cfg_fields}))
+        base.append(('Raw JSON (advanced)', {
             'fields': ('config', 'config_schema'),
             'classes': ('collapse',),
-        }),
-    )
+        }))
+        return base
 
     @display(
         description="Status",

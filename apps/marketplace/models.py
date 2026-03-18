@@ -105,6 +105,17 @@ class MarketConfig(models.Model):
         obj, _ = cls.objects.get_or_create(pk='00000000-0000-0000-0000-000000000001')
         return obj
 
+    @classmethod
+    def get_effective_config(cls):
+        """Get marketplace config, with system module overrides."""
+        from apps.game_config.modules import get_module_config
+        obj = cls.objects.first()
+        return {
+            'transaction_fee': get_module_config('marketplace', 'transaction_fee_percent', obj.transaction_fee_percent if obj else 5.0),
+            'listing_duration_hours': get_module_config('marketplace', 'listing_duration_hours', obj.listing_duration_hours if obj else 72),
+            'max_active_listings': get_module_config('marketplace', 'max_active_listings_per_user', obj.max_active_listings_per_user if obj else 20),
+        }
+
     def save(self, *args, **kwargs):
         self.pk = '00000000-0000-0000-0000-000000000001'
         super().save(*args, **kwargs)

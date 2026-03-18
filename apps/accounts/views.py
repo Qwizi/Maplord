@@ -11,6 +11,7 @@ from ninja.errors import HttpError
 from ninja_extra import api_controller, route
 from ninja_extra.permissions import IsAuthenticated
 from apps.accounts.auth import ActiveUserJWTAuth
+from apps.game_config.modules import get_module_config
 
 from apps.accounts.models import PushSubscription
 from apps.accounts.schemas import LeaderboardEntrySchema, PushSubscriptionSchema, RegisterSchema, UserOutSchema
@@ -49,12 +50,13 @@ class AuthController:
         try:
             from apps.inventory.models import Deck, DeckItem, Item, UserInventory, Wallet
 
-            STARTER_SLUGS = [
+            STARTER_SLUGS = get_module_config('registration', 'starter_items', [
                 'pkg-shield-1', 'bp-barracks-1', 'bp-factory-1',
                 'bp-tower-1', 'bp-port-1', 'bp-carrier-1', 'bp-radar-1',
-            ]
+            ])
+            starter_gold = get_module_config('registration', 'starter_gold', 100)
 
-            Wallet.objects.get_or_create(user=user, defaults={'gold': 100})
+            Wallet.objects.get_or_create(user=user, defaults={'gold': starter_gold})
 
             for slug in STARTER_SLUGS:
                 item = Item.objects.filter(slug=slug).first()
@@ -99,7 +101,8 @@ class AuthController:
     def ws_ticket(self, request):
         ticket = str(uuid.uuid4())
         challenge = os.urandom(16).hex()
-        difficulty = 16
+        difficulty = get_module_config('registration', 'pow_difficulty', 16)
+        ws_ticket_expiry = get_module_config('registration', 'ws_ticket_expiry_seconds', 30)
         r = redis_lib.Redis(
             host=settings.REDIS_HOST,
             port=settings.REDIS_PORT,
@@ -107,7 +110,7 @@ class AuthController:
         )
         r.setex(
             f"ws_ticket:{ticket}",
-            30,
+            ws_ticket_expiry,
             json.dumps({
                 'user_id': str(request.auth.id),
                 'challenge': challenge,

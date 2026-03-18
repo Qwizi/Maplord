@@ -6,6 +6,7 @@ import redis
 from celery import shared_task
 from django.conf import settings
 from django.db import transaction
+from apps.game_config.modules import get_module_config
 
 logger = logging.getLogger(__name__)
 
@@ -138,9 +139,10 @@ def finalize_match_results_sync(
         max_buildings = max((row["buildings_built"] for row in player_rows), default=0)
         max_survival_ticks = max(total_ticks, 1)
 
-        # Determine if match is ranked (need at least 2 human players)
+        # Determine if match is ranked (configurable minimum human player count)
+        min_human_players = get_module_config('leaderboard', 'min_human_players_for_ranked', 2)
         human_rows = [r for r in player_rows if not r["is_bot"]]
-        is_ranked = len(human_rows) >= 2
+        is_ranked = len(human_rows) >= min_human_players
 
         raw_changes: list[float] = []
         for row in player_rows:
@@ -174,15 +176,19 @@ def finalize_match_results_sync(
             row["survived_ticks"] = survived_ticks
             discipline_penalty = 0.0
             if row["eliminated_reason"] == "left_match":
-                discipline_penalty = -0.2
+                discipline_penalty = get_module_config('leaderboard', 'discipline_penalty_left_match', -0.2)
             elif row["eliminated_reason"] == "disconnect_timeout":
-                discipline_penalty = -0.12
+                discipline_penalty = get_module_config('leaderboard', 'discipline_penalty_disconnect', -0.12)
 
+            w_regions = get_module_config('leaderboard', 'perf_weight_regions', 0.35)
+            w_units = get_module_config('leaderboard', 'perf_weight_units', 0.25)
+            w_buildings = get_module_config('leaderboard', 'perf_weight_buildings', 0.15)
+            w_survival = get_module_config('leaderboard', 'perf_weight_survival', 0.25)
             performance_score = (
-                0.35 * _safe_ratio(row["owned_regions"], max_regions)
-                + 0.25 * _safe_ratio(row["total_units"], max_units)
-                + 0.15 * _safe_ratio(row["buildings_built"], max_buildings)
-                + 0.25 * _safe_ratio(survived_ticks, max_survival_ticks)
+                w_regions * _safe_ratio(row["owned_regions"], max_regions)
+                + w_units * _safe_ratio(row["total_units"], max_units)
+                + w_buildings * _safe_ratio(row["buildings_built"], max_buildings)
+                + w_survival * _safe_ratio(survived_ticks, max_survival_ticks)
                 + discipline_penalty
             )
             row["performance_score"] = performance_score
@@ -195,9 +201,10 @@ def finalize_match_results_sync(
             human_perf = [player_rows[i]["performance_score"] for i in human_indices]
             average_performance = sum(human_perf) / len(human_perf) if human_perf else 0.0
 
+            perf_component_weight = get_module_config('leaderboard', 'performance_component_weight', 0.35)
             for i in human_indices:
                 row = player_rows[i]
-                performance_component = k_factor * 0.35 * (row["performance_score"] - average_performance)
+                performance_component = k_factor * perf_component_weight * (row["performance_score"] - average_performance)
                 row["raw_elo_change"] = row["base_elo_component"] + performance_component
                 raw_changes[i] = row["raw_elo_change"]
 
@@ -371,7 +378,8 @@ def cleanup_stale_queue_entries():
 
     from apps.matchmaking.models import MatchQueue
 
-    cutoff = timezone.now() - timedelta(minutes=30)
+    stale_queue_minutes = get_module_config('matchmaking', 'stale_queue_cleanup_minutes', 30)
+    cutoff = timezone.now() - timedelta(minutes=stale_queue_minutes)
     deleted, _ = MatchQueue.objects.filter(joined_at__lt=cutoff).delete()
     if deleted:
         logger.info("Cleaned up %d stale queue entries", deleted)

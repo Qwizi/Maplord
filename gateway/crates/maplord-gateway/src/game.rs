@@ -215,8 +215,12 @@ async fn handle_game_socket(socket: WebSocket, match_id: String, user_id: String
         });
     }
 
-    // Send LiveKit voice chat token
-    {
+    // Send LiveKit voice chat token (only if voice-chat module enabled)
+    // Note: settings are not yet loaded at this point, so check via Django API
+    let voice_chat_enabled = state.django.get_system_modules().await
+        .map(|m| m.get("voice-chat").map(|v| v.enabled).unwrap_or(true))
+        .unwrap_or(true);
+    if voice_chat_enabled {
         let config = state.config.clone();
         let mid = match_id.clone();
         let uid = user_id.clone();
@@ -869,6 +873,7 @@ async fn game_loop(
         .map_err(|e| format!("Failed to get neighbor map: {e}"))?;
 
     let mut engine = GameEngine::new(settings.clone(), neighbor_map.clone());
+    let anticheat_enabled = settings.is_system_module_enabled("anticheat");
     let mut anticheat = AnticheatEngine::new(match_id.to_string(), state_mgr.redis());
     let snapshot_interval = settings.snapshot_interval_ticks;
     let mut next_tick_at = tokio::time::Instant::now() + tick_interval;
@@ -1017,16 +1022,20 @@ async fn game_loop(
             }
         }
 
-        // Anti-cheat analysis (pre-tick)
-        let ac_verdict = anticheat
-            .analyze_tick(
-                &tick_data.actions,
-                tick,
-                &tick_data.regions,
-                &tick_data.players,
-                &neighbor_map,
-            )
-            .await;
+        // Anti-cheat analysis (pre-tick) — skip if module disabled
+        let ac_verdict = if anticheat_enabled {
+            anticheat
+                .analyze_tick(
+                    &tick_data.actions,
+                    tick,
+                    &tick_data.regions,
+                    &tick_data.players,
+                    &neighbor_map,
+                )
+                .await
+        } else {
+            AnticheatVerdict::Allow
+        };
 
         match &ac_verdict {
             AnticheatVerdict::CancelMatch { reason } => {
