@@ -297,6 +297,14 @@ export interface UnitType {
   order: number;
   max_level: number;
   level_stats: Record<string, Record<string, number>>;
+  is_stealth: boolean;
+  path_damage: number;
+  aoe_damage: number;
+  blockade_port: boolean;
+  intercept_air: boolean;
+  can_station_anywhere: boolean;
+  lifetime_ticks: number;
+  combat_target: string;
 }
 
 export interface GameSettings {

@@ -1316,6 +1316,24 @@ export default function GamePage({
           }
         }
       }
+      if (e.type === "path_damage") {
+        playSound("missile_explosion");
+      }
+      if (e.type === "aoe_damage") {
+        playSound("missile_explosion");
+      }
+      if (e.type === "flash_effect") {
+        playSound("alert");
+        if (e.affected_region_ids && Array.isArray(e.affected_region_ids)) {
+          const myRegions = Object.entries(gameStateRef.current?.regions ?? {})
+            .filter(([, r]) => r.owner_id === myUserId)
+            .map(([id]) => id);
+          const affectedMine = (e.affected_region_ids as string[]).some(id => myRegions.includes(id));
+          if (affectedMine) {
+            toast.error("Flara oślepiająca! Prowincje zaciemnione!");
+          }
+        }
+      }
       if (e.type === "ability_effect_expired") {
         const effectType = e.effect_type as string;
         const targetRegionName = gameStateRef.current?.regions[String(e.target_region_id)]?.name ?? "region";

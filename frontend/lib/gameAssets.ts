@@ -47,7 +47,13 @@ export function getUnitAsset(kind: string | null | undefined = "default", assetU
       return "/assets/units/ground_unit_sphere_h300.png";
     case "infantry":
     case "ground_unit":
+    case "commando":
       return "/assets/units/ground_unit.webp";
+    case "artillery":
+    case "sam":
+      return "/assets/units/ground_unit_sphere_h300.png";
+    case "submarine":
+      return "/assets/units/ships/ship1.png";
     default:
       return "/assets/units/ground_unit_sphere_h300.png";
   }
@@ -108,6 +114,10 @@ const UNIT_SLOT_MAP: Record<string, string> = {
   fighter: "unit_fighter",
   air: "unit_fighter",
   bomber: "unit_fighter",
+  commando: "unit_infantry",
+  artillery: "unit_tank",
+  submarine: "unit_ship",
+  sam: "unit_tank",
 };
 
 /**

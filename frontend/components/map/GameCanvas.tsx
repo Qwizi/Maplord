@@ -89,6 +89,7 @@ const EFFECT_CONFIG: Record<string, { color: string; borderColor: string; icon: 
   ab_pr_submarine:       { color: "#a855f7", borderColor: "#c084fc", icon: "/assets/abilities/ab_pr_submarine.webp",       symbol: "⚓" },
   ab_province_nuke:      { color: "#ef4444", borderColor: "#f87171", icon: "/assets/abilities/ab_province_nuke.webp",      symbol: "☢" },
   ab_conscription_point: { color: "#f59e0b", borderColor: "#fbbf24", icon: "/assets/abilities/ab_conscription_point.webp", symbol: "⚔" },
+  ab_flash:              { color: "#fbbf24", borderColor: "#f59e0b", icon: "⚡", symbol: "💡" },
 };
 
 // ── Color constants ───────────────────────────────────────────

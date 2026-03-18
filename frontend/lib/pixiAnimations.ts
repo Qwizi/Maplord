@@ -28,6 +28,14 @@ const DURATION_MAP: Record<AnimKind, number> = {
   infantry: 1900,
 };
 
+const EXTRA_DURATION_MAP: Record<string, number> = {
+  bomber: 1300,
+  submarine: 3500,
+  artillery: 2000,
+  commando: 1500,
+  sam: 2400,
+};
+
 // ── Internal structs ─────────────────────────────────────────────────────────
 
 interface InternalAnim {
@@ -168,6 +176,11 @@ export function buildAnimationPath(
   unitType?: string | null
 ): [number, number][] {
   if (unitType === "nuke_rocket") return computeCurvePath(from, to, 0.35, 200);
+  if (unitType === "bomber") return computeCurvePath(from, to, 0.28, 40);
+  if (unitType === "submarine") return computeCurvePath(from, to, 0.04, 34);
+  if (unitType === "artillery") return computeCurvePath(from, to, 0.35, 30);
+  if (unitType === "commando") return computeMarchPath(from, to, 26);
+  if (unitType === "sam") return computeMarchPath(from, to, 26);
   if (kind === "fighter") return computeCurvePath(from, to, 0.24, 52);
   if (kind === "ship") return computeCurvePath(from, to, 0.04, 34);
   if (kind === "tank") return computeCurvePath(from, to, 0.08, 26);
@@ -339,7 +352,7 @@ export class PixiAnimationManager {
     );
     const duration =
       anim.durationMs ??
-      (isNuke ? 8000 : (DURATION_MAP[animKind] ?? DURATION_MAP.infantry));
+      (isNuke ? 8000 : (EXTRA_DURATION_MAP[anim.unitType ?? ""] ?? DURATION_MAP[animKind] ?? DURATION_MAP.infantry));
     const config = resolveAnimConfig(
       animKind,
       anim.type,
