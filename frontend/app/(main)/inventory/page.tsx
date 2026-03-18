@@ -27,13 +27,16 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/h
 import { useAuth } from "@/hooks/useAuth";
 import { useModuleConfig } from "@/hooks/useSystemModules";
 import { ModuleDisabledPage } from "@/components/ModuleGate";
+import { CrateOpenModal } from "@/components/inventory/CrateOpenModal";
 import {
   getMyInventory,
   getMyWallet,
   getMyDrops,
+  getItemCategories,
   openCrate,
   type InventoryItemOut,
   type ItemInstanceOut,
+  type ItemOut,
   type WalletOut,
   type ItemDropOut,
 } from "@/lib/api";
@@ -505,6 +508,14 @@ function InventoryContent() {
   const [filter, setFilter] = useState<string>("all");
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Crate opening modal state
+  const [crateModalOpen, setCrateModalOpen] = useState(false);
+  const [openingCrateItem, setOpeningCrateItem] = useState<ItemOut | null>(null);
+  const [crateDrops, setCrateDrops] = useState<
+    Array<{ item_name: string; item_slug: string; rarity: string; quantity: number }> | null
+  >(null);
+  const [allItemCatalog, setAllItemCatalog] = useState<ItemOut[]>([]);
+
   useGSAP(() => {
     if (!containerRef.current || loading) return;
     gsap.fromTo("[data-animate='slot']", { scale: 0.85, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.3, stagger: 0.02, ease: "back.out(1.5)" });
@@ -517,14 +528,16 @@ function InventoryContent() {
   const loadData = useCallback(async () => {
     if (!token) return;
     try {
-      const [invRes, wal, drRes] = await Promise.all([
+      const [invRes, wal, drRes, categories] = await Promise.all([
         getMyInventory(token, 200),
         getMyWallet(token),
         getMyDrops(token, 10),
+        getItemCategories(),
       ]);
       setInventory(invRes.items);
       setWallet(wal);
       setDrops(drRes.items);
+      setAllItemCatalog(categories.flatMap((c) => c.items));
     } catch {
       toast.error("Nie udało się załadować ekwipunku");
     } finally {
@@ -555,17 +568,22 @@ function InventoryContent() {
       toast.error("Nie masz odpowiedniego klucza!");
       return;
     }
+    const crateEntry = inventory.find((i) => i.item.slug === crateSlug);
     try {
       const result = await openCrate(token, crateSlug, matchingKey.item.slug);
-      toast.success(
-        `Otwarto skrzynię! Otrzymano: ${result.drops
-          .map((d) => `${d.item_name} x${d.quantity}`)
-          .join(", ")}`
-      );
-      loadData();
+      setOpeningCrateItem(crateEntry?.item ?? null);
+      setCrateDrops(result.drops);
+      setCrateModalOpen(true);
     } catch {
       toast.error("Nie udało się otworzyć skrzynki");
     }
+  };
+
+  const handleCrateModalClose = () => {
+    setCrateModalOpen(false);
+    setOpeningCrateItem(null);
+    setCrateDrops(null);
+    loadData();
   };
 
   const filteredInventory =
@@ -581,6 +599,14 @@ function InventoryContent() {
 
   return (
     <div ref={containerRef} className="space-y-3 md:space-y-8 -mx-4 md:mx-0 -mt-2 md:mt-0">
+
+      <CrateOpenModal
+        isOpen={crateModalOpen}
+        onClose={handleCrateModalClose}
+        crateItem={openingCrateItem}
+        drops={crateDrops}
+        allItems={allItemCatalog}
+      />
 
       {/* ── Page header ─────────────────────────────────────────────────────── */}
       <div className="px-4 md:px-0">

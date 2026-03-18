@@ -159,13 +159,21 @@ def _build_cosmetic_snapshot(user) -> dict:
 
         if ec.slot.startswith('vfx_'):
             # VFX slot: include params alongside URL
-            snapshot[ec.slot] = {
+            entry = {
                 'url': url,
                 'params': ec.item.cosmetic_params or {},
             }
+            if ec.instance_id:
+                entry['instance_id'] = str(ec.instance_id)
+            snapshot[ec.slot] = entry
         else:
-            # Static skin slot: just the URL
-            if url:
+            # Static skin slot: URL string when no instance, dict when instance exists
+            if ec.instance_id:
+                snapshot[ec.slot] = {
+                    'url': url,
+                    'instance_id': str(ec.instance_id),
+                }
+            elif url:
                 snapshot[ec.slot] = url
     return snapshot
 

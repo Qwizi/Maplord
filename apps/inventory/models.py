@@ -3,6 +3,50 @@ from django.conf import settings
 from django.db import models
 
 
+class CosmeticSlot(models.TextChoices):
+    # Units
+    UNIT_INFANTRY = 'unit_infantry', 'Skin: Piechota'
+    UNIT_TANK = 'unit_tank', 'Skin: Czołg'
+    UNIT_SHIP = 'unit_ship', 'Skin: Okręt'
+    UNIT_FIGHTER = 'unit_fighter', 'Skin: Myśliwiec'
+
+    # Buildings
+    BUILDING_BARRACKS = 'building_barracks', 'Skin: Koszary'
+    BUILDING_FACTORY = 'building_factory', 'Skin: Fabryka'
+    BUILDING_TOWER = 'building_tower', 'Skin: Wieża'
+    BUILDING_PORT = 'building_port', 'Skin: Port'
+    BUILDING_CARRIER = 'building_carrier', 'Skin: Lotniskowiec'
+    BUILDING_RADAR = 'building_radar', 'Skin: Elektrownia'
+
+    # VFX Actions
+    VFX_ATTACK = 'vfx_attack', 'VFX: Atak'
+    VFX_MOVE = 'vfx_move', 'VFX: Ruch'
+    VFX_NUKE = 'vfx_nuke', 'VFX: Nuke'
+    VFX_CAPTURE = 'vfx_capture', 'VFX: Zdobycie'
+    VFX_DEFEND = 'vfx_defend', 'VFX: Obrona'
+
+    # VFX Special
+    VFX_ELIMINATION = 'vfx_elimination', 'VFX: Eliminacja'
+    VFX_VICTORY = 'vfx_victory', 'VFX: Zwycięstwo'
+
+    # Abilities
+    ABILITY_CONSCRIPTION = 'ability_conscription', 'Skin: Pobór'
+    ABILITY_RECON = 'ability_recon', 'Skin: Wywiad'
+    ABILITY_SHIELD = 'ability_shield', 'Skin: Tarcza'
+    ABILITY_VIRUS = 'ability_virus', 'Skin: Wirus'
+    ABILITY_NUKE = 'ability_nuke', 'Skin: Nuke'
+
+    # Profile
+    EMBLEM = 'emblem', 'Emblemat'
+    PROFILE_FRAME = 'profile_frame', 'Ramka profilu'
+    PLAYER_TITLE = 'player_title', 'Tytuł'
+    FLAG = 'flag', 'Flaga'
+
+    # Audio
+    SOUND_ATTACK = 'sound_attack', 'Dźwięk: Atak'
+    MUSIC_THEME = 'music_theme', 'Muzyka: Motyw'
+
+
 class ItemCategory(models.Model):
     """Top-level item category (Materials, Blueprints, Abilities, Boosts, Crates, Keys, Cosmetics)."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -49,7 +93,12 @@ class Item(models.Model):
     rarity = models.CharField(max_length=20, choices=Rarity.choices, default=Rarity.COMMON)
     level = models.PositiveIntegerField(default=1, help_text='Item level (1-3)')
     icon = models.CharField(max_length=100, blank=True)
-    asset_key = models.CharField(max_length=100, blank=True, help_text='Frontend asset key for rendering')
+    cosmetic_slot = models.CharField(
+        max_length=30,
+        choices=CosmeticSlot.choices,
+        blank=True,
+        help_text='Cosmetic slot for rendering (only for cosmetics)',
+    )
     cosmetic_asset = models.ForeignKey(
         'assets.GameAsset',
         on_delete=models.SET_NULL,
@@ -97,6 +146,11 @@ class Item(models.Model):
 
     def __str__(self):
         return f'{self.name} ({self.get_rarity_display()})'
+
+    def save(self, *args, **kwargs):
+        if self.item_type == self.ItemType.COSMETIC:
+            self.is_stackable = False
+        super().save(*args, **kwargs)
 
 
 class UserInventory(models.Model):
@@ -292,7 +346,11 @@ class EquippedCosmetic(models.Model):
         limit_choices_to={'item_type': 'cosmetic'},
         related_name='equipped_by',
     )
-    slot = models.CharField(max_length=100, help_text='Asset key slot, e.g. infantry, barracks')
+    slot = models.CharField(
+        max_length=30,
+        choices=CosmeticSlot.choices,
+        help_text='Cosmetic slot for rendering',
+    )
     equipped_at = models.DateTimeField(auto_now_add=True)
     instance = models.ForeignKey(
         'ItemInstance', on_delete=models.CASCADE,
@@ -306,7 +364,7 @@ class EquippedCosmetic(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.slot:
-            self.slot = self.item.asset_key
+            self.slot = self.item.cosmetic_slot
         super().save(*args, **kwargs)
 
     def __str__(self):

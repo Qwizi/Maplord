@@ -4,7 +4,7 @@ from unfold.decorators import display
 from apps.game_config.forms import SystemModuleForm
 from apps.game_config.models import (
     GameSettings, BuildingType, UnitType, MapConfig, GameMode, AbilityType,
-    GameModule, GameSettingsModuleOverride, GameModeModuleOverride,
+    GameSettingsModuleOverride, GameModeModuleOverride,
     SystemModule,
 )
 
@@ -180,35 +180,11 @@ class MapConfigAdmin(ModelAdmin):
         return "ACTIVE" if obj.is_active else "INACTIVE"
 
 
-@admin.register(GameModule)
-class GameModuleAdmin(ModelAdmin):
-    list_display = ('icon', 'name', 'slug', 'default_enabled', 'display_active', 'order')
-    list_filter = ('is_active', 'default_enabled')
-    list_filter_submit = True
-    list_fullwidth = True
-    list_editable = ('default_enabled', 'order')
-    search_fields = ('name', 'slug')
-    prepopulated_fields = {'slug': ('name',)}
-    warn_unsaved_form = True
-    fieldsets = (
-        (None, {'fields': ('name', 'slug', 'description', 'icon', 'is_active', 'order')}),
-        ('Defaults', {'fields': ('default_enabled', 'default_config')}),
-        ('Schema & Mapping', {
-            'fields': ('config_schema', 'field_mapping'),
-            'classes': ('collapse',),
-        }),
-    )
-
-    @display(description="Active", label=True)
-    def display_active(self, obj):
-        return "ACTIVE" if obj.is_active else "INACTIVE"
-
-
 @admin.register(SystemModule)
 class SystemModuleAdmin(ModelAdmin):
     form = SystemModuleForm
-    list_display = ('icon', 'name', 'slug', 'display_enabled', 'display_layers', 'display_core', 'order')
-    list_filter = ('enabled', 'is_core', 'affects_backend', 'affects_frontend', 'affects_gateway')
+    list_display = ('icon', 'name', 'slug', 'display_type', 'enabled', 'display_enabled', 'display_layers', 'display_core', 'order')
+    list_filter = ('module_type', 'enabled', 'is_core', 'affects_backend', 'affects_frontend', 'affects_gateway')
     list_filter_submit = True
     list_fullwidth = True
     list_editable = ('enabled', 'order')
@@ -216,22 +192,52 @@ class SystemModuleAdmin(ModelAdmin):
     prepopulated_fields = {'slug': ('name',)}
     warn_unsaved_form = True
 
+    # All real model fields — used by get_form to avoid FieldError on dynamic cfg__ fields
+    _model_fields = [
+        'name', 'slug', 'description', 'icon', 'module_type', 'order',
+        'enabled', 'is_core',
+        'affects_backend', 'affects_frontend', 'affects_gateway',
+        'config', 'config_schema',
+        'default_enabled', 'default_config', 'field_mapping',
+    ]
+
+    def get_form(self, request, obj=None, **kwargs):
+        kwargs['fields'] = self._model_fields
+        return super().get_form(request, obj, **kwargs)
+
     def get_fieldsets(self, request, obj=None):
+        is_game = obj and obj.module_type == 'game'
+
         base = [
-            (None, {'fields': ('name', 'slug', 'description', 'icon', 'order')}),
+            (None, {'fields': ('name', 'slug', 'description', 'icon', 'module_type', 'order')}),
             ('State', {'fields': ('enabled', 'is_core')}),
             ('Affected Layers', {'fields': ('affects_backend', 'affects_frontend', 'affects_gateway')}),
         ]
-        # Build dynamic config fields from config_schema
         if obj and obj.config_schema:
             cfg_fields = [f'cfg__{f["key"]}' for f in obj.config_schema if f.get('key')]
             if cfg_fields:
                 base.append(('Module Configuration', {'fields': cfg_fields}))
+        if is_game:
+            base.append(('Game Module Defaults', {
+                'fields': ('default_enabled', 'field_mapping'),
+                'classes': ('collapse',),
+            }))
+        raw_fields = ('config', 'config_schema') if not is_game else ('default_config', 'config_schema')
         base.append(('Raw JSON (advanced)', {
-            'fields': ('config', 'config_schema'),
+            'fields': raw_fields,
             'classes': ('collapse',),
         }))
         return base
+
+    @display(
+        description="Type",
+        label={
+            'SYSTEM': 'info',
+            'GAME': 'warning',
+        },
+    )
+    def display_type(self, obj):
+        return obj.module_type.upper()
 
     @display(
         description="Status",

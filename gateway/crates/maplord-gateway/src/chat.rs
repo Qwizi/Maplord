@@ -108,6 +108,27 @@ pub async fn resolve_username(state: &AppState, user_id: &str) -> String {
 async fn handle_chat_socket(socket: WebSocket, user_id: String, state: AppState) {
     let (mut ws_sender, mut ws_receiver) = socket.split();
 
+    // Check that the chat module is enabled
+    match state.django.get_system_modules().await {
+        Ok(modules) => {
+            if let Some(chat_module) = modules.get("chat") {
+                if !chat_module.enabled {
+                    let _ = ws_sender
+                        .send(Message::Close(Some(axum::extract::ws::CloseFrame {
+                            code: 4503,
+                            reason: "Chat is currently disabled".into(),
+                        })))
+                        .await;
+                    return;
+                }
+            }
+        }
+        Err(e) => {
+            tracing::warn!("Chat: failed to check system modules: {e}");
+            // fail-open: allow connection if we can't check
+        }
+    }
+
     // Check that the account is active (not banned)
     match state.django.get_user(&user_id).await {
         Ok(user_info) if !user_info.is_active => {

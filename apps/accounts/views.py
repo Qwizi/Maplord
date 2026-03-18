@@ -15,6 +15,7 @@ from apps.game_config.modules import get_module_config
 
 from apps.accounts.models import PushSubscription
 from apps.accounts.schemas import LeaderboardEntrySchema, PushSubscriptionSchema, RegisterSchema, UserOutSchema
+from apps.game_config.decorators import require_module
 from apps.pagination import paginate_qs
 
 User = get_user_model()
@@ -24,6 +25,7 @@ User = get_user_model()
 class AuthController:
 
     @route.post('/register', response=UserOutSchema, auth=None)
+    @require_module('registration')
     def register(self, payload: RegisterSchema):
         if len(payload.username) < 3:
             raise HttpError(400, 'Nazwa uzytkownika musi miec co najmniej 3 znaki.')
@@ -85,6 +87,7 @@ class AuthController:
         return {'ok': True}
 
     @route.get('/leaderboard', response=dict, auth=ActiveUserJWTAuth(), permissions=[IsAuthenticated])
+    @require_module('leaderboard')
     def leaderboard(self, request, limit: int = 50, offset: int = 0):
         qs = (
             User.objects.filter(game_results__isnull=False, is_bot=False)

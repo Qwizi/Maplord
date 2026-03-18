@@ -386,7 +386,6 @@ export interface GameModuleItem {
     min?: number;
     max?: number;
   }>;
-  is_active: boolean;
   order: number;
 }
 
@@ -396,6 +395,7 @@ export interface SystemModule {
   name: string;
   description: string;
   icon: string;
+  module_type: 'system' | 'game';
   enabled: boolean;
   config: Record<string, unknown>;
   config_schema: Array<{
@@ -411,6 +411,9 @@ export interface SystemModule {
   affects_gateway: boolean;
   is_core: boolean;
   order: number;
+  default_enabled: boolean;
+  default_config: Record<string, unknown>;
+  field_mapping: Record<string, unknown>;
 }
 
 export interface FullConfig {
@@ -920,13 +923,16 @@ export interface ItemOut {
   item_type: string;
   rarity: string;
   icon: string;
-  asset_key: string;
+  cosmetic_slot: string;
   is_stackable: boolean;
   is_tradeable: boolean;
   is_consumable: boolean;
   base_value: number;
   level: number;
   blueprint_ref: string;
+  boost_params?: Record<string, unknown> | null;
+  cosmetic_params?: Record<string, unknown> | null;
+  crate_loot_table?: Array<unknown> | null;
 }
 
 export interface ItemInstanceOut {
@@ -1106,6 +1112,8 @@ export interface EquippedCosmeticOut {
   item_slug: string;
   item_name: string;
   asset_url: string | null;
+  cosmetic_params: Record<string, unknown> | null;
+  instance: ItemInstanceOut | null;
 }
 
 export interface EquippedCosmeticDetail {
@@ -1113,20 +1121,27 @@ export interface EquippedCosmeticDetail {
   item_slug: string;
   item_name: string;
   asset_url: string | null;
+  cosmetic_params: Record<string, unknown> | null;
+  instance: ItemInstanceOut | null;
 }
 
 export async function getEquippedCosmetics(token: string): Promise<EquippedCosmeticOut[]> {
   return fetchAPI<EquippedCosmeticOut[]>("/inventory/cosmetics/equipped/", { token });
 }
 
+export interface EquipCosmeticPayload {
+  item_slug: string;
+  instance_id?: string;
+}
+
 export async function equipCosmetic(
   token: string,
-  item_slug: string
+  payload: EquipCosmeticPayload
 ): Promise<EquippedCosmeticDetail> {
   return fetchAPI<EquippedCosmeticDetail>("/inventory/cosmetics/equip/", {
     method: "POST",
     token,
-    body: JSON.stringify({ item_slug }),
+    body: JSON.stringify(payload),
   });
 }
 

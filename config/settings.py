@@ -30,7 +30,6 @@ INSTALLED_APPS = [
     'apps.matchmaking',
     'apps.game',
     'apps.chat',
-    'apps.shop',
     'apps.inventory',
     'apps.marketplace',
     'apps.crafting',
@@ -380,22 +379,6 @@ UNFOLD = {
                         "title": "Wallets",
                         "icon": "account_balance_wallet",
                         "link": "/admin/inventory/wallet/",
-                    },
-                ],
-            },
-            {
-                "title": "Shop",
-                "separator": True,
-                "items": [
-                    {
-                        "title": "Categories",
-                        "icon": "storefront",
-                        "link": "/admin/shop/shopcategory/",
-                    },
-                    {
-                        "title": "Items",
-                        "icon": "shopping_cart",
-                        "link": "/admin/shop/shopitem/",
                     },
                 ],
             },

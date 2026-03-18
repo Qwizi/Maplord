@@ -436,6 +436,48 @@ export const ANIMATION_DEFAULTS: Record<string, AnimationConfig> = {
   },
 };
 
+// ── Cosmetic slot helpers ─────────────────────────────────────────────────────
+//
+// Helpers for cosmetic slots that are not part of the per-unit animation
+// pipeline but are used in other parts of the game UI (overlays, HUD, etc.).
+
+/**
+ * Returns the `vfx_elimination` cosmetic value for the given player cosmetics.
+ * Call this when a player eliminates another player to obtain the VFX asset
+ * that should be triggered for the eliminating player.
+ *
+ * Usage (placeholder — VFX rendering not yet implemented):
+ *   const vfx = getEliminationVfx(eliminatingPlayer?.cosmetics);
+ *   if (vfx) { /* trigger elimination VFX overlay * / }
+ */
+export function getEliminationVfx(
+  playerCosmetics?: Record<string, unknown>
+): CosmeticValue | undefined {
+  return playerCosmetics?.vfx_elimination as CosmeticValue | undefined;
+}
+
+/**
+ * Returns the `vfx_victory` cosmetic value for the given player cosmetics.
+ * Call this when the local player wins a match to obtain the VFX asset
+ * that should be triggered for the victory screen.
+ *
+ * Usage (placeholder — VFX rendering not yet implemented):
+ *   const vfx = getVictoryVfx(myPlayer?.cosmetics);
+ *   if (vfx) { /* trigger victory VFX overlay * / }
+ */
+export function getVictoryVfx(
+  playerCosmetics?: Record<string, unknown>
+): CosmeticValue | undefined {
+  return playerCosmetics?.vfx_victory as CosmeticValue | undefined;
+}
+
+// TODO: sound_attack cosmetic - play custom attack sound effect when the player
+//   sends an attack. Resolve via playerCosmetics?.sound_attack and pass the URL
+//   to the audio subsystem instead of the default attack sound.
+// TODO: music_theme cosmetic - play custom background music loop for the player.
+//   Resolve via playerCosmetics?.music_theme and swap the active track in
+//   useAudio when the match starts and the cosmetic is present.
+
 // ── Deep-merge helper ─────────────────────────────────────────────────────────
 
 type PlainObject = Record<string, unknown>;
@@ -498,8 +540,11 @@ export type CosmeticValue =
 /**
  * Resolve the final AnimationConfig for a given unit kind + player cosmetics.
  *
- * VFX slot selection:
+ * VFX slot selection (evaluated in order, first match wins):
+ *   - If `vfxSlotOverride` is provided:  `playerCosmetics[vfxSlotOverride]`
  *   - Nuke units:  `vfx_nuke` → fallback `vfx_attack`
+ *   - Capture:     `vfx_capture`
+ *   - Defend:      `vfx_defend`
  *   - Attack:      `vfx_attack`
  *   - Move:        `vfx_move`
  *
@@ -508,9 +553,10 @@ export type CosmeticValue =
  */
 export function resolveAnimConfig(
   animKind: string,
-  actionType: "attack" | "move",
+  actionType: "attack" | "move" | "capture" | "defend",
   isNuke: boolean,
-  playerCosmetics?: Record<string, CosmeticValue>
+  playerCosmetics?: Record<string, CosmeticValue>,
+  vfxSlotOverride?: string
 ): AnimationConfig {
   const base = structuredClone(
     ANIMATION_DEFAULTS[animKind] ?? ANIMATION_DEFAULTS.infantry
@@ -519,8 +565,14 @@ export function resolveAnimConfig(
   if (!playerCosmetics) return base;
 
   let vfxEntry: CosmeticValue | undefined;
-  if (isNuke) {
+  if (vfxSlotOverride) {
+    vfxEntry = playerCosmetics[vfxSlotOverride];
+  } else if (isNuke) {
     vfxEntry = playerCosmetics["vfx_nuke"] ?? playerCosmetics["vfx_attack"];
+  } else if (actionType === "capture") {
+    vfxEntry = playerCosmetics["vfx_capture"];
+  } else if (actionType === "defend") {
+    vfxEntry = playerCosmetics["vfx_defend"];
   } else {
     vfxEntry =
       playerCosmetics[actionType === "attack" ? "vfx_attack" : "vfx_move"];

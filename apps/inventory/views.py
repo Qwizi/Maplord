@@ -138,7 +138,7 @@ class InventoryController:
         """List user's inventory: stackable stacks + unique instances."""
         from apps.inventory.models import ItemInstance
 
-        # Stackable items from UserInventory
+        # Stackable items only
         stacks_qs = UserInventory.objects.filter(
             user=request.user, item__is_stackable=True,
         ).select_related('item', 'item__category')
@@ -282,21 +282,51 @@ class InventoryController:
     @route.post('/cosmetics/equip/', response={200: EquippedCosmeticOutSchema, 400: dict, 404: dict}, auth=ActiveUserJWTAuth())
     def equip_cosmetic(self, request, payload: EquipCosmeticInSchema):
         """Equip a cosmetic item."""
-        inv = UserInventory.objects.filter(user=request.user, item__slug=payload.item_slug).select_related('item', 'item__cosmetic_asset').first()
-        if not inv:
+        from apps.inventory.models import ItemInstance
+
+        item = None
+        instance = None
+
+        if payload.instance_id:
+            # Look up specific instance
+            inst = ItemInstance.objects.filter(
+                id=payload.instance_id, owner=request.user
+            ).select_related('item', 'item__cosmetic_asset').first()
+            if inst:
+                item = inst.item
+                instance = inst
+        else:
+            # Look up by slug - try instances first (cosmetics are always instances)
+            inst = ItemInstance.objects.filter(
+                owner=request.user, item__slug=payload.item_slug
+            ).select_related('item', 'item__cosmetic_asset').first()
+            if inst:
+                item = inst.item
+                instance = inst
+            else:
+                # Fallback to stackable inventory
+                inv = UserInventory.objects.filter(
+                    user=request.user, item__slug=payload.item_slug
+                ).select_related('item', 'item__cosmetic_asset').first()
+                if inv:
+                    item = inv.item
+
+        if not item:
             return 404, {'detail': 'Item not found in inventory.'}
 
-        item = inv.item
         if item.item_type != Item.ItemType.COSMETIC:
             return 400, {'detail': 'Item is not a cosmetic.'}
 
-        if not item.asset_key:
-            return 400, {'detail': 'Item has no asset_key configured.'}
+        if not item.cosmetic_slot:
+            return 400, {'detail': 'Item has no cosmetic_slot configured.'}
 
+        defaults = {'item': item}
+        if instance:
+            defaults['instance'] = instance
         equipped, _ = EquippedCosmetic.objects.update_or_create(
             user=request.user,
-            slot=item.asset_key,
-            defaults={'item': item},
+            slot=item.cosmetic_slot,
+            defaults=defaults,
         )
         return 200, equipped
 

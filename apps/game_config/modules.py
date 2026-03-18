@@ -1,9 +1,9 @@
-"""Helper functions for the game module and system module systems."""
+"""Helper functions for the unified module system."""
 from __future__ import annotations
 
 from typing import Any, TypeVar, overload
 
-from apps.game_config.models import GameModule, SystemModule
+from apps.game_config.models import SystemModule
 
 T = TypeVar('T')
 
@@ -70,9 +70,9 @@ def get_modules_snapshot(source):
     """
     Build a modules dict for the settings_snapshot.
 
-    For each active GameModule:
+    For each active game-type SystemModule:
     1. Check if source (GameSettings or GameMode) has an override
-    2. Merge: module defaults ← override config
+    2. Merge: module defaults <- override config
     3. Apply enabled state and config to flat snapshot fields via field_mapping
 
     Args:
@@ -90,7 +90,7 @@ def get_modules_snapshot(source):
     modules_dict = {}
     flat_overrides = {}
 
-    for module in GameModule.objects.filter(is_active=True).order_by('order'):
+    for module in SystemModule.objects.filter(module_type='game', enabled=True).order_by('order'):
         override = overrides_by_module.get(module.slug)
 
         if override is not None:

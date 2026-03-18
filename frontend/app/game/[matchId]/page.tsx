@@ -18,6 +18,7 @@ import { loadAssetOverrides } from "@/lib/assetOverrides";
 import { getSeaTravelRange, getTravelDistance } from "@/lib/gameTravel.js";
 import dynamic from "next/dynamic";
 import type { TroopAnimation } from "@/lib/gameTypes";
+import { getEliminationVfx, getVictoryVfx } from "@/lib/animationConfig";
 import { useShapesData } from "@/hooks/useShapesData";
 const ANIMATION_DURATION_MS = 2200;
 const GameCanvas = dynamic(() => import("@/components/map/GameCanvas"), { ssr: false });
@@ -676,6 +677,7 @@ export default function GamePage({
           unitCount: stats?.unitCount ?? 0,
           isAlive: player.is_alive,
           isBot: player.is_bot ?? false,
+          cosmetics: player.cosmetics,
         };
       })
       .sort((left, right) =>
@@ -1163,6 +1165,10 @@ export default function GamePage({
         if (winnerId === myUserId) {
           toast.success("Wygrales");
           playSound("popup");
+          // TODO: Trigger victory VFX overlay using the winner's vfx_victory cosmetic.
+          // getVictoryVfx returns the cosmetic asset (URL or params object) to use.
+          const _victoryVfx = getVictoryVfx(gameStateRef.current?.players[myUserId]?.cosmetics);
+          void _victoryVfx; // placeholder — pass to VFX overlay component when implemented
         } else {
           toast.error(`Przegrales. Wygrywa: ${winner?.username || "?"}`);
           playSound("buzzer");
@@ -1181,6 +1187,13 @@ export default function GamePage({
       if (e.type === "player_eliminated" && e.player_id !== myUserId) {
         const eliminatedPlayer = gameStateRef.current?.players[String(e.player_id)];
         toast.info(`${eliminatedPlayer?.username || "Gracz"} został wyeliminowany`);
+        // TODO: Trigger elimination VFX overlay for the eliminating player.
+        // e.eliminator_id will carry the killer's player ID once the gateway sends it.
+        // Example (not yet wired): const eliminatorId = e.eliminator_id as string | undefined;
+        //   const eliminator = gameStateRef.current?.players[eliminatorId ?? ""];
+        //   const eliminationVfx = getEliminationVfx(eliminator?.cosmetics);
+        //   if (eliminationVfx) { /* show VFX overlay for eliminatorId */ }
+        void getEliminationVfx; // ensure the import is referenced
       }
       if (e.type === "player_disconnected" && e.player_id !== myUserId) {
         const disconnectedPlayer = gameStateRef.current?.players[String(e.player_id)];

@@ -247,6 +247,68 @@ def finalize_match_results_sync(
         total_ticks,
     )
 
+    # --- StatTrak increment ---
+    try:
+        from apps.inventory.models import ItemInstance
+        from django.db.models import F
+
+        stattrak_instance_ids = set()
+
+        for mp in match.players.all():
+            # Collect instance_ids from deck_snapshot
+            if mp.deck_snapshot:
+                for iid in mp.deck_snapshot.get('instance_ids', []):
+                    stattrak_instance_ids.add(iid)
+
+            # Collect instance_ids from cosmetic_snapshot
+            if mp.cosmetic_snapshot:
+                for slot, val in mp.cosmetic_snapshot.items():
+                    if isinstance(val, dict) and val.get('instance_id'):
+                        stattrak_instance_ids.add(val['instance_id'])
+
+        if stattrak_instance_ids:
+            # Build per-player stats map keyed by user_id string
+            player_stats = {}
+            for row in player_rows:
+                pid = row['pid']
+                player_stats[pid] = {
+                    'regions': row.get('owned_regions', 0),
+                    'units': row.get('total_units', 0),
+                }
+
+            # Increment matches counter on all StatTrak instances that participated
+            ItemInstance.objects.filter(
+                id__in=stattrak_instance_ids,
+                stattrak=True,
+            ).update(
+                stattrak_matches=F('stattrak_matches') + 1,
+            )
+
+            # Per-player updates for region kills and units produced
+            for mp in match.players.all():
+                pid = str(mp.user_id)
+                stats = player_stats.get(pid, {})
+
+                mp_instance_ids = set()
+                if mp.deck_snapshot:
+                    for iid in mp.deck_snapshot.get('instance_ids', []):
+                        mp_instance_ids.add(iid)
+                if mp.cosmetic_snapshot:
+                    for slot, val in mp.cosmetic_snapshot.items():
+                        if isinstance(val, dict) and val.get('instance_id'):
+                            mp_instance_ids.add(val['instance_id'])
+
+                if mp_instance_ids:
+                    ItemInstance.objects.filter(
+                        id__in=mp_instance_ids,
+                        stattrak=True,
+                    ).update(
+                        stattrak_kills=F('stattrak_kills') + stats.get('regions', 0),
+                        stattrak_units_produced=F('stattrak_units_produced') + stats.get('units', 0),
+                    )
+    except Exception as e:
+        logger.error("Failed to update StatTrak for match %s: %s", match_id, e)
+
     # Generate post-match item drops
     try:
         from apps.inventory.tasks import generate_match_drops

@@ -223,7 +223,32 @@ class AbilityTypeOutSchema(Schema):
         from_attributes = True
 
 
+class SystemModuleOutSchema(Schema):
+    id: uuid.UUID
+    slug: str
+    name: str
+    description: str
+    icon: str
+    module_type: str
+    enabled: bool
+    config: dict
+    config_schema: list
+    affects_backend: bool
+    affects_frontend: bool
+    affects_gateway: bool
+    is_core: bool
+    order: int
+    # Game module fields
+    default_enabled: bool
+    default_config: dict
+    field_mapping: dict
+
+    class Config:
+        from_attributes = True
+
+
 class GameModuleOutSchema(Schema):
+    """Backward-compatible schema for game-type modules."""
     id: uuid.UUID
     slug: str
     name: str
@@ -232,26 +257,6 @@ class GameModuleOutSchema(Schema):
     default_enabled: bool
     default_config: dict
     config_schema: list
-    is_active: bool
-    order: int
-
-    class Config:
-        from_attributes = True
-
-
-class SystemModuleOutSchema(Schema):
-    id: uuid.UUID
-    slug: str
-    name: str
-    description: str
-    icon: str
-    enabled: bool
-    config: dict
-    config_schema: list
-    affects_backend: bool
-    affects_frontend: bool
-    affects_gateway: bool
-    is_core: bool
     order: int
 
     class Config:

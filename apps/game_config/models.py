@@ -346,37 +346,119 @@ class MapConfig(models.Model):
         return self.name
 
 
-class GameModule(models.Model):
-    """Defines a configurable game module/system (e.g. weather, day/night, combat)."""
+class ModuleType(models.TextChoices):
+    SYSTEM = 'system', 'System'
+    GAME = 'game', 'Game'
+
+
+class SystemModule(models.Model):
+    """
+    Unified module system — both application-wide feature toggles (system)
+    and per-match game modules (game).
+
+    System modules gate backend API endpoints, frontend UI sections, and gateway features.
+    Game modules configure per-match settings (weather, combat, economy, etc.)
+    with override support via GameSettingsModuleOverride / GameModeModuleOverride.
+    """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    slug = models.SlugField(max_length=100, unique=True)
+    slug = models.SlugField(max_length=100, unique=True, db_index=True)
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
     icon = models.CharField(max_length=50, blank=True, default='')
 
-    default_enabled = models.BooleanField(default=True, help_text='Default enabled state for new matches')
-    default_config = models.JSONField(
+    module_type = models.CharField(
+        max_length=20, choices=ModuleType.choices, default=ModuleType.SYSTEM,
+        help_text='System = app-wide feature toggle, Game = per-match configurable module'
+    )
+
+    enabled = models.BooleanField(default=True, help_text='Whether this module is currently active')
+    config = models.JSONField(
         default=dict, blank=True,
-        help_text='Default configuration parameters as JSON (e.g. {"night_defense_modifier": 1.15})'
+        help_text='Module-specific configuration as JSON'
     )
     config_schema = models.JSONField(
         default=list, blank=True,
-        help_text='Describes available fields: [{"key": "...", "label": "...", "type": "float", "default": 1.0, "min": 0, "max": 5}]'
+        help_text='Describes available config fields for admin UI'
     )
-    # Maps module enabled state and config keys to flat settings_snapshot fields
+
+    # Which layers this module affects
+    affects_backend = models.BooleanField(default=True, help_text='Controls backend API endpoints')
+    affects_frontend = models.BooleanField(default=True, help_text='Controls frontend UI sections')
+    affects_gateway = models.BooleanField(default=False, help_text='Controls Rust gateway features')
+
+    is_core = models.BooleanField(
+        default=False,
+        help_text='Core modules cannot be disabled (auth, config, geo)'
+    )
+    order = models.PositiveIntegerField(default=0)
+
+    # Game module fields (only used when module_type='game')
+    default_enabled = models.BooleanField(default=True, help_text='Default enabled state for new matches')
+    default_config = models.JSONField(
+        default=dict, blank=True,
+        help_text='Default config parameters for game modules (merged with overrides per match)'
+    )
     field_mapping = models.JSONField(
         default=dict, blank=True,
         help_text='Maps module to flat settings fields: {"enabled_field": "weather_enabled", "config_fields": {"key": "snapshot_field"}}'
     )
 
-    is_active = models.BooleanField(default=True, help_text='Whether this module is available in the system')
-    order = models.PositiveIntegerField(default=0)
-
     class Meta:
         ordering = ['order', 'name']
 
     def __str__(self):
-        return self.name
+        status = 'ON' if self.enabled else 'OFF'
+        core = ' [CORE]' if self.is_core else ''
+        return f'{self.name} [{status}]{core}'
+
+    def clean(self):
+        if self.is_core and not self.enabled:
+            raise ValidationError('Core modules cannot be disabled.')
+
+    @classmethod
+    def is_enabled(cls, slug: str) -> bool:
+        """Check if a system module is enabled. Cached for 60 seconds."""
+        from django.core.cache import cache
+        cache_key = f'sysmodule:{slug}'
+        result = cache.get(cache_key)
+        if result is None:
+            try:
+                module = cls.objects.get(slug=slug)
+                result = module.enabled
+            except cls.DoesNotExist:
+                # Unknown modules are considered enabled (fail-open for dev)
+                result = True
+            cache.set(cache_key, result, 60)
+        return result
+
+    @classmethod
+    def get_all_states(cls) -> dict:
+        """Return {slug: enabled} dict for all modules. Cached for 60 seconds."""
+        from django.core.cache import cache
+        cache_key = 'sysmodules:all'
+        result = cache.get(cache_key)
+        if result is None:
+            result = dict(cls.objects.values_list('slug', 'enabled'))
+            cache.set(cache_key, result, 60)
+        return result
+
+    @classmethod
+    def invalidate_cache(cls):
+        """Invalidate all system module caches."""
+        from django.core.cache import cache
+        for slug in cls.objects.values_list('slug', flat=True):
+            cache.delete(f'sysmodule:{slug}')
+            cache.delete(f'sysmodule_cfg:{slug}')
+        cache.delete('sysmodules:all')
+        cache.delete('sysmodules:full')
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        SystemModule.invalidate_cache()
+
+    def delete(self, *args, **kwargs):
+        super().delete(*args, **kwargs)
+        SystemModule.invalidate_cache()
 
 
 class GameSettingsModuleOverride(models.Model):
@@ -386,7 +468,7 @@ class GameSettingsModuleOverride(models.Model):
         GameSettings, on_delete=models.CASCADE, related_name='module_overrides'
     )
     module = models.ForeignKey(
-        GameModule, on_delete=models.CASCADE, related_name='settings_overrides'
+        SystemModule, on_delete=models.CASCADE, related_name='settings_overrides'
     )
     enabled = models.BooleanField(default=True)
     config = models.JSONField(
@@ -403,98 +485,6 @@ class GameSettingsModuleOverride(models.Model):
         return f'{self.module.name} [{status}]'
 
 
-class SystemModule(models.Model):
-    """
-    Application-wide feature toggle.
-
-    Controls whether entire subsystems (shop, marketplace, anticheat, registration, etc.)
-    are enabled or disabled across the whole stack: backend API, frontend UI, and Rust gateway.
-    """
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    slug = models.SlugField(max_length=100, unique=True, db_index=True)
-    name = models.CharField(max_length=100)
-    description = models.TextField(blank=True)
-    icon = models.CharField(max_length=50, blank=True, default='')
-
-    enabled = models.BooleanField(default=True, help_text='Whether this module is currently active')
-    config = models.JSONField(
-        default=dict, blank=True,
-        help_text='Module-specific configuration as JSON'
-    )
-    config_schema = models.JSONField(
-        default=list, blank=True,
-        help_text='Describes available config fields for admin UI'
-    )
-
-    # Which layers this module affects
-    affects_backend = models.BooleanField(default=True, help_text='Controls backend API endpoints')
-    affects_frontend = models.BooleanField(default=True, help_text='Controls frontend UI sections')
-    affects_gateway = models.BooleanField(default=False, help_text='Controls Rust gateway features')
-
-    is_core = models.BooleanField(
-        default=False,
-        help_text='Core modules cannot be disabled (auth, config, geo)'
-    )
-    order = models.PositiveIntegerField(default=0)
-
-    class Meta:
-        ordering = ['order', 'name']
-
-    def __str__(self):
-        status = 'ON' if self.enabled else 'OFF'
-        core = ' [CORE]' if self.is_core else ''
-        return f'{self.name} [{status}]{core}'
-
-    def clean(self):
-        if self.is_core and not self.enabled:
-            raise ValidationError('Core modules cannot be disabled.')
-
-    @classmethod
-    def is_enabled(cls, slug: str) -> bool:
-        """Check if a system module is enabled. Cached for 60 seconds."""
-        from django.core.cache import cache
-        cache_key = f'sysmodule:{slug}'
-        result = cache.get(cache_key)
-        if result is None:
-            try:
-                module = cls.objects.get(slug=slug)
-                result = module.enabled
-            except cls.DoesNotExist:
-                # Unknown modules are considered enabled (fail-open for dev)
-                result = True
-            cache.set(cache_key, result, 60)
-        return result
-
-    @classmethod
-    def get_all_states(cls) -> dict:
-        """Return {slug: enabled} dict for all modules. Cached for 60 seconds."""
-        from django.core.cache import cache
-        cache_key = 'sysmodules:all'
-        result = cache.get(cache_key)
-        if result is None:
-            result = dict(cls.objects.values_list('slug', 'enabled'))
-            cache.set(cache_key, result, 60)
-        return result
-
-    @classmethod
-    def invalidate_cache(cls):
-        """Invalidate all system module caches."""
-        from django.core.cache import cache
-        for slug in cls.objects.values_list('slug', flat=True):
-            cache.delete(f'sysmodule:{slug}')
-            cache.delete(f'sysmodule_cfg:{slug}')
-        cache.delete('sysmodules:all')
-        cache.delete('sysmodules:full')
-
-    def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
-        SystemModule.invalidate_cache()
-
-    def delete(self, *args, **kwargs):
-        super().delete(*args, **kwargs)
-        SystemModule.invalidate_cache()
-
-
 class GameModeModuleOverride(models.Model):
     """Per-module override for a GameMode."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -502,7 +492,7 @@ class GameModeModuleOverride(models.Model):
         GameMode, on_delete=models.CASCADE, related_name='module_overrides'
     )
     module = models.ForeignKey(
-        GameModule, on_delete=models.CASCADE, related_name='mode_overrides'
+        SystemModule, on_delete=models.CASCADE, related_name='mode_overrides'
     )
     enabled = models.BooleanField(default=True)
     config = models.JSONField(
@@ -517,95 +507,3 @@ class GameModeModuleOverride(models.Model):
     def __str__(self):
         status = 'ON' if self.enabled else 'OFF'
         return f'{self.module.name} [{status}]'
-
-
-class SystemModule(models.Model):
-    """
-    Application-wide feature toggle.
-
-    Controls whether entire subsystems (shop, marketplace, anticheat, registration, etc.)
-    are enabled or disabled across the whole stack: backend API, frontend UI, and Rust gateway.
-    """
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    slug = models.SlugField(max_length=100, unique=True, db_index=True)
-    name = models.CharField(max_length=100)
-    description = models.TextField(blank=True)
-    icon = models.CharField(max_length=50, blank=True, default='')
-
-    enabled = models.BooleanField(default=True, help_text='Whether this module is currently active')
-    config = models.JSONField(
-        default=dict, blank=True,
-        help_text='Module-specific configuration as JSON'
-    )
-    config_schema = models.JSONField(
-        default=list, blank=True,
-        help_text='Describes available config fields for admin UI'
-    )
-
-    # Which layers this module affects
-    affects_backend = models.BooleanField(default=True, help_text='Controls backend API endpoints')
-    affects_frontend = models.BooleanField(default=True, help_text='Controls frontend UI sections')
-    affects_gateway = models.BooleanField(default=False, help_text='Controls Rust gateway features')
-
-    is_core = models.BooleanField(
-        default=False,
-        help_text='Core modules cannot be disabled (auth, config, geo)'
-    )
-    order = models.PositiveIntegerField(default=0)
-
-    class Meta:
-        ordering = ['order', 'name']
-
-    def __str__(self):
-        status = 'ON' if self.enabled else 'OFF'
-        core = ' [CORE]' if self.is_core else ''
-        return f'{self.name} [{status}]{core}'
-
-    def clean(self):
-        if self.is_core and not self.enabled:
-            raise ValidationError('Core modules cannot be disabled.')
-
-    @classmethod
-    def is_enabled(cls, slug: str) -> bool:
-        """Check if a system module is enabled. Cached for 60 seconds."""
-        from django.core.cache import cache
-        cache_key = f'sysmodule:{slug}'
-        result = cache.get(cache_key)
-        if result is None:
-            try:
-                module = cls.objects.get(slug=slug)
-                result = module.enabled
-            except cls.DoesNotExist:
-                # Unknown modules are considered enabled (fail-open for dev)
-                result = True
-            cache.set(cache_key, result, 60)
-        return result
-
-    @classmethod
-    def get_all_states(cls) -> dict:
-        """Return {slug: enabled} dict for all modules. Cached for 60 seconds."""
-        from django.core.cache import cache
-        cache_key = 'sysmodules:all'
-        result = cache.get(cache_key)
-        if result is None:
-            result = dict(cls.objects.values_list('slug', 'enabled'))
-            cache.set(cache_key, result, 60)
-        return result
-
-    @classmethod
-    def invalidate_cache(cls):
-        """Invalidate all system module caches."""
-        from django.core.cache import cache
-        for slug in cls.objects.values_list('slug', flat=True):
-            cache.delete(f'sysmodule:{slug}')
-            cache.delete(f'sysmodule_cfg:{slug}')
-        cache.delete('sysmodules:all')
-        cache.delete('sysmodules:full')
-
-    def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
-        SystemModule.invalidate_cache()
-
-    def delete(self, *args, **kwargs):
-        super().delete(*args, **kwargs)
-        SystemModule.invalidate_cache()

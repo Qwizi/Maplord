@@ -53,37 +53,90 @@ export function getUnitAsset(kind: string | null | undefined = "default", assetU
   }
 }
 
+// Slot names for building cosmetics — canonical names used in playerCosmetics.
+const BUILDING_SLOT_MAP: Record<string, string> = {
+  barracks: "building_barracks",
+  factory: "building_factory",
+  tower: "building_tower",
+  port: "building_port",
+  carrier: "building_carrier",
+  radar: "building_radar",
+};
+
 /**
  * Resolve a building asset with player cosmetic priority.
- * Priority: playerCosmetics[slug] > global override > fallback
+ * Priority: playerCosmetics[building_<slug>] > global override > fallback
+ *
+ * The cosmetic slot key is derived from the building type using
+ * BUILDING_SLOT_MAP (e.g. "port" → "building_port").  Legacy slugs that are
+ * not in the slot map (airport, navy_port, …) skip the cosmetic lookup and go
+ * straight to the default asset.
  */
 export function getPlayerBuildingAsset(
   slug: string | null | undefined,
   playerCosmetics?: Record<string, unknown>,
   assetUrl?: string | null
 ): string | null {
-  if (slug && playerCosmetics?.[slug]) {
-    const v = playerCosmetics[slug];
-    const url = typeof v === "string" ? v : typeof v === "object" && v !== null && "url" in v ? (v as { url?: string | null }).url : null;
-    if (url) return url;
+  if (slug && playerCosmetics) {
+    const slot = BUILDING_SLOT_MAP[slug];
+    if (slot) {
+      const v = playerCosmetics[slot];
+      if (v) {
+        const url =
+          typeof v === "string"
+            ? v
+            : typeof v === "object" && v !== null && "url" in v
+              ? (v as { url?: string | null }).url ?? null
+              : null;
+        if (url) return url;
+      }
+    }
   }
   return getBuildingAsset(slug, assetUrl);
 }
 
+// Maps unit kind strings to their canonical cosmetic slot names.
+// Aliased kinds (air, bomber, ship_1, ground_unit, …) map to the same slot as
+// their canonical counterpart so cosmetics apply consistently.
+const UNIT_SLOT_MAP: Record<string, string> = {
+  infantry: "unit_infantry",
+  ground_unit: "unit_infantry",
+  tank: "unit_tank",
+  ground_unit_sphere: "unit_tank",
+  ship: "unit_ship",
+  ship_1: "unit_ship",
+  fighter: "unit_fighter",
+  air: "unit_fighter",
+  bomber: "unit_fighter",
+};
+
 /**
  * Resolve a unit asset with player cosmetic priority.
- * Priority: playerCosmetics[kind] > global override > fallback
+ * Priority: playerCosmetics[unit_<kind>] > global override > fallback
+ *
+ * The cosmetic slot key is derived from the unit kind using UNIT_SLOT_MAP
+ * (e.g. "infantry" → "unit_infantry").  Special/internal kinds (nuke_rocket,
+ * moving, …) that are not in the slot map skip the cosmetic lookup.
  */
 export function getPlayerUnitAsset(
   kind: string | null | undefined,
   playerCosmetics?: Record<string, unknown>,
   assetUrl?: string | null
 ): string {
-  const resolvedKind = kind ?? "default";
-  if (playerCosmetics?.[resolvedKind]) {
-    const v = playerCosmetics[resolvedKind];
-    const url = typeof v === "string" ? v : typeof v === "object" && v !== null && "url" in v ? (v as { url?: string | null }).url : null;
-    if (url) return url;
+  if (kind && playerCosmetics) {
+    const slot = UNIT_SLOT_MAP[kind];
+    if (slot) {
+      const v = playerCosmetics[slot];
+      if (v) {
+        const url =
+          typeof v === "string"
+            ? v
+            : typeof v === "object" && v !== null && "url" in v
+              ? (v as { url?: string | null }).url ?? null
+              : null;
+        if (url) return url;
+      }
+    }
   }
   return getUnitAsset(kind, assetUrl);
 }

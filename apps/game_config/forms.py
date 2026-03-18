@@ -8,12 +8,15 @@ class SystemModuleForm(forms.ModelForm):
     """
     Custom form that generates typed fields from config_schema.
 
-    Instead of editing raw JSON, admins see proper form fields:
-    - int → NumberInput with min/max
-    - float → NumberInput with step=0.01
-    - bool → CheckboxInput
-    - str → TextInput (or Select if 'options' defined)
-    - list → Textarea (JSON array)
+    For system modules: cfg__ fields read/write the `config` JSON field.
+    For game modules: cfg__ fields read/write the `default_config` JSON field.
+
+    Field types supported:
+    - int -> NumberInput with min/max
+    - float -> NumberInput with step=0.01
+    - bool -> CheckboxInput
+    - str -> TextInput (or Select if 'options' defined)
+    - list -> Textarea (JSON array)
     """
 
     class Meta:
@@ -26,10 +29,16 @@ class SystemModuleForm(forms.ModelForm):
         if self.instance and self.instance.pk:
             self._generate_config_fields()
 
+    def _get_config_source(self):
+        """Return the config dict to read values from based on module type."""
+        if self.instance.module_type == 'game':
+            return self.instance.default_config or {}
+        return self.instance.config or {}
+
     def _generate_config_fields(self):
         """Generate form fields from config_schema."""
         schema = self.instance.config_schema or []
-        config = self.instance.config or {}
+        config = self._get_config_source()
 
         for field_def in schema:
             key = field_def.get('key', '')
@@ -105,12 +114,12 @@ class SystemModuleForm(forms.ModelForm):
     def clean(self):
         cleaned = super().clean()
 
-        # Collect cfg__ fields back into the config dict
+        # Collect cfg__ fields back into the appropriate config dict
         schema = self.instance.config_schema if self.instance else []
         if not schema:
             return cleaned
 
-        config = dict(self.instance.config or {}) if self.instance else {}
+        config = dict(self._get_config_source())
         for field_def in schema:
             key = field_def.get('key', '')
             field_name = f'cfg__{key}'
@@ -129,9 +138,9 @@ class SystemModuleForm(forms.ModelForm):
             if value is not None:
                 config[key] = value
 
-        cleaned['config'] = config
+        # Write to the correct JSON field based on module type
+        if self.instance.module_type == 'game':
+            cleaned['default_config'] = config
+        else:
+            cleaned['config'] = config
         return cleaned
-
-    def get_config_fieldnames(self):
-        """Return list of dynamic config field names for fieldset building."""
-        return [name for name in self.fields if name.startswith('cfg__')]

@@ -282,6 +282,13 @@ export default function GameCanvas({
       if (player) {
         baseFill = hexStringToNumber(player.color);
       }
+      // TODO: If playerCosmetics.flag is set, render flag texture as province background.
+      // The flag slot value is a URL (or { url }) pointing to a texture image. When present,
+      // the province polygon should be filled with the flag texture (tiled or stretched) at
+      // low opacity instead of / beneath the solid player color. Implement by loading the
+      // texture via Assets.load() and using a textured Graphics fill once Pixi.js supports it,
+      // or by compositing a Sprite masked to the province polygon outline.
+      // Resolve: const flagUrl = player.cosmetics?.flag (string | { url: string } | undefined)
       if (isNeighbor) {
         if (!player) {
           baseFill = NEIGHBOR_TINT;
