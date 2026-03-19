@@ -1218,6 +1218,7 @@ export interface DeckOut {
   id: string;
   name: string;
   is_default: boolean;
+  is_editable: boolean;
   items: DeckItemOut[];
 }
 

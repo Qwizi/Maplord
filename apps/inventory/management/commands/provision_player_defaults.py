@@ -5,7 +5,7 @@ from apps.inventory.models import Deck, DeckItem, Item, ItemInstance, UserInvent
 
 User = get_user_model()
 
-# All building blueprints Lvl 1 + unit blueprints Lvl 1 + Tarcza Lvl 1
+# Building blueprints Lvl 1 + default unit blueprints + Tarcza Lvl 1
 STARTER_ITEMS = [
     'pkg-shield-1',    # Pakiet: Tarcza Lvl 1
     'bp-barracks-1',   # Blueprint: Koszary Lvl 1
@@ -14,14 +14,8 @@ STARTER_ITEMS = [
     'bp-port-1',       # Blueprint: Port Lvl 1
     'bp-carrier-1',    # Blueprint: Lotnisko Lvl 1
     'bp-radar-1',      # Blueprint: Elektrownia Lvl 1
-    'bp-tank-1',       # Blueprint: Czołg Lvl 1
-    'bp-ship-1',       # Blueprint: Okręt Lvl 1
-    'bp-fighter-1',    # Blueprint: Myśliwiec Lvl 1
-    'bp-commando-1',   # Blueprint: Komandosi Lvl 1
-    'bp-artillery-1',  # Blueprint: Artyleria Lvl 1
-    'bp-submarine-1',  # Blueprint: Okręt Podwodny Lvl 1
-    'bp-bomber-1',     # Blueprint: Bombowiec Lvl 1
-    'bp-sam-1',        # Blueprint: SAM Lvl 1
+    'bp-tank-1',       # Blueprint: Czołg Lvl 1 (domyślna jednostka Fabryki)
+    'bp-fighter-1',    # Blueprint: Myśliwiec Lvl 1 (domyślna jednostka Lotniska)
 ]
 STARTER_GOLD = 100
 DEFAULT_DECK_NAME = 'Domyślna talia'

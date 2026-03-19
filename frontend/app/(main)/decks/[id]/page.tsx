@@ -45,6 +45,13 @@ const SECTION_CONFIG = [
     slots: 6,
   },
   {
+    type: "blueprint_unit",
+    label: "Jednostki",
+    icon: "⚔️",
+    colorClass: "text-orange-300",
+    slots: 9,
+  },
+  {
     type: "boost",
     label: "Bonusy",
     icon: "🚀",
@@ -156,6 +163,7 @@ export default function DeckEditorPage() {
     {
       tactical_package: [],
       blueprint_building: [],
+      blueprint_unit: [],
       boost: [],
     }
   );
@@ -186,6 +194,7 @@ export default function DeckEditorPage() {
       const slots: Record<SectionType, SlotItem[]> = {
         tactical_package: [],
         blueprint_building: [],
+        blueprint_unit: [],
         boost: [],
       };
       for (const di of deckRes.items) {
@@ -222,6 +231,7 @@ export default function DeckEditorPage() {
   // ─── Slot interactions ───────────────────────────────────────────────────────
 
   const addItemToSection = (invItem: InventoryItemOut) => {
+    if (isLocked) return;
     const type = invItem.item.item_type as SectionType;
     const section = sectionForType(type);
     if (!section) return;
@@ -257,6 +267,7 @@ export default function DeckEditorPage() {
   };
 
   const removeSlotItem = (type: SectionType, index: number) => {
+    if (isLocked) return;
     setDraftSlots((prev) => {
       const updated = [...prev[type]];
       updated.splice(index, 1);
@@ -273,6 +284,7 @@ export default function DeckEditorPage() {
       const allSlotItems = [
         ...draftSlots.tactical_package,
         ...draftSlots.blueprint_building,
+        ...draftSlots.blueprint_unit,
         ...draftSlots.boost,
       ];
       const countMap = new Map<string, number>();
@@ -319,6 +331,8 @@ export default function DeckEditorPage() {
     0
   );
 
+  const isLocked = deck?.is_editable === false;
+
   if (authLoading || !user) return null;
 
   if (loading) {
@@ -333,6 +347,13 @@ export default function DeckEditorPage() {
 
   return (
     <div className="space-y-3 md:space-y-6 -mx-4 md:mx-0 -mt-2 md:mt-0">
+      {/* Locked deck banner */}
+      {isLocked && (
+        <div className="mx-4 md:mx-0 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
+          Ta talia jest domyślna i nie może być edytowana. Utwórz nową talię aby dostosować.
+        </div>
+      )}
+
       {/* Back + title */}
       <div className="flex items-center gap-2 px-4 md:px-0">
         <Link
@@ -367,7 +388,7 @@ export default function DeckEditorPage() {
           </button>
           <button
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || isLocked}
             className="flex h-10 items-center gap-1.5 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-40 active:scale-[0.95] transition-all"
           >
             <Check className="h-4 w-4" />
@@ -403,7 +424,7 @@ export default function DeckEditorPage() {
             <Button
               size="sm"
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || isLocked}
               className="h-11 gap-1.5 rounded-xl bg-primary/20 text-primary hover:bg-primary/30 border border-primary/20 px-5 text-base"
             >
               <Check className="h-4 w-4" />

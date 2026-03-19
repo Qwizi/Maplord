@@ -55,9 +55,7 @@ class AuthController:
             STARTER_SLUGS = get_module_config('registration', 'starter_items', [
                 'pkg-shield-1', 'bp-barracks-1', 'bp-factory-1',
                 'bp-tower-1', 'bp-port-1', 'bp-carrier-1', 'bp-radar-1',
-                'bp-tank-1', 'bp-ship-1', 'bp-fighter-1',
-                'bp-commando-1', 'bp-artillery-1', 'bp-submarine-1',
-                'bp-bomber-1', 'bp-sam-1',
+                'bp-tank-1', 'bp-fighter-1',
             ])
             starter_gold = get_module_config('registration', 'starter_gold', 100)
 
