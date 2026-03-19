@@ -121,6 +121,8 @@ interface SlotItem {
   level: number;
   icon: string;
   blueprint_ref: string;
+  instance_id?: string;
+  is_stattrak?: boolean;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -194,6 +196,9 @@ function FilledSlotCard({
       <span className={`text-[9px] font-semibold ${levelBadgeClass(item.level)}`}>
         Lvl {item.level}
       </span>
+      {item.is_stattrak && (
+        <span className="text-[8px] font-bold text-amber-400">ST</span>
+      )}
     </button>
   );
 }
@@ -349,8 +354,19 @@ function PickerItem({
             Lvl {inv.item.level ?? 1}
           </Badge>
         </div>
-        <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted-foreground">
-          <span>Posiadasz: {inv.quantity} szt.</span>
+        <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted-foreground flex-wrap">
+          {inv.is_instance && inv.instance?.stattrak && (
+            <Badge className="text-[9px] px-1 py-0 bg-amber-500/15 text-amber-300 border-amber-500/20" variant="outline">
+              StatTrak
+            </Badge>
+          )}
+          {inv.is_instance && inv.instance?.wear_condition && (
+            <span>{inv.instance.wear_condition === "factory_new" ? "FN" : inv.instance.wear_condition === "minimal_wear" ? "MW" : inv.instance.wear_condition === "field_tested" ? "FT" : inv.instance.wear_condition === "well_worn" ? "WW" : "BS"}</span>
+          )}
+          {inv.is_instance && inv.instance?.is_rare_pattern && (
+            <span className="text-amber-400">Rzadki wzór</span>
+          )}
+          {!inv.is_instance && <span>x{inv.quantity}</span>}
           {disabled && disabledReason && (
             <span className="text-amber-400/70">{disabledReason}</span>
           )}
@@ -417,17 +433,25 @@ function SectionPickerSheet({
           ) : (
             <div className="space-y-1.5">
               {availableItems.map((inv) => {
+                const instanceId = inv.is_instance && inv.instance ? inv.instance.id : undefined;
+                // For instances, check if THIS specific instance is already in deck
+                const instanceAlreadyUsed = instanceId
+                  ? currentSlots.some((s) => s.instance_id === instanceId)
+                  : false;
+                // For stackable/consumable, count by slug
                 const inDraftCount = currentSlots.filter((s) => s.item_slug === inv.item.slug).length;
                 const ownedQty = inv.quantity ?? 0;
-                const alreadyInDeck = !inv.item.is_consumable && inDraftCount >= 1;
+                // Non-consumable non-instance items: one per slug
+                const alreadyInDeck = !inv.item.is_consumable && !instanceId && inDraftCount >= 1;
                 const refTaken = !!(inv.item.blueprint_ref && currentSlots.some(
                   (s) => s.blueprint_ref === inv.item.blueprint_ref
                 ));
                 const exhausted = inv.item.is_consumable && inDraftCount >= ownedQty;
-                const disabled = sectionFull || alreadyInDeck || refTaken || exhausted;
+                const disabled = sectionFull || instanceAlreadyUsed || alreadyInDeck || refTaken || exhausted;
 
                 let disabledReason = "";
                 if (sectionFull) disabledReason = "Sekcja pełna";
+                else if (instanceAlreadyUsed) disabledReason = "Ta instancja już w talii";
                 else if (alreadyInDeck) disabledReason = "Już w talii";
                 else if (refTaken) disabledReason = "Inny poziom już dodany";
                 else if (exhausted) disabledReason = "Wyczerpano ilość";
@@ -490,7 +514,7 @@ export default function DeckEditorPage() {
     try {
       const [deckRes, invRes] = await Promise.all([
         getDeck(token, deckId),
-        getMyInventory(token),
+        getMyInventory(token, 500),
       ]);
 
       setDeck(deckRes);
@@ -568,6 +592,8 @@ export default function DeckEditorPage() {
             level: invItem.item.level ?? 1,
             icon: invItem.item.icon || "",
             blueprint_ref: ref || "",
+            instance_id: invItem.is_instance && invItem.instance ? invItem.instance.id : undefined,
+            is_stattrak: invItem.is_instance && invItem.instance?.stattrak || false,
           },
         ],
       };
