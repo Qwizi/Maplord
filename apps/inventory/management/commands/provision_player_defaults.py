@@ -5,7 +5,7 @@ from apps.inventory.models import Deck, DeckItem, Item, ItemInstance, UserInvent
 
 User = get_user_model()
 
-# All 6 building blueprints Lvl 1 + Tarcza Lvl 1 (free ability)
+# All building blueprints Lvl 1 + unit blueprints Lvl 1 + Tarcza Lvl 1
 STARTER_ITEMS = [
     'pkg-shield-1',    # Pakiet: Tarcza Lvl 1
     'bp-barracks-1',   # Blueprint: Koszary Lvl 1
@@ -14,6 +14,14 @@ STARTER_ITEMS = [
     'bp-port-1',       # Blueprint: Port Lvl 1
     'bp-carrier-1',    # Blueprint: Lotnisko Lvl 1
     'bp-radar-1',      # Blueprint: Elektrownia Lvl 1
+    'bp-tank-1',       # Blueprint: Czołg Lvl 1
+    'bp-ship-1',       # Blueprint: Okręt Lvl 1
+    'bp-fighter-1',    # Blueprint: Myśliwiec Lvl 1
+    'bp-commando-1',   # Blueprint: Komandosi Lvl 1
+    'bp-artillery-1',  # Blueprint: Artyleria Lvl 1
+    'bp-submarine-1',  # Blueprint: Okręt Podwodny Lvl 1
+    'bp-bomber-1',     # Blueprint: Bombowiec Lvl 1
+    'bp-sam-1',        # Blueprint: SAM Lvl 1
 ]
 STARTER_GOLD = 100
 DEFAULT_DECK_NAME = 'Domyślna talia'
@@ -62,10 +70,12 @@ class Command(BaseCommand):
                 if item.is_stackable:
                     UserInventory.objects.get_or_create(user=user, item=item, defaults={'quantity': 1})
                 else:
-                    inst, _ = ItemInstance.objects.get_or_create(
-                        item=item, owner=user,
-                        defaults={'pattern_seed': 0, 'wear': 0.0, 'stattrak': False, 'first_owner': user}
-                    )
+                    inst = ItemInstance.objects.filter(item=item, owner=user).first()
+                    if not inst:
+                        inst = ItemInstance.objects.create(
+                            item=item, owner=user,
+                            pattern_seed=0, wear=0.0, stattrak=False, first_owner=user,
+                        )
                     instance_map[slug] = inst
 
             # Wallet

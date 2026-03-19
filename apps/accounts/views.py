@@ -55,21 +55,35 @@ class AuthController:
             STARTER_SLUGS = get_module_config('registration', 'starter_items', [
                 'pkg-shield-1', 'bp-barracks-1', 'bp-factory-1',
                 'bp-tower-1', 'bp-port-1', 'bp-carrier-1', 'bp-radar-1',
+                'bp-tank-1', 'bp-ship-1', 'bp-fighter-1',
+                'bp-commando-1', 'bp-artillery-1', 'bp-submarine-1',
+                'bp-bomber-1', 'bp-sam-1',
             ])
             starter_gold = get_module_config('registration', 'starter_gold', 100)
 
             Wallet.objects.get_or_create(user=user, defaults={'gold': starter_gold})
 
+            from apps.inventory.models import ItemInstance
+
+            instance_map = {}
             for slug in STARTER_SLUGS:
                 item = Item.objects.filter(slug=slug).first()
-                if item:
+                if not item:
+                    continue
+                if item.is_stackable:
                     UserInventory.objects.get_or_create(user=user, item=item, defaults={'quantity': 1})
+                else:
+                    inst = ItemInstance.objects.create(
+                        item=item, owner=user,
+                        pattern_seed=0, wear=0.0, stattrak=False, first_owner=user,
+                    )
+                    instance_map[slug] = inst
 
             deck = Deck.objects.create(user=user, name='Domyślna talia', is_default=True, is_editable=False)
             for slug in STARTER_SLUGS:
                 item = Item.objects.filter(slug=slug).first()
                 if item:
-                    DeckItem.objects.create(deck=deck, item=item, quantity=1)
+                    DeckItem.objects.create(deck=deck, item=item, quantity=1, instance=instance_map.get(slug))
         except Exception:
             pass
 
