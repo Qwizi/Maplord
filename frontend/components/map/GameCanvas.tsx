@@ -991,9 +991,7 @@ export default function GameCanvas({
           activeIds.add(`${flight.id}_escort_${ei}`);
         }
       }
-      for (const interceptor of flight.interceptors ?? []) {
-        activeIds.add(`${flight.id}_int_${interceptor.player_id}`);
-      }
+      // Interceptor IDs not tracked here — rendered in ticker instead.
     }
 
     for (const flight of airTransitQueue) {
@@ -1065,30 +1063,8 @@ export default function GameCanvas({
         }
       }
 
-      // Render interceptor groups chasing this flight.
-      for (const interceptor of flight.interceptors ?? []) {
-        const interpId = `${flight.id}_int_${interceptor.player_id}`;
-        if (!registeredFlightsRef.current.has(interpId)) {
-          registeredFlightsRef.current.add(interpId);
-
-          const intColor = players[interceptor.player_id]?.color ?? "#ef4444";
-          const intManpower = interceptor.fighters * (unitManpowerMap?.["fighter"] ?? 1);
-
-          newAnims.push({
-            id: interpId,
-            sourceId: interceptor.source_region_id,
-            targetId: flight.target_region_id, // chasing the flight's destination
-            color: intColor,
-            units: intManpower,
-            unitCount: interceptor.fighters,
-            unitType: "fighter",
-            type: "attack" as const,
-            startTime: Date.now() - (interceptor.progress / interceptor.speed_per_tick) * tickMs,
-            durationMs: (1.0 / interceptor.speed_per_tick) * tickMs,
-            playerId: interceptor.player_id,
-          });
-        }
-      }
+      // Interceptors are rendered in the ticker (not as TroopAnimations)
+      // because they chase the bomber's moving position, not a fixed province.
     }
 
     // Update unit count labels on already-registered flights.
@@ -1103,14 +1079,7 @@ export default function GameCanvas({
 
         // Escort labels: each escort is 1 fighter, label stays at 1 (no update needed).
 
-        // Update interceptor labels
-        for (const interceptor of flight.interceptors ?? []) {
-          const interpId = `${flight.id}_int_${interceptor.player_id}`;
-          if (registeredFlightsRef.current.has(interpId)) {
-            const intManpower = interceptor.fighters * (unitManpowerMap?.["fighter"] ?? 1);
-            manager.updateAnimationLabel(interpId, intManpower);
-          }
-        }
+        // Interceptor visuals handled in ticker (chase bomber position).
       }
     }
 
@@ -1615,6 +1584,44 @@ export default function GameCanvas({
                 onFlightClickRef.current?.(capturedFlightId);
               });
               airLayer.addChild(hitArea);
+            }
+          }
+        }
+
+        // Render interceptor groups chasing bombers — drawn each frame to track moving targets.
+        const atqForInt = airTransitQueueRef.current;
+        if (atqForInt && centroidLookup.size > 0) {
+          for (const flight of atqForInt) {
+            if (!flight.interceptors || flight.interceptors.length === 0) continue;
+            // Bomber's current position (interpolated from progress)
+            const src = centroidLookup.get(flight.source_region_id);
+            const tgt = centroidLookup.get(flight.target_region_id);
+            if (!src || !tgt) continue;
+            const bomberX = src[0] + (tgt[0] - src[0]) * flight.progress;
+            const bomberY = src[1] + (tgt[1] - src[1]) * flight.progress;
+
+            for (const interceptor of flight.interceptors) {
+              const intSrc = centroidLookup.get(interceptor.source_region_id);
+              if (!intSrc) continue;
+              // Interceptor position: lerp from source toward bomber's current position
+              const intX = intSrc[0] + (bomberX - intSrc[0]) * interceptor.progress;
+              const intY = intSrc[1] + (bomberY - intSrc[1]) * interceptor.progress;
+              const intPlayer = playersRef.current[interceptor.player_id];
+              const intColor = intPlayer ? hexStringToNumber(intPlayer.color) : 0xef4444;
+
+              // Draw interceptor icon (small fighter circle)
+              const g = new Graphics();
+              g.eventMode = "none";
+              // Trail line from source to current position
+              g.moveTo(intSrc[0], intSrc[1]).lineTo(intX, intY)
+                .stroke({ color: intColor, width: 1.5, alpha: 0.4 });
+              // Fighter icon circle
+              g.circle(intX, intY, 8)
+                .fill({ color: intColor, alpha: 0.7 })
+                .stroke({ color: 0xffffff, width: 1.5, alpha: 0.8 });
+              // Fighter count label
+              g.circle(intX, intY, 3).fill({ color: 0xffffff, alpha: 0.9 });
+              airLayer.addChild(g);
             }
           }
         }
