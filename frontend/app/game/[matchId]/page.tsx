@@ -395,11 +395,7 @@ export default function GamePage({
   }, [unitsConfig]);
 
   const unitManpowerMap = useMemo(() => {
-    const map = Object.fromEntries(unitsConfig.map((u) => [u.slug, u.manpower_cost ?? 1]));
-    if (unitsConfig.length > 0) {
-      console.log("[DEBUG] unitManpowerMap:", JSON.stringify(map));
-    }
-    return map;
+    return Object.fromEntries(unitsConfig.map((u) => [u.slug, u.manpower_cost ?? 1]));
   }, [unitsConfig]);
 
   // Guard against double capital selection while waiting for server confirmation

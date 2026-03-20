@@ -294,7 +294,7 @@ export default function GameCanvas({
   // Bump structural gen when non-region deps change (selection, highlights, etc.)
   useEffect(() => {
     structuralGenRef.current++;
-  }, [selectedRegion, targetRegions, highlightedNeighbors, dimmedRegions, airTransitQueue]);
+  }, [selectedRegion, targetRegions, highlightedNeighbors, dimmedRegions, airTransitQueue, unitManpowerMap]);
 
   // Track recently bombed provinces — keep showing unit count for 5s after bombing.
   const recentlyBombedRef = useRef<Map<string, number>>(new Map());
