@@ -16,6 +16,19 @@ import {
   type PulseConfig,
 } from "@/lib/animationConfig";
 
+// ── Texture cache ────────────────────────────────────────────────────────────
+// Deduplicate concurrent Assets.load() calls for the same URL so that 100
+// animations of the same unit type share a single in-flight Promise.
+const _textureCache = new Map<string, Promise<Texture>>();
+function loadTextureCached(url: string): Promise<Texture> {
+  let p = _textureCache.get(url);
+  if (!p) {
+    p = Assets.load<Texture>(url);
+    _textureCache.set(url, p);
+  }
+  return p;
+}
+
 // ── AnimKind type ────────────────────────────────────────────────────────────
 
 export type AnimKind = "fighter" | "ship" | "tank" | "infantry";
@@ -582,7 +595,7 @@ export class PixiAnimationManager {
     // Load unit sprite asynchronously
     const spriteUrl = UNIT_ICON_MAP[anim.unitType ?? ""] ?? UNIT_ICON_MAP[animKind];
     if (spriteUrl) {
-      Assets.load(spriteUrl).then((texture: Texture) => {
+      loadTextureCached(spriteUrl).then((texture: Texture) => {
         if (!this.anims.has(anim.id)) return; // animation already removed
         const sprite = new Sprite(texture);
         sprite.anchor.set(0.5, 0.5);

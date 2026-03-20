@@ -231,6 +231,9 @@ export default function GameCanvas({
   const prevUnitCountsRef = useRef<Map<string, number>>(new Map());
   const unitPulsesRef = useRef<Map<string, { startTime: number; delta: number }>>(new Map());
 
+  /** Snapshot of the previous regions state — used to diff tick updates. */
+  const prevRegionsRef = useRef<Record<string, GameRegion>>({});
+
   // Stable ref wrappers for props used inside Pixi event callbacks so we
   // don't have to tear down / rebuild interactivity on every render.
   const onRegionClickRef = useRef(onRegionClick);
@@ -273,6 +276,15 @@ export default function GameCanvas({
 
   const unitManpowerMapRef = useRef(unitManpowerMap);
   unitManpowerMapRef.current = unitManpowerMap;
+
+  // Dirty-region rendering: track previous region snapshot + structural generation.
+  const prevRegionSnapshotRef = useRef<Record<string, GameRegion>>({});
+  const structuralGenRef = useRef(0);
+  const prevStructuralGenRef = useRef(-1);
+  // Bump structural gen when non-region deps change (selection, highlights, etc.)
+  useEffect(() => {
+    structuralGenRef.current++;
+  }, [selectedRegion, targetRegions, highlightedNeighbors, dimmedRegions, airTransitQueue]);
 
   // Track recently bombed provinces — keep showing unit count for 5s after bombing.
   const recentlyBombedRef = useRef<Map<string, number>>(new Map());
@@ -590,6 +602,7 @@ export default function GameCanvas({
 
       const terrainContainer = new Container();
       terrainContainer.eventMode = "none";
+      terrainContainer.cullable = true;
 
       const wt = shapesData.world_texture;
       if (wt) {
@@ -791,12 +804,37 @@ export default function GameCanvas({
       }
     }
 
-    for (const shape of shapesData.regions) {
-      const state = stateMapRef.current.get(shape.id);
-      if (state) {
-        drawProvince(shape.id, shape, state, false);
+    // Dirty-region rendering: only redraw provinces that actually changed.
+    // Full redraw triggered by structural deps (selectedRegion, neighbors, etc.)
+    // tracked via a generation counter. Tick-driven region updates are incremental.
+    const structuralGen = structuralGenRef.current;
+    const prevStructGen = prevStructuralGenRef.current;
+    const needsFullRedraw = structuralGen !== prevStructGen;
+    prevStructuralGenRef.current = structuralGen;
+
+    if (needsFullRedraw) {
+      // Full redraw — structural change (selection, highlights, etc.)
+      for (const shape of shapesData.regions) {
+        const state = stateMapRef.current.get(shape.id);
+        if (state) drawProvince(shape.id, shape, state, false);
+      }
+    } else {
+      // Incremental — only redraw regions whose data changed this tick.
+      const prev = prevRegionSnapshotRef.current;
+      for (const shape of shapesData.regions) {
+        const rid = shape.id;
+        const curr = regions[rid];
+        const p = prev[rid];
+        if (!curr) continue;
+        if (p && p.unit_count === curr.unit_count && p.owner_id === curr.owner_id &&
+            p.is_capital === curr.is_capital && p.building_type === curr.building_type) {
+          continue; // unchanged — skip redraw
+        }
+        const state = stateMapRef.current.get(rid);
+        if (state) drawProvince(rid, shape, state, false);
       }
     }
+    prevRegionSnapshotRef.current = regions;
   }, [
     shapesData,
     regions,
@@ -1291,6 +1329,7 @@ export default function GameCanvas({
 
       // Build layer containers
       const provinceLayer = new Container();
+      provinceLayer.cullable = true;
       const labelLayer = new Container();
       const capitalLayer = new Container();
       const effectLayer = new Container();
