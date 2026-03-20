@@ -1932,6 +1932,8 @@ export default function GamePage({
       {status === "in_progress" && (() => {
         const enemyFlights = gameState?.air_transit_queue?.filter(
           (f) => f.player_id !== myUserId && f.mission_type === "bomb_run"
+            // Hide if we already sent interceptors to this flight
+            && !(f.interceptors ?? []).some((ig) => ig.player_id === myUserId)
         ) ?? [];
         const myFighterRegions = Object.entries(gameState?.regions ?? {})
           .filter(([, r]) => r.owner_id === myUserId && (r.units?.fighter ?? 0) > 0);
@@ -1948,24 +1950,26 @@ export default function GamePage({
                       ? selectedRegion
                       : myFighterRegions[0]?.[0];
                     if (!sourceId) { toast.error("Brak prowincji z myśliwcami!"); return; }
-                    const fighterCount = gameState?.regions[sourceId]?.units?.fighter ?? 0;
-                    if (fighterCount <= 0) { toast.error("Brak myśliwców w prowincji!"); return; }
-                    console.log("[INTERCEPT]", { sourceId, flightId: flight.id, fighterCount });
-                    interceptFlight(sourceId, flight.id, fighterCount);
-                    toast.info(`Wysłano ${fighterCount} myśliwców na przechwycenie!`);
+                    const available = gameState?.regions[sourceId]?.units?.fighter ?? 0;
+                    if (available <= 0) { toast.error("Brak myśliwców w prowincji!"); return; }
+                    // Calculate how many fighters needed: enough to beat escorts + bombers.
+                    const needed = flight.escort_fighters + flight.units + 1; // +1 for advantage
+                    const toSend = Math.min(available, Math.max(needed, 1));
+                    interceptFlight(sourceId, flight.id, toSend);
+                    toast.info(`Wysłano ${toSend} myśliwców na przechwycenie! (potrzeba ~${needed})`);
                   }}
                   className="flex items-center gap-2 rounded-lg border border-red-500/40 bg-red-950/80 px-3 py-2 text-sm font-semibold text-red-300 shadow-lg backdrop-blur-sm transition-colors hover:bg-red-900/80 hover:text-red-200"
                 >
-                  <span className="text-lg">✈️</span>
+                  <span className="text-lg">🎯</span>
                   <div className="flex flex-col items-start">
                     <span className="text-xs text-red-400">Przechwycenie</span>
                     <span className="text-[10px] text-red-400/70">
                       {attacker?.username ?? "Wróg"} → {gameState?.regions[flight.target_region_id]?.name ?? "?"}
                     </span>
+                    <span className="text-[10px] text-red-300/60">
+                      {flight.units}💣{flight.escort_fighters > 0 ? ` +${flight.escort_fighters}✈ eskort` : ""}
+                    </span>
                   </div>
-                  <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs tabular-nums">
-                    {flight.units}✈
-                  </span>
                 </button>
               );
             })}
