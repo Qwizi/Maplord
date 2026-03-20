@@ -277,14 +277,18 @@ export default memo(function QuickActionBar({
                             <Lock className="absolute -right-1 -top-1 h-2.5 w-2.5 text-muted-foreground" />
                           )}
                         </div>
+                        <span className="text-[9px] font-medium text-foreground/60 leading-none">{building.name}</span>
                         {isAtMaxLevel ? (
                           <span className="text-[10px] font-medium text-yellow-300">Max</span>
                         ) : (
-                          <div className="flex items-center gap-0.5">
-                            <span className="text-[10px] text-primary">⚡</span>
-                            <span className={`font-display text-[10px] sm:text-xs font-semibold tabular-nums ${canAfford ? "text-foreground/80" : "text-destructive"}`}>
-                              {nextCost}
-                            </span>
+                          <div className="flex flex-col items-center gap-0">
+                            <div className="flex items-center gap-0.5">
+                              <span className="text-[10px] text-primary">⚡</span>
+                              <span className={`font-display text-[10px] sm:text-xs font-semibold tabular-nums ${canAfford ? "text-foreground/80" : "text-destructive"}`}>
+                                {nextCost}
+                              </span>
+                            </div>
+                            {isUpgrade && <span className="text-[9px] text-amber-400">Lv{nextLevel}</span>}
                           </div>
                         )}
                       </button>
@@ -317,13 +321,19 @@ export default memo(function QuickActionBar({
                             <Lock className="absolute -right-1 -top-1 h-2.5 w-2.5 text-muted-foreground" />
                           )}
                         </div>
+                        <span className="text-[9px] font-medium text-foreground/60 leading-none">{unit.name}</span>
                         {isUnitLocked ? (
                           <Lock className="h-2.5 w-2.5 text-muted-foreground" />
                         ) : (
-                          <div className="flex items-center gap-0.5">
-                            <span className="text-[10px] text-primary">⚡</span>
-                            <span className={`font-display text-[10px] sm:text-xs font-semibold tabular-nums ${canAfford ? "text-foreground/80" : "text-destructive"}`}>
-                              {unit.production_cost}
+                          <div className="flex flex-col items-center gap-0">
+                            <div className="flex items-center gap-0.5">
+                              <span className="text-[10px] text-primary">⚡</span>
+                              <span className={`font-display text-[10px] sm:text-xs font-semibold tabular-nums ${canAfford ? "text-foreground/80" : "text-destructive"}`}>
+                                {unit.production_cost}
+                              </span>
+                            </div>
+                            <span className="text-[9px] text-muted-foreground tabular-nums">
+                              {unit.manpower_cost > 1 ? `${unit.manpower_cost}♟` : ""}{unit.production_time_ticks > 0 ? ` ${unit.production_time_ticks}t` : ""}
                             </span>
                           </div>
                         )}

@@ -392,11 +392,16 @@ export function lerpPath(
 
 // Unit icon sprite URLs per animation kind
 const UNIT_ICON_MAP: Record<string, string> = {
-  fighter: "/assets/units/planes/bomber_h300.webp",
-  ship: "/assets/units/ships/ship1.png",
-  tank: "/assets/units/ground_unit_sphere_h300.png",
-  infantry: "/assets/units/ground_unit.webp",
-  nuke_rocket: "/assets/units/nuke_icon.png",
+  fighter: "/assets/units/svg/fighter.svg",
+  bomber: "/assets/units/svg/bomber.svg",
+  ship: "/assets/units/svg/ship.svg",
+  tank: "/assets/units/svg/tank.svg",
+  infantry: "/assets/units/svg/infantry.svg",
+  nuke_rocket: "/assets/units/svg/nuke.svg",
+  commando: "/assets/units/svg/commando.svg",
+  artillery: "/assets/units/svg/artillery.svg",
+  sam: "/assets/units/svg/sam.svg",
+  submarine: "/assets/units/svg/submarine.svg",
 };
 
 // Minimal asset path constants — only needed for unit kind disambiguation.

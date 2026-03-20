@@ -1,19 +1,19 @@
 import { getAssetUrl, getOverrideUrl } from "./assetOverrides";
 
 export const BUILDING_ASSET_MAP: Record<string, string> = {
-  port: "/assets/buildings/v2/navyport_w300.webp",
-  barracks: "/assets/buildings/v2/barracks1_w300.webp",
-  carrier: "/assets/buildings/v2/airport_w300.webp",
-  radar: "/assets/buildings/v2/powerplant1_w300.webp",
-  tower: "/assets/buildings/v2/sentry_w300.webp",
-  factory: "/assets/buildings/v2/ironworks_w300.webp",
+  port: "/assets/buildings/svg/port.svg",
+  barracks: "/assets/buildings/svg/barracks.svg",
+  carrier: "/assets/buildings/svg/airport.svg",
+  radar: "/assets/buildings/svg/radar.svg",
+  tower: "/assets/buildings/svg/tower.svg",
+  factory: "/assets/buildings/svg/factory.svg",
   // legacy fallbacks
-  airport: "/assets/buildings/v2/airport_w300.webp",
-  navy_port: "/assets/buildings/v2/navyport_w300.webp",
-  power_plant: "/assets/buildings/v2/powerplant1_w300.webp",
-  military_base: "/assets/buildings/v2/militarybase_w300.webp",
-  ironworks: "/assets/buildings/v2/ironworks_w300.webp",
-  mine: "/assets/buildings/v2/mine_w300.webp",
+  airport: "/assets/buildings/svg/airport.svg",
+  navy_port: "/assets/buildings/svg/port.svg",
+  power_plant: "/assets/buildings/svg/radar.svg",
+  military_base: "/assets/buildings/svg/barracks.svg",
+  ironworks: "/assets/buildings/svg/factory.svg",
+  mine: "/assets/buildings/svg/factory.svg",
 };
 
 export function getBuildingAsset(slug: string | null | undefined, assetUrl?: string | null): string | null {
@@ -34,28 +34,31 @@ export function getUnitAsset(kind: string | null | undefined = "default", assetU
     case "moving":
       return "/assets/units/moving.webp";
     case "nuke_rocket":
-      return "/assets/units/nuke_icon.png";
+      return "/assets/units/svg/nuke.svg";
     case "air":
     case "fighter":
+      return "/assets/units/svg/fighter.svg";
     case "bomber":
-      return "/assets/units/planes/bomber_h300.webp";
+      return "/assets/units/svg/bomber.svg";
     case "ship":
     case "ship_1":
-      return "/assets/units/ships/ship1.png";
+      return "/assets/units/svg/ship.svg";
     case "tank":
     case "ground_unit_sphere":
-      return "/assets/units/ground_unit_sphere_h300.png";
+      return "/assets/units/svg/tank.svg";
     case "infantry":
     case "ground_unit":
+      return "/assets/units/svg/infantry.svg";
     case "commando":
-      return "/assets/units/ground_unit.webp";
+      return "/assets/units/svg/commando.svg";
     case "artillery":
+      return "/assets/units/svg/artillery.svg";
     case "sam":
-      return "/assets/units/ground_unit_sphere_h300.png";
+      return "/assets/units/svg/sam.svg";
     case "submarine":
-      return "/assets/units/ships/ship1.png";
+      return "/assets/units/svg/submarine.svg";
     default:
-      return "/assets/units/ground_unit_sphere_h300.png";
+      return "/assets/units/svg/infantry.svg";
   }
 }
 
