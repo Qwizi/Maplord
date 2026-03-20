@@ -347,7 +347,7 @@ async fn handle_game_message(
     // Rate limit game actions (not chat/leave_match/set_tick_multiplier)
     if matches!(
         action,
-        "attack" | "move" | "build" | "produce_unit" | "use_ability" | "select_capital"
+        "attack" | "move" | "build" | "produce_unit" | "use_ability" | "intercept" | "bombard" | "activate_boost" | "select_capital"
     ) {
         if check_action_rate_limit(state, user_id) {
             let _ = tx.try_send(Message::Text(
@@ -385,7 +385,7 @@ async fn handle_game_message(
                 let _ = state_mgr.set_meta_field("tick_multiplier", &multiplier.to_string()).await;
             }
         }
-        "attack" | "move" | "build" | "produce_unit" | "use_ability" => {
+        "attack" | "move" | "build" | "produce_unit" | "use_ability" | "intercept" | "bombard" | "activate_boost" => {
             let mut action_data: serde_json::Map<String, serde_json::Value> =
                 content.as_object().cloned().unwrap_or_default();
             action_data.remove("action");

@@ -518,11 +518,13 @@ export class PixiAnimationManager {
     if (this.anims.has(anim.id)) return;
 
     const isNuke = anim.unitType === "nuke_rocket";
-    const isBomber = anim.unitType === "bomber" && (anim.bombingWaypoints?.length ?? 0) >= 2;
+    const hasBomberPath = (anim.bombingWaypoints?.length ?? 0) >= 2;
+    const isBomber = anim.unitType === "bomber" && hasBomberPath;
+    const isEscort = anim.unitType !== "bomber" && hasBomberPath; // fighter escort with bomber path
     const animKind = resolveAnimationKindSync(anim.unitType);
-    // Bombers with bombing waypoints fly through province centroids with dip-dive curves.
+    // Bombers and their escorts fly through province centroids with dip-dive curves.
     // Other units use standard path logic.
-    const path = isBomber
+    let path = (isBomber || isEscort)
       ? buildBomberFlightPath(anim.bombingWaypoints!)
       : anim.waypoints && anim.waypoints.length >= 2
         ? buildWaypointPath(anim.waypoints)
@@ -533,6 +535,23 @@ export class PixiAnimationManager {
             anim.unitType,
             anim.type
           );
+    // Apply perpendicular offset for escorts flying beside bomber.
+    if (anim.pathOffset && anim.pathOffset !== 0 && path.length >= 2) {
+      const offset = anim.pathOffset;
+      path = path.map((pt, i) => {
+        const next = path[Math.min(i + 1, path.length - 1)];
+        const prev = path[Math.max(i - 1, 0)];
+        const dx = next[0] - prev[0];
+        const dy = next[1] - prev[1];
+        const len = Math.sqrt(dx * dx + dy * dy);
+        if (len < 0.001) return pt;
+        // Perpendicular direction
+        const nx = -dy / len;
+        const ny = dx / len;
+        return [pt[0] + nx * offset, pt[1] + ny * offset] as [number, number];
+      });
+    }
+
     const duration =
       anim.durationMs ??
       (isNuke ? 8000 : (EXTRA_DURATION_MAP[anim.unitType ?? ""] ?? DURATION_MAP[animKind] ?? DURATION_MAP.infantry));

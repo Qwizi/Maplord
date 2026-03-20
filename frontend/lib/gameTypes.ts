@@ -24,4 +24,6 @@ export interface TroopAnimation {
   bombingWaypoints?: [number, number][];
   /** Total province hops for the bombing run (= flight_path.length). */
   totalHops?: number;
+  /** Perpendicular offset in pixels from the path (for escorts flying beside bomber). */
+  pathOffset?: number;
 }

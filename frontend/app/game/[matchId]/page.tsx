@@ -877,13 +877,63 @@ export default function GamePage({
         // No TroopAnimation needed — flights are rendered from air_transit_queue
         // state in GameCanvas (state-driven, position from progress field).
       } else if (e.type === "air_combat_resolved") {
-        // Mid-air combat — show explosion at approximate position
-        // (no specific animation needed; the flight animation continues or stops)
+        // Mid-air combat resolved — interceptors vs bomber/escorts.
         const flightId = e.flight_id as string;
         const bombersRemaining = (e.bombers_remaining as number) ?? 0;
+        const interceptorsRemaining = (e.interceptors_remaining as number) ?? 0;
+        const interceptorPlayerId = e.interceptor_player_id as string;
+
         if (bombersRemaining <= 0) {
-          // Remove the flight animation if bombers destroyed
-          setAnimations((prev) => prev.filter((a) => a.id !== flightId));
+          // Bombers destroyed — remove flight + escort animations
+          setAnimations((prev) => prev.filter((a) =>
+            a.id !== flightId && !a.id.startsWith(`${flightId}_escort`)
+          ));
+        }
+
+        // Remove interceptor animations (combat resolved — they either died or return)
+        setAnimations((prev) => prev.filter((a) =>
+          !a.id.startsWith(`${flightId}_int_`)
+        ));
+
+        // Surviving interceptors return home — find their source and create return animation.
+        if (interceptorsRemaining > 0 && interceptorPlayerId) {
+          // Find the flight to get combat location (approximate as target)
+          const flight = gameStateRef.current?.air_transit_queue?.find((f) => f.id === flightId);
+          const targetId = flight?.target_region_id ?? (e.target_region_id as string);
+          // Find interceptor source from flight data
+          const interceptorGroup = flight?.interceptors?.find((ig) => ig.player_id === interceptorPlayerId);
+          const sourceId = interceptorGroup?.source_region_id;
+          if (sourceId && targetId) {
+            const intColor = gameStateRef.current?.players[interceptorPlayerId]?.color ?? "#3b82f6";
+            const numReturn = Math.min(interceptorsRemaining, 4);
+            const offsets = [-15, 15, -28, 28];
+            for (let i = 0; i < numReturn; i++) {
+              newAnims.push({
+                id: `int_return_${crypto.randomUUID()}_${i}`,
+                sourceId: targetId, // from combat location
+                targetId: sourceId, // back to base
+                color: intColor,
+                units: 1,
+                unitCount: 1,
+                unitType: "fighter",
+                type: "move" as const,
+                startTime: Date.now(),
+                durationMs: 3000,
+                playerId: interceptorPlayerId,
+                pathOffset: offsets[i],
+              });
+            }
+          }
+        }
+
+        // Toast
+        const interceptorsLost = (e.interceptors_lost as number) ?? 0;
+        const escortsLost = (e.escorts_lost as number) ?? 0;
+        const bombersLost = (e.bombers_lost as number) ?? 0;
+        if (interceptorPlayerId === myUserId) {
+          toast.info(`Przechwycenie: stracono ${interceptorsLost} myśliwców, zniszczono ${bombersLost} bombowców`);
+        } else if (e.target_player_id === myUserId) {
+          toast.warning(`Wróg przechwycił nalot: stracono ${escortsLost} eskort, ${bombersLost} bombowców`);
         }
       } else if (e.type === "path_damage") {
         // Visual bomb-drop already handled client-side in PixiAnimationManager.
@@ -898,6 +948,7 @@ export default function GamePage({
       } else if (e.type === "bomber_strike") {
         // Final strike — mark province as recently bombed.
         const targetId = e.target_region_id as string;
+        const playerId = e.player_id as string;
         window.dispatchEvent(new CustomEvent("province-bombed", { detail: { regionId: targetId } }));
         const groundKilled = (e.ground_units_destroyed as number) ?? 0;
         const neutralized = e.province_neutralized as boolean;
@@ -907,6 +958,36 @@ export default function GamePage({
         }
         if (neutralized) {
           toast.info(`${regionName} zneutralizowana przez bombardowanie!`);
+        }
+        // Escort return animation — fighters fly back from target to source.
+        // Find the flight that just completed to get source_region_id and escort count.
+        const completedFlight = gameStateRef.current?.air_transit_queue?.find(
+          (f) => f.target_region_id === targetId && f.player_id === playerId && f.unit_type === "bomber"
+        );
+        const escortCount = completedFlight?.escort_fighters ?? (e.escorts_surviving as number ?? 0);
+        if (escortCount > 0) {
+          const sourceId = completedFlight?.source_region_id ?? (e.source_region_id as string);
+          if (sourceId) {
+            const color = gameStateRef.current?.players[playerId]?.color ?? "#3b82f6";
+            const numEscorts = Math.min(escortCount, 4);
+            const offsets = [-18, 18, -32, 32];
+            for (let ei = 0; ei < numEscorts; ei++) {
+              newAnims.push({
+                id: `escort_return_${crypto.randomUUID()}_${ei}`,
+                sourceId: targetId, // fly FROM target
+                targetId: sourceId, // BACK to source
+                color,
+                units: 1,
+                unitCount: 1,
+                unitType: "fighter",
+                type: "move" as const,
+                startTime: Date.now(),
+                durationMs: 4000, // 4s return flight
+                playerId,
+                pathOffset: offsets[ei],
+              });
+            }
+          }
         }
       } else if (e.type === "province_neutralized") {
         const regionId = e.region_id as string;
@@ -1846,6 +1927,51 @@ export default function GamePage({
             toast.info(`Wysłano ${fighterCount} myśliwców na przechwycenie!`);
           }}
         />
+
+      {/* Intercept button — shown when enemy flights are active and player has fighters */}
+      {status === "in_progress" && (() => {
+        const enemyFlights = gameState?.air_transit_queue?.filter(
+          (f) => f.player_id !== myUserId && f.mission_type === "bomb_run"
+        ) ?? [];
+        const myFighterRegions = Object.entries(gameState?.regions ?? {})
+          .filter(([, r]) => r.owner_id === myUserId && (r.units?.fighter ?? 0) > 0);
+        if (enemyFlights.length === 0 || myFighterRegions.length === 0) return null;
+        return (
+          <div className="absolute right-3 top-1/2 z-20 -translate-y-1/2 flex flex-col gap-2">
+            {enemyFlights.map((flight) => {
+              const attacker = gameState?.players[flight.player_id];
+              return (
+                <button
+                  key={flight.id}
+                  onClick={() => {
+                    const sourceId = selectedRegion && myFighterRegions.some(([id]) => id === selectedRegion)
+                      ? selectedRegion
+                      : myFighterRegions[0]?.[0];
+                    if (!sourceId) { toast.error("Brak prowincji z myśliwcami!"); return; }
+                    const fighterCount = gameState?.regions[sourceId]?.units?.fighter ?? 0;
+                    if (fighterCount <= 0) { toast.error("Brak myśliwców w prowincji!"); return; }
+                    console.log("[INTERCEPT]", { sourceId, flightId: flight.id, fighterCount });
+                    interceptFlight(sourceId, flight.id, fighterCount);
+                    toast.info(`Wysłano ${fighterCount} myśliwców na przechwycenie!`);
+                  }}
+                  className="flex items-center gap-2 rounded-lg border border-red-500/40 bg-red-950/80 px-3 py-2 text-sm font-semibold text-red-300 shadow-lg backdrop-blur-sm transition-colors hover:bg-red-900/80 hover:text-red-200"
+                >
+                  <span className="text-lg">✈️</span>
+                  <div className="flex flex-col items-start">
+                    <span className="text-xs text-red-400">Przechwycenie</span>
+                    <span className="text-[10px] text-red-400/70">
+                      {attacker?.username ?? "Wróg"} → {gameState?.regions[flight.target_region_id]?.name ?? "?"}
+                    </span>
+                  </div>
+                  <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs tabular-nums">
+                    {flight.units}✈
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* HUD */}
       <GameHUD

@@ -246,6 +246,9 @@ export default function GameCanvas({
   const onDoubleTapRef = useRef(onDoubleTap);
   onDoubleTapRef.current = onDoubleTap;
 
+  const onFlightClickRef = useRef(onFlightClick);
+  onFlightClickRef.current = onFlightClick;
+
   const lastTapRef = useRef<{ regionId: string; time: number } | null>(null);
 
   const regionsRef = useRef(regions);
@@ -976,64 +979,146 @@ export default function GameCanvas({
     const tickMs = 1000;
     const newAnims: TroopAnimation[] = [];
 
+    // Build the full set of IDs currently active (flights + escorts + interceptors)
+    // so we can clean up stale registered entries correctly.
+    const activeIds = new Set<string>();
+
     for (const flight of airTransitQueue) {
-      if (registeredFlightsRef.current.has(flight.id)) continue;
-      registeredFlightsRef.current.add(flight.id);
-
-      const color = players[flight.player_id]?.color ?? "#888888";
-
-      // Calculate manpower.
-      const mainManpower = flight.units * (unitManpowerMap?.[flight.unit_type] ?? 1);
-      const escortManpower = flight.escort_fighters * (unitManpowerMap?.["fighter"] ?? 1);
-      const totalManpower = mainManpower + escortManpower;
-
-      // Build bombing waypoints from flight_path province IDs → centroids.
-      // The bomber animation will fly through these centroids and drop bombs
-      // at each hop, synchronized with the engine's tick-by-tick path_damage.
-      let bombingWaypoints: [number, number][] | undefined;
-      let totalHops: number | undefined;
-      if (flight.unit_type === "bomber" && flight.flight_path && flight.flight_path.length >= 2) {
-        bombingWaypoints = flight.flight_path
-          .map((rid) => centroids.get(rid))
-          .filter((c): c is [number, number] => !!c);
-        totalHops = flight.flight_path.length;
+      activeIds.add(flight.id);
+      if (flight.escort_fighters > 0 && flight.unit_type === "bomber") {
+        const numEscorts = Math.min(flight.escort_fighters, 4);
+        for (let ei = 0; ei < numEscorts; ei++) {
+          activeIds.add(`${flight.id}_escort_${ei}`);
+        }
       }
-
-      newAnims.push({
-        id: flight.id,
-        sourceId: flight.source_region_id,
-        targetId: flight.target_region_id,
-        color,
-        units: totalManpower,
-        unitCount: totalManpower,
-        unitType: flight.unit_type,
-        type: "attack" as const,
-        startTime: Date.now() - (flight.progress / flight.speed_per_tick) * tickMs,
-        durationMs: (1.0 / flight.speed_per_tick) * tickMs,
-        playerId: flight.player_id,
-        bombingWaypoints,
-        totalHops,
-      });
+      for (const interceptor of flight.interceptors ?? []) {
+        activeIds.add(`${flight.id}_int_${interceptor.player_id}`);
+      }
     }
 
-    // Update unit count labels on already-registered bomber flights
-    // (bomber loses units during path bombing — engine updates air_transit_queue).
+    for (const flight of airTransitQueue) {
+      if (!registeredFlightsRef.current.has(flight.id)) {
+        registeredFlightsRef.current.add(flight.id);
+
+        const color = players[flight.player_id]?.color ?? "#888888";
+
+        // Calculate manpower — bomber animation shows bomber-only count.
+        const mainManpower = flight.units * (unitManpowerMap?.[flight.unit_type] ?? 1);
+
+        // Build bombing waypoints from flight_path province IDs → centroids.
+        // The bomber animation will fly through these centroids and drop bombs
+        // at each hop, synchronized with the engine's tick-by-tick path_damage.
+        let bombingWaypoints: [number, number][] | undefined;
+        let totalHops: number | undefined;
+        if (flight.unit_type === "bomber" && flight.flight_path && flight.flight_path.length >= 2) {
+          bombingWaypoints = flight.flight_path
+            .map((rid) => centroids.get(rid))
+            .filter((c): c is [number, number] => !!c);
+          totalHops = flight.flight_path.length;
+        }
+
+        newAnims.push({
+          id: flight.id,
+          sourceId: flight.source_region_id,
+          targetId: flight.target_region_id,
+          color,
+          units: mainManpower,
+          unitCount: flight.units,
+          unitType: flight.unit_type,
+          type: "attack" as const,
+          startTime: Date.now() - (flight.progress / flight.speed_per_tick) * tickMs,
+          durationMs: (1.0 / flight.speed_per_tick) * tickMs,
+          playerId: flight.player_id,
+          bombingWaypoints,
+          totalHops,
+        });
+
+        // Separate escort fighter animation following the SAME path as bomber.
+        // Render each escort fighter as a separate animation beside the bomber.
+        // Each gets a perpendicular offset so they fly in formation.
+        if (flight.escort_fighters > 0 && flight.unit_type === "bomber") {
+          const fighterMc = unitManpowerMap?.["fighter"] ?? 1;
+          const numEscorts = Math.min(flight.escort_fighters, 4); // max 4 visible escorts
+          const offsets = [-18, 18, -32, 32]; // px offsets from bomber path
+          for (let ei = 0; ei < numEscorts; ei++) {
+            const escortId = `${flight.id}_escort_${ei}`;
+            activeIds.add(escortId);
+            if (registeredFlightsRef.current.has(escortId)) continue;
+            registeredFlightsRef.current.add(escortId);
+            newAnims.push({
+              id: escortId,
+              sourceId: flight.source_region_id,
+              targetId: flight.target_region_id,
+              color,
+              units: fighterMc,
+              unitCount: 1,
+              unitType: "fighter",
+              type: "move" as const,
+              startTime: Date.now() - (flight.progress / flight.speed_per_tick) * tickMs,
+              durationMs: (1.0 / flight.speed_per_tick) * tickMs,
+              playerId: flight.player_id,
+              bombingWaypoints,
+              totalHops,
+              pathOffset: offsets[ei],
+            });
+          }
+        }
+      }
+
+      // Render interceptor groups chasing this flight.
+      for (const interceptor of flight.interceptors ?? []) {
+        const interpId = `${flight.id}_int_${interceptor.player_id}`;
+        if (!registeredFlightsRef.current.has(interpId)) {
+          registeredFlightsRef.current.add(interpId);
+
+          const intColor = players[interceptor.player_id]?.color ?? "#ef4444";
+          const intManpower = interceptor.fighters * (unitManpowerMap?.["fighter"] ?? 1);
+
+          newAnims.push({
+            id: interpId,
+            sourceId: interceptor.source_region_id,
+            targetId: flight.target_region_id, // chasing the flight's destination
+            color: intColor,
+            units: intManpower,
+            unitCount: interceptor.fighters,
+            unitType: "fighter",
+            type: "attack" as const,
+            startTime: Date.now() - (interceptor.progress / interceptor.speed_per_tick) * tickMs,
+            durationMs: (1.0 / interceptor.speed_per_tick) * tickMs,
+            playerId: interceptor.player_id,
+          });
+        }
+      }
+    }
+
+    // Update unit count labels on already-registered flights.
+    // Bomber loses units during path bombing — engine updates air_transit_queue.
     const manager = animManagerRef.current;
     if (manager) {
       for (const flight of airTransitQueue) {
-        if (!registeredFlightsRef.current.has(flight.id)) continue;
-        const mainManpower = flight.units * (unitManpowerMap?.[flight.unit_type] ?? 1);
-        const escortManpower = flight.escort_fighters * (unitManpowerMap?.["fighter"] ?? 1);
-        manager.updateAnimationLabel(flight.id, mainManpower + escortManpower);
+        if (registeredFlightsRef.current.has(flight.id)) {
+          const mainManpower = flight.units * (unitManpowerMap?.[flight.unit_type] ?? 1);
+          manager.updateAnimationLabel(flight.id, mainManpower);
+        }
+
+        // Escort labels: each escort is 1 fighter, label stays at 1 (no update needed).
+
+        // Update interceptor labels
+        for (const interceptor of flight.interceptors ?? []) {
+          const interpId = `${flight.id}_int_${interceptor.player_id}`;
+          if (registeredFlightsRef.current.has(interpId)) {
+            const intManpower = interceptor.fighters * (unitManpowerMap?.["fighter"] ?? 1);
+            manager.updateAnimationLabel(interpId, intManpower);
+          }
+        }
       }
     }
 
-    // Clean up finished flights.
-    const activeIds = new Set(airTransitQueue.map((f) => f.id));
+    // Clean up finished flights and their escort/interceptor animations.
     for (const id of registeredFlightsRef.current) {
       if (!activeIds.has(id)) registeredFlightsRef.current.delete(id);
     }
-    if (registeredFlightsRef.current.size > 200) registeredFlightsRef.current.clear();
+    if (registeredFlightsRef.current.size > 300) registeredFlightsRef.current.clear();
 
     if (newAnims.length > 0 && typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("air-transit-anims", { detail: newAnims }));
@@ -1477,9 +1562,10 @@ export default function GameCanvas({
       viewport.addChild(nukeLayer);
       viewport.addChild(animManager.container);
 
-      // Air transit flight icons layer — between animations and labels
+      // Air transit flight icons layer — between animations and labels.
+      // eventMode "static" allows clickable hit areas for enemy flights.
       const airTransitLayer = new Container();
-      airTransitLayer.eventMode = "none";
+      airTransitLayer.eventMode = "static";
       airTransitLayerRef.current = airTransitLayer;
       viewport.addChild(airTransitLayer);
 
@@ -1494,6 +1580,44 @@ export default function GameCanvas({
         animManager.update(Date.now());
 
         const now = Date.now();
+
+        // Enemy flight click targets — rebuild each frame so positions track flight progress.
+        // The centroid map is built once per shapesData change (outside the ticker in a ref)
+        // then reused here for O(1) lookups rather than a per-frame linear scan.
+        const airLayer = airTransitLayerRef.current;
+        if (airLayer && onFlightClickRef.current) {
+          airLayer.removeChildren();
+          const atq = airTransitQueueRef.current;
+          const sd = shapesDataRef.current;
+          if (atq && sd) {
+            // Build a quick centroid lookup from the stable shapesData ref.
+            // This runs at ticker frequency but the loop is small (hundreds of regions max)
+            // and the shapes array is stable between ticks — acceptable for 60fps.
+            const centroidLookup = new Map<string, [number, number]>();
+            for (const s of sd.regions) centroidLookup.set(s.id, s.centroid);
+
+            for (const flight of atq) {
+              // Only enemy flights are shown as clickable targets
+              if (flight.player_id === myUserId) continue;
+              const src = centroidLookup.get(flight.source_region_id);
+              const tgt = centroidLookup.get(flight.target_region_id);
+              if (!src || !tgt) continue;
+              const progress = flight.progress;
+              const x = src[0] + (tgt[0] - src[0]) * progress;
+              const y = src[1] + (tgt[1] - src[1]) * progress;
+
+              const hitArea = new Graphics();
+              hitArea.circle(x, y, 20).fill({ color: 0xff0000, alpha: 0.001 });
+              hitArea.eventMode = "static";
+              hitArea.cursor = "crosshair";
+              const capturedFlightId = flight.id;
+              hitArea.on("pointerdown", () => {
+                onFlightClickRef.current?.(capturedFlightId);
+              });
+              airLayer.addChild(hitArea);
+            }
+          }
+        }
 
         // Capital radar ping — expanding concentric rings around owned capital provinces
         const radar = capitalRadarRef.current;
