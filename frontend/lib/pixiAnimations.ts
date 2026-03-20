@@ -62,8 +62,11 @@ interface InternalAnim {
   iconSprite: Sprite | null;
   labelText: Text;
 
-  // Bomber bomb-drop tracking: which spawn checkpoints have already fired
-  spawnedBombs: Set<number>;
+  // Bomber waypoint bombing: centroids along the flight corridor
+  bombingWaypoints: [number, number][];
+  totalHops: number;
+  /** Last hop index that was visually bombed (matches engine's last_bombed_hop). */
+  lastBombedHop: number;
 }
 
 interface ImpactFlash {
@@ -208,6 +211,44 @@ export function buildWaypointPath(waypoints: [number, number][]): [number, numbe
     for (let j = 0; j < POINTS_PER_SEGMENT; j++) {
       const t = j / POINTS_PER_SEGMENT;
       path.push([x0 + (x1 - x0) * t, y0 + (y1 - y0) * t]);
+    }
+  }
+  path.push(waypoints[waypoints.length - 1]);
+  return path;
+}
+
+/**
+ * Build a bomber flight path through province centroids with smooth dipping arcs.
+ * Between each pair of waypoints, the path rises slightly (cruise altitude) then
+ * dips back down to the next centroid (bombing dive), creating a smooth wavelike
+ * flight trajectory that communicates "bombing run" visually.
+ */
+export function buildBomberFlightPath(waypoints: [number, number][]): [number, number][] {
+  if (waypoints.length < 2) return waypoints;
+  const path: [number, number][] = [];
+  const POINTS_PER_SEGMENT = 30;
+  // Altitude offset: bomber rises perpendicular to travel direction between waypoints.
+  const ALTITUDE_FRACTION = 0.12; // How high the arc goes relative to segment distance.
+
+  for (let i = 0; i < waypoints.length - 1; i++) {
+    const [x0, y0] = waypoints[i];
+    const [x1, y1] = waypoints[i + 1];
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    // Perpendicular direction for altitude offset
+    const nx = dist > 0.001 ? -dy / dist : 0;
+    const ny = dist > 0.001 ? dx / dist : 0;
+    const altitude = dist * ALTITUDE_FRACTION;
+
+    for (let j = 0; j < POINTS_PER_SEGMENT; j++) {
+      const t = j / POINTS_PER_SEGMENT;
+      // Smooth altitude: sine wave — rises in the middle, touches ground at endpoints.
+      const alt = Math.sin(t * Math.PI) * altitude;
+      path.push([
+        x0 + dx * t + nx * alt,
+        y0 + dy * t + ny * alt,
+      ]);
     }
   }
   path.push(waypoints[waypoints.length - 1]);
@@ -459,17 +500,21 @@ export class PixiAnimationManager {
     if (this.anims.has(anim.id)) return;
 
     const isNuke = anim.unitType === "nuke_rocket";
+    const isBomber = anim.unitType === "bomber" && (anim.bombingWaypoints?.length ?? 0) >= 2;
     const animKind = resolveAnimationKindSync(anim.unitType);
-    // Use waypoints path if available (air transit through province centroids).
-    const path = anim.waypoints && anim.waypoints.length >= 2
-      ? buildWaypointPath(anim.waypoints)
-      : buildAnimationPath(
-          animKind,
-          sourceCentroid,
-          targetCentroid,
-          anim.unitType,
-          anim.type
-        );
+    // Bombers with bombing waypoints fly through province centroids with dip-dive curves.
+    // Other units use standard path logic.
+    const path = isBomber
+      ? buildBomberFlightPath(anim.bombingWaypoints!)
+      : anim.waypoints && anim.waypoints.length >= 2
+        ? buildWaypointPath(anim.waypoints)
+        : buildAnimationPath(
+            animKind,
+            sourceCentroid,
+            targetCentroid,
+            anim.unitType,
+            anim.type
+          );
     const duration =
       anim.durationMs ??
       (isNuke ? 8000 : (EXTRA_DURATION_MAP[anim.unitType ?? ""] ?? DURATION_MAP[animKind] ?? DURATION_MAP.infantry));
@@ -527,7 +572,9 @@ export class PixiAnimationManager {
       iconGfx,
       iconSprite: null,
       labelText,
-      spawnedBombs: new Set<number>(),
+      bombingWaypoints: anim.bombingWaypoints ?? [],
+      totalHops: anim.totalHops ?? 0,
+      lastBombedHop: 0,
     };
 
     this.anims.set(anim.id, internal);
@@ -545,6 +592,16 @@ export class PixiAnimationManager {
         internal.iconSprite = sprite;
       }).catch(() => {});
     }
+  }
+
+  /**
+   * Update the unit count label on an active animation (e.g. bomber losing units).
+   */
+  updateAnimationLabel(animId: string, newCount: number): void {
+    const a = this.anims.get(animId);
+    if (!a) return;
+    a.units = newCount;
+    a.labelText.text = String(newCount);
   }
 
   /**
@@ -666,16 +723,30 @@ export class PixiAnimationManager {
       if (rawLinear >= 1 && !this.arrived.has(a.id)) {
         this.arrived.add(a.id);
         this._triggerImpact(a, now);
+        // Bomber: big salvo on target province at arrival.
+        if (a.unitType === "bomber" && a.bombingWaypoints.length > 0) {
+          const target = a.bombingWaypoints[a.bombingWaypoints.length - 1];
+          this._spawnBombingSalvo(target[0], target[1], now, true);
+        }
       }
 
-      // ── Bomber bomb drops ─────────────────────────────────────────────────
-      if (a.unitType === "bomber" && rawLinear < 1) {
-        const BOMB_CHECKPOINTS = [0.2, 0.35, 0.5, 0.65, 0.8];
-        for (const checkpoint of BOMB_CHECKPOINTS) {
-          if (rawLinear >= checkpoint && !a.spawnedBombs.has(checkpoint)) {
-            a.spawnedBombs.add(checkpoint);
-            const dropPos = lerpPath(a.path, progress);
-            this._spawnBomb(dropPos[0], dropPos[1], now);
+      // ── Bomber waypoint bombing ─────────────────────────────────────────
+      // Engine formula: currentHop = floor(progress * totalHops).
+      // Bomb each intermediate province centroid as the bomber passes over it.
+      // Skip hop 0 (source) and last hop (target — handled at arrival).
+      // This is client-side so it's instant — no server delay.
+      if (a.unitType === "bomber" && a.totalHops > 1 && a.bombingWaypoints.length > 1) {
+        const currentHop = Math.min(
+          Math.floor(rawLinear * a.totalHops),
+          a.totalHops - 1 // cap so we don't overshoot
+        );
+        while (a.lastBombedHop < currentHop) {
+          a.lastBombedHop++;
+          // Skip source (0) and target (last) — target gets big impact at arrival.
+          if (a.lastBombedHop <= 0 || a.lastBombedHop >= a.bombingWaypoints.length - 1) continue;
+          const wp = a.bombingWaypoints[a.lastBombedHop];
+          if (wp) {
+            this._spawnBombingSalvo(wp[0], wp[1], now, false);
           }
         }
       }
@@ -1002,6 +1073,70 @@ export class PixiAnimationManager {
 
   // ── Bomb drops (bomber unit) ───────────────────────────────────────────────
 
+  /**
+   * Spawn a bomb-drop + explosion at the given world-space coordinates.
+   * Called externally when path_damage / bomber_strike events arrive from
+   * the engine, so the visual effect confirms the real tick damage.
+   */
+  spawnBombAt(x: number, y: number): void {
+    this._spawnBomb(x, y, Date.now());
+  }
+
+  /**
+   * Spawn a salvo of bombs spread around a province centroid.
+   * `isFinal` = true for the target province (bigger salvo + shockwave).
+   */
+  private _spawnBombingSalvo(
+    cx: number,
+    cy: number,
+    now: number,
+    isFinal: boolean
+  ): void {
+    const count = isFinal ? 5 : 2;
+    const spread = isFinal ? 22 : 14;
+    for (let i = 0; i < count; i++) {
+      const ox = (Math.random() - 0.5) * spread;
+      const oy = (Math.random() - 0.5) * spread * 0.7;
+      const delay = i * 100;
+      if (delay === 0) {
+        this._spawnBomb(cx + ox, cy + oy, now);
+      } else {
+        this._spawnBomb(cx + ox, cy + oy, now + delay);
+      }
+    }
+    // Emit sound event so page.tsx can play synchronized audio.
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("bomber-salvo", { detail: { isFinal } }));
+    }
+    // Final strike: add a shockwave ring at province center.
+    if (isFinal) {
+      this._spawnShockwave(cx, cy, now + count * 100);
+    }
+  }
+
+  /**
+   * Expanding shockwave ring at the final bombing target.
+   */
+  private _spawnShockwave(x: number, y: number, now: number): void {
+    const gfx = new Graphics();
+    this.container.addChild(gfx);
+    // Reuse BombDrop struct for the shockwave — abuse impactGfx for the ring.
+    const impactGfx = new Graphics();
+    this.container.addChild(impactGfx);
+    this._bombs.push({
+      x,
+      y,
+      startTime: now,
+      duration: 100, // "fall" is instant
+      startY: y,
+      endY: y,
+      gfx,
+      impactGfx,
+      impacted: false,
+      impactStartTime: 0,
+    });
+  }
+
   private _spawnBomb(x: number, y: number, now: number): void {
     const gfx = new Graphics();
     const impactGfx = new Graphics();
@@ -1061,41 +1196,61 @@ export class PixiAnimationManager {
       // Draw expanding explosion at impact point
       if (bomb.impacted) {
         const impactElapsed = now - bomb.impactStartTime;
-        const impactDuration = 400;
+        const impactDuration = 600;
         const ip = impactElapsed / impactDuration;
         const ig = bomb.impactGfx;
         ig.clear();
 
         if (ip < 1) {
-          // Outer orange ring expanding outward
-          const ringRadius = 5 + ip * 20;
-          const ringAlpha = Math.pow(1 - ip, 1.5) * 0.85;
-          ig.circle(bomb.x, bomb.endY, ringRadius).stroke({ color: 0xf97316, alpha: ringAlpha, width: 2.5 });
+          // Layer 1: outer shockwave ring — fast expanding, fading
+          const shockRadius = 8 + ip * 32;
+          const shockAlpha = Math.pow(1 - ip, 2) * 0.7;
+          ig.circle(bomb.x, bomb.endY, shockRadius).stroke({ color: 0xf97316, alpha: shockAlpha, width: 2 });
 
-          // Inner red fill shrinking and fading
-          if (ip < 0.6) {
-            const fillProgress = ip / 0.6;
-            const fillRadius = 5 + fillProgress * 12;
-            const fillAlpha = Math.pow(1 - fillProgress, 1.8) * 0.65;
-            ig.circle(bomb.x, bomb.endY, fillRadius).fill({ color: 0xef4444, alpha: fillAlpha });
+          // Layer 2: second ring (slightly delayed) for depth
+          if (ip > 0.1) {
+            const ip2 = (ip - 0.1) / 0.9;
+            const ring2Radius = 5 + ip2 * 24;
+            const ring2Alpha = Math.pow(1 - ip2, 2) * 0.5;
+            ig.circle(bomb.x, bomb.endY, ring2Radius).stroke({ color: 0xff6b35, alpha: ring2Alpha, width: 1.5 });
           }
 
-          // Bright yellow core flash (very early)
-          if (ip < 0.25) {
-            const coreProgress = ip / 0.25;
-            const coreRadius = 3 + coreProgress * 6;
-            const coreAlpha = Math.pow(1 - coreProgress, 2) * 0.9;
-            ig.circle(bomb.x, bomb.endY, coreRadius).fill({ color: 0xfbbf24, alpha: coreAlpha });
+          // Layer 3: fireball core — bright yellow→orange→red transition
+          if (ip < 0.5) {
+            const coreP = ip / 0.5;
+            const coreRadius = 4 + coreP * 10;
+            const coreAlpha = Math.pow(1 - coreP, 1.5) * 0.9;
+            // Yellow core
+            ig.circle(bomb.x, bomb.endY, coreRadius * 0.6).fill({ color: 0xfbbf24, alpha: coreAlpha });
+            // Orange fill
+            ig.circle(bomb.x, bomb.endY, coreRadius).fill({ color: 0xef4444, alpha: coreAlpha * 0.6 });
           }
 
-          // 4 small debris particles radiating outward
-          const particleAngles = [0, Math.PI / 2, Math.PI, Math.PI * 1.5];
-          for (const angle of particleAngles) {
-            const pDist = ip * 18;
+          // Layer 4: white-hot flash (first 15%)
+          if (ip < 0.15) {
+            const flashP = ip / 0.15;
+            const flashRadius = 3 + flashP * 8;
+            ig.circle(bomb.x, bomb.endY, flashRadius).fill({ color: 0xffffff, alpha: (1 - flashP) * 0.8 });
+          }
+
+          // Layer 5: smoke — dark gray circles that expand and fade slowly
+          if (ip > 0.2) {
+            const smokeP = (ip - 0.2) / 0.8;
+            const smokeRadius = 6 + smokeP * 18;
+            const smokeAlpha = Math.pow(1 - smokeP, 1.2) * 0.25;
+            ig.circle(bomb.x, bomb.endY - smokeP * 10, smokeRadius).fill({ color: 0x333333, alpha: smokeAlpha });
+          }
+
+          // Layer 6: 6 debris particles radiating outward (more than before)
+          const debrisCount = 6;
+          for (let d = 0; d < debrisCount; d++) {
+            const angle = (d / debrisCount) * Math.PI * 2 + 0.3; // slight offset
+            const pDist = ip * 22;
             const px = bomb.x + Math.cos(angle) * pDist;
-            const py = bomb.endY + Math.sin(angle) * pDist;
-            const pAlpha = Math.pow(1 - ip, 2) * 0.6;
-            ig.circle(px, py, 1.5).fill({ color: 0xff8c00, alpha: pAlpha });
+            const py = bomb.endY + Math.sin(angle) * pDist - ip * 5; // slight upward drift
+            const pAlpha = Math.pow(1 - ip, 2.5) * 0.7;
+            const pRadius = 1.2 + (1 - ip) * 1.0;
+            ig.circle(px, py, pRadius).fill({ color: 0xff8c00, alpha: pAlpha });
           }
         } else if (impactElapsed > impactDuration + 200) {
           // Fully complete — remove this bomb

@@ -1420,8 +1420,10 @@ impl GameEngine {
             };
             let escort_fighters = action.escort_fighters.unwrap_or(0);
             let flight_id = uuid_v4();
-            eprintln!("[AIR] Launching {} mission {} from {} to {} ({} units, {} escorts)",
-                mission_type, flight_id, source_id, target_id, units, escort_fighters);
+            let launch_force = units * unit_config.manpower_cost.max(1) as i64;
+            eprintln!("[AIR] Launching {} mission {} | {} bombers × mc={} = force {} | escorts={} | {} → {}",
+                mission_type, flight_id, units, unit_config.manpower_cost.max(1),
+                launch_force, escort_fighters, source_id, target_id);
             air_transit_queue.push(AirTransitItem {
                 id: flight_id.clone(),
                 mission_type: mission_type.to_string(),
@@ -2141,9 +2143,6 @@ impl GameEngine {
         for item in air_transit_queue {
             let mut item = item.clone();
 
-            // Advance progress.
-            item.progress += item.speed_per_tick;
-
             // Advance interceptors and check for mid-air combat.
             let mut i = 0;
             while i < item.interceptors.len() {
@@ -2162,95 +2161,97 @@ impl GameEngine {
                 }
             }
 
-            // Bomber path bombing — damage enemy provinces along the flight path.
+            // Bomber path bombing — budget model.
+            // path_damage = fraction of total force allocated to the ENTIRE path.
+            // This budget is split evenly across intermediate provinces.
+            // Bomber does NOT lose units during flight — it drops ordnance.
+            // Final target gets force × (1 - path_damage) × attack.
             if item.mission_type == "bomb_run" && item.units > 0 {
                 let unit_config = self.get_unit_config(&item.unit_type);
                 if unit_config.path_damage > 0.0 {
-                    // Determine which hop index we're currently at.
                     let current_hop = (item.progress * item.total_distance as f64) as usize;
                     let path_len = item.flight_path.len();
-                    // Bomb hops from last_bombed_hop+1 up to current_hop-1 (skip source and target).
                     let start_hop = item.last_bombed_hop + 1;
                     let end_hop = current_hop.min(path_len.saturating_sub(1));
                     if start_hop < end_hop {
                         let unit_scale = self.get_unit_scale(&item.unit_type);
+                        let attack = unit_config.attack;
+                        let total_force = item.units * unit_scale;
+                        // Count intermediate provinces (excluding source and target).
+                        let num_intermediate = item.flight_path.iter()
+                            .filter(|rid| **rid != item.source_region_id && **rid != item.target_region_id)
+                            .count() as f64;
+                        // Force budget per province = total_force × path_damage / num_intermediate.
+                        let force_per_province = if num_intermediate > 0.0 {
+                            (total_force as f64 * unit_config.path_damage / num_intermediate).round() as i64
+                        } else { 0 };
+
                         let mut bombed_regions: std::collections::HashSet<String> = std::collections::HashSet::new();
                         for hop_idx in start_hop..end_hop {
                             let hop_region_id = item.flight_path[hop_idx].clone();
-                            // Skip source and target.
                             if hop_region_id == item.source_region_id || hop_region_id == item.target_region_id {
                                 continue;
                             }
-                            // Only bomb the province directly on the flight path.
-                            {
-                                let target_rid = hop_region_id.clone();
-                                if bombed_regions.contains(&target_rid) {
+                            let target_rid = hop_region_id.clone();
+                            if bombed_regions.contains(&target_rid) {
+                                continue;
+                            }
+                            let target_owner = regions.get(&target_rid).and_then(|r| r.owner_id.clone());
+                            let is_enemy = match &target_owner {
+                                Some(oid) => oid != &item.player_id,
+                                None => true,
+                            };
+                            if !is_enemy {
+                                continue;
+                            }
+                            if let Some(target_region) = regions.get_mut(&target_rid) {
+                                let total_ground: i64 = target_region.units.iter()
+                                    .filter(|(ut, _)| self.get_unit_config(ut).movement_type != "air")
+                                    .map(|(_, c)| c)
+                                    .sum();
+                                if total_ground == 0 {
                                     continue;
                                 }
-                                let target_owner = regions.get(&target_rid).and_then(|r| r.owner_id.clone());
-                                let is_enemy = match &target_owner {
-                                    Some(oid) => oid != &item.player_id,
-                                    None => false,
-                                };
-                                if !is_enemy {
-                                    continue;
-                                }
-                                if let Some(target_region) = regions.get_mut(&target_rid) {
-                                    let total: i64 = target_region.units.iter()
-                                        .filter(|(ut, _)| self.get_unit_config(ut).movement_type != "air")
-                                        .map(|(_, c)| c)
-                                        .sum();
-                                    if total == 0 {
+                                let effective_damage = (force_per_province as f64 * attack).round() as i64;
+                                let actual_kills = effective_damage.min(total_ground);
+                                let kill_fraction = actual_kills as f64 / total_ground as f64;
+
+                                let mut new_units: HashMap<String, i64> = HashMap::new();
+                                let mut killed = 0i64;
+                                for (ut, &count) in &target_region.units {
+                                    let cfg = self.get_unit_config(ut);
+                                    if cfg.movement_type == "air" {
+                                        new_units.insert(ut.clone(), count);
                                         continue;
                                     }
-                                    // Damage = current manpower × path_damage bonus. Kills that many units.
-                                    let current_manpower = item.units * unit_scale;
-                                    let damage = (current_manpower as f64 * unit_config.path_damage).round() as i64;
-                                    let actual_kills = damage.min(total);
-                                    let kill_fraction = if total > 0 {
-                                        actual_kills as f64 / total as f64
-                                    } else {
-                                        0.0
-                                    };
-                                    let mut new_units: HashMap<String, i64> = HashMap::new();
-                                    let mut killed = 0i64;
-                                    for (ut, &count) in &target_region.units {
-                                        let cfg = self.get_unit_config(ut);
-                                        if cfg.movement_type == "air" {
-                                            new_units.insert(ut.clone(), count);
-                                            continue;
-                                        }
-                                        let k = (count as f64 * kill_fraction).round() as i64;
-                                        let r = (count - k).max(0);
-                                        killed += k;
-                                        if r > 0 {
-                                            new_units.insert(ut.clone(), r);
-                                        }
+                                    let k = (count as f64 * kill_fraction).round() as i64;
+                                    let r = (count - k).max(0);
+                                    killed += k;
+                                    if r > 0 {
+                                        new_units.insert(ut.clone(), r);
                                     }
-                                    target_region.units = new_units;
-                                    sync_region_unit_meta(target_region, self);
-                                    bombed_regions.insert(target_rid.clone());
-
-                                    // Bomber loses units proportional to damage dealt.
-                                    // Each killed enemy costs bomber some of its own manpower.
-                                    let manpower_spent = (killed as f64 * 0.5).ceil() as i64; // 0.5 manpower per kill
-                                    let bomber_units_lost = (manpower_spent as f64 / unit_scale as f64).ceil() as i64;
-                                    item.units = (item.units - bomber_units_lost).max(0);
-
-                                    eprintln!("[AIR] Path bomb {} -> {} killed {} (bomber units left: {})",
-                                        item.id, target_rid, killed, item.units);
-                                    events.push(Event::PathDamage {
-                                        target_region_id: target_rid,
-                                        player_id: item.player_id.clone(),
-                                        units_killed: killed,
-                                    });
                                 }
+                                target_region.units = new_units;
+                                sync_region_unit_meta(target_region, self);
+                                bombed_regions.insert(target_rid.clone());
+
+                                eprintln!("[AIR] Path bomb {} -> {} | bombers={} force={} | budget_per_province={} damage={} killed={}/{} ground",
+                                    item.id, target_rid, item.units, total_force, force_per_province, effective_damage, killed, total_ground);
+                                events.push(Event::PathDamage {
+                                    target_region_id: target_rid,
+                                    player_id: item.player_id.clone(),
+                                    units_killed: killed,
+                                });
                             }
                         }
                         item.last_bombed_hop = end_hop;
                     }
                 }
             }
+
+            // Advance progress after interceptor processing and path bombing,
+            // so hop calculations use the progress value from the start of this tick.
+            item.progress += item.speed_per_tick;
 
             // Check for arrival.
             if item.progress >= 1.0 {
@@ -2483,9 +2484,11 @@ impl GameEngine {
         let target_mut = regions.get_mut(target_id).unwrap();
         let old_owner_id = target_mut.owner_id.clone();
 
-        // Damage = remaining manpower × attack bonus. Kills that many ground units directly.
+        // Final strike: remaining force × (1 - path_damage) × attack.
+        // path_damage fraction was already spent on intermediate provinces.
         let remaining_manpower = effective_bombers * unit_scale;
-        let damage = (remaining_manpower as f64 * bomber_cfg.attack).round() as i64;
+        let final_force_fraction = 1.0 - bomber_cfg.path_damage;
+        let damage = (remaining_manpower as f64 * final_force_fraction * bomber_cfg.attack).round() as i64;
         let total_ground: i64 = target_mut.units.iter()
             .filter(|(ut, _)| self.get_unit_config(ut).movement_type != "air")
             .map(|(_, c)| *c)
@@ -2499,8 +2502,8 @@ impl GameEngine {
             0.0
         };
 
-        eprintln!("[AIR] Bomber strike on {}: effective_bombers={} manpower={} attack={} damage={} total_ground={} kills={}",
-            target_id, effective_bombers, remaining_manpower, bomber_cfg.attack, damage, total_ground, actual_kills);
+        eprintln!("[AIR] Bomber strike on {} | bombers={} force={} × (1-{}) × {} = damage {} | ground={} kills={}",
+            target_id, effective_bombers, remaining_manpower, bomber_cfg.path_damage, bomber_cfg.attack, damage, total_ground, actual_kills);
 
         let mut new_units: HashMap<String, i64> = HashMap::new();
         let mut ground_killed = 0i64;

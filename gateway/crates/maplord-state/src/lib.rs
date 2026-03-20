@@ -449,6 +449,7 @@ impl GameStateManager {
         pipe.del(self.key("buildings_queue")).ignore();
         pipe.del(self.key("unit_queue")).ignore();
         pipe.del(self.key("transit_queue")).ignore();
+        pipe.del(self.key("air_transit_queue")).ignore();
         pipe.del(self.key("active_effects")).ignore();
         pipe.del(self.key("actions")).ignore();
 
@@ -491,6 +492,12 @@ impl GameStateManager {
             pipe.rpush(&transit_key, packed).ignore();
         }
 
+        let air_transit_key = self.key("air_transit_queue");
+        for item in &full_state.air_transit_queue {
+            let packed = rmp_serde::to_vec(item).unwrap();
+            pipe.rpush(&air_transit_key, packed).ignore();
+        }
+
         let effects_key = self.key("active_effects");
         for item in &full_state.active_effects {
             let packed = rmp_serde::to_vec(item).unwrap();
@@ -513,6 +520,7 @@ impl GameStateManager {
             self.key("buildings_queue"),
             self.key("unit_queue"),
             self.key("transit_queue"),
+            self.key("air_transit_queue"),
             self.key("active_effects"),
         ];
         redis::cmd("DEL")
@@ -598,6 +606,15 @@ impl GameStateManager {
     pub async fn get_all_air_transit_queue(&self) -> redis::RedisResult<Vec<AirTransitItem>> {
         let mut conn = self.redis.clone();
         let raw: Vec<Vec<u8>> = conn.lrange(self.key("air_transit_queue"), 0, -1).await?;
+        Ok(raw
+            .iter()
+            .map(|v| deser(v))
+            .collect::<redis::RedisResult<_>>()?)
+    }
+
+    pub async fn get_all_active_effects(&self) -> redis::RedisResult<Vec<ActiveEffect>> {
+        let mut conn = self.redis.clone();
+        let raw: Vec<Vec<u8>> = conn.lrange(self.key("active_effects"), 0, -1).await?;
         Ok(raw
             .iter()
             .map(|v| deser(v))

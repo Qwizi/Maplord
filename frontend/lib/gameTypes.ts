@@ -17,4 +17,11 @@ export interface TroopAnimation {
   playerId?: string;
   /** Multi-point path as [x,y] waypoints. If set, animation follows this path instead of straight line. */
   waypoints?: [number, number][];
+  /**
+   * Bomber flight: ordered province centroids [x,y] along the bombing corridor.
+   * Each centroid is a bombing point — the bomber drops bombs as it passes over.
+   */
+  bombingWaypoints?: [number, number][];
+  /** Total province hops for the bombing run (= flight_path.length). */
+  totalHops?: number;
 }

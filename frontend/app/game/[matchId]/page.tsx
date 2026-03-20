@@ -181,12 +181,26 @@ export default function GamePage({
     const handler = (e: Event) => {
       const anims = (e as CustomEvent<TroopAnimation[]>).detail;
       if (anims.length > 0) {
-        setAnimations((prev) => [...prev, ...anims]);
+        setAnimations((prev) => {
+          const existingIds = new Set(prev.map(a => a.id));
+          const newAnims = anims.filter(a => !existingIds.has(a.id));
+          return newAnims.length > 0 ? [...prev, ...newAnims] : prev;
+        });
       }
     };
     window.addEventListener("air-transit-anims", handler);
     return () => window.removeEventListener("air-transit-anims", handler);
   }, []);
+
+  // Synchronized bomber sound — fires when PixiAnimationManager drops a salvo.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { isFinal } = (e as CustomEvent<{ isFinal: boolean }>).detail;
+      playSound(isFinal ? "missile_explosion" : "mine_explosion");
+    };
+    window.addEventListener("bomber-salvo", handler);
+    return () => window.removeEventListener("bomber-salvo", handler);
+  }, [playSound]);
   const mapReadyRef = useRef(false);
   const [showIntro, setShowIntro] = useState(true);
   const showIntroRef = useRef(true);
@@ -806,6 +820,11 @@ export default function GamePage({
           continue;
         }
         const playerId = e.player_id as string;
+        // Air units are rendered from air_transit_queue state in GameCanvas — skip here
+        const unitTypeStr = (e.unit_type as string) || null;
+        if (unitConfigBySlug[unitTypeStr ?? ""]?.movement_type === "air") {
+          continue;
+        }
         const color = gameStateRef.current?.players[playerId]?.color ?? "#3b82f6";
         const carrierCount = (e.units as number) || 0;
         const travelTicks = Math.max(1, (e.travel_ticks as number) || 1);
@@ -815,8 +834,8 @@ export default function GamePage({
           sourceId: e.source_region_id as string,
           targetId: e.target_region_id as string,
           color,
-          units: getAnimationPower(unitsConfig, e.unit_type as string, carrierCount),
-          unitType: (e.unit_type as string) || null,
+          units: getAnimationPower(unitsConfig, unitTypeStr, carrierCount),
+          unitType: unitTypeStr,
           type: ((e.action_type as string) === "attack" ? "attack" : "move"),
           startTime: Date.now(),
           durationMs: travelTicks * tickMs,
@@ -867,49 +886,23 @@ export default function GamePage({
           setAnimations((prev) => prev.filter((a) => a.id !== flightId));
         }
       } else if (e.type === "path_damage") {
-        // Bomb drop animation on the province that took real damage during flight.
-        const targetId = e.target_region_id as string;
-        const playerId = e.player_id as string;
+        // Visual bomb-drop already handled client-side in PixiAnimationManager.
+        // Mark province as recently bombed so unit count stays visible.
         const killed = (e.units_killed as number) ?? 0;
-        if (killed > 0) {
-          const color = gameStateRef.current?.players[playerId]?.color ?? "#ef4444";
-          newAnims.push({
-            id: crypto.randomUUID(),
-            sourceId: targetId,
-            targetId,
-            color,
-            units: killed,
-            unitCount: killed,
-            unitType: "bomber",
-            type: "attack" as const,
-            startTime: Date.now(),
-            durationMs: 1200,
-            playerId,
-          });
+        const targetId = e.target_region_id as string;
+        window.dispatchEvent(new CustomEvent("province-bombed", { detail: { regionId: targetId } }));
+        const regionName = gameStateRef.current?.regions[targetId]?.name ?? targetId;
+        if (killed >= 3) {
+          toast.info(`Nalot na ${regionName}: -${killed} jednostek`);
         }
       } else if (e.type === "bomber_strike") {
-        // Final strike on target province.
+        // Final strike — mark province as recently bombed.
         const targetId = e.target_region_id as string;
-        const playerId = e.player_id as string;
+        window.dispatchEvent(new CustomEvent("province-bombed", { detail: { regionId: targetId } }));
         const groundKilled = (e.ground_units_destroyed as number) ?? 0;
         const neutralized = e.province_neutralized as boolean;
         const regionName = gameStateRef.current?.regions[targetId]?.name ?? targetId;
         if (groundKilled > 0) {
-          const color = gameStateRef.current?.players[playerId]?.color ?? "#ef4444";
-          // Bomb drop animation on target.
-          newAnims.push({
-            id: crypto.randomUUID(),
-            sourceId: targetId,
-            targetId,
-            color,
-            units: groundKilled,
-            unitCount: groundKilled,
-            unitType: "bomber",
-            type: "attack" as const,
-            startTime: Date.now(),
-            durationMs: 1500,
-            playerId,
-          });
           toast.info(`Bombardowanie ${regionName}: -${groundKilled} jednostek`);
         }
         if (neutralized) {
@@ -1463,9 +1456,8 @@ export default function GamePage({
           }
         }
       }
-      if (e.type === "path_damage") {
-        playSound("missile_explosion");
-      }
+      // path_damage + bomber_strike sounds handled by "bomber-salvo" event listener
+      // (synchronized with visual bomb drops, not server events).
       if (e.type === "bombard") {
         playSound("missile_explosion");
       }
@@ -1474,9 +1466,6 @@ export default function GamePage({
       }
       if (e.type === "air_mission_launched") {
         playSound("plane_start");
-      }
-      if (e.type === "bomber_strike") {
-        playSound("missile_explosion");
       }
       if (e.type === "air_combat_resolved") {
         playSound("missile_explosion");

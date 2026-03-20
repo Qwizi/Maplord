@@ -344,18 +344,19 @@ class Command(BaseCommand):
             bt_updated += 1
         self.stdout.write(f"    BuildingType: {bt_updated} updated (level_stats cost=1, energy=1, build=1 tick)")
 
-        # Units: patch level_stats — production_cost=1, production_time=1, manpower=1 for all levels
+        # Units: patch level_stats — production_cost=1, production_time=1 for all levels.
+        # manpower_cost preserved from fixture (defines unit strength, not just cost).
         ut_updated = 0
         for ut in UnitType.objects.filter(is_active=True):
             level_stats = ut.level_stats or {}
             for level_data in level_stats.values():
                 level_data['production_cost'] = 1
                 level_data['production_time_ticks'] = 1
-                level_data['manpower_cost'] = 1
+                # Don't override manpower_cost — it defines unit strength/force.
             ut.level_stats = level_stats
             ut.save(update_fields=['level_stats'])
             ut_updated += 1
-        self.stdout.write(f"    UnitType: {ut_updated} updated (level_stats cost=1, time=1, manpower=1)")
+        self.stdout.write(f"    UnitType: {ut_updated} updated (level_stats cost=1, time=1, manpower preserved)")
 
         # Abilities: patch base fields (energy_cost, cooldown_ticks) AND level_stats
         at_updated = 0

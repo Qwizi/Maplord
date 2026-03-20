@@ -1659,6 +1659,7 @@ async fn eliminate_player(
         "unit_queue": state_mgr.get_all_unit_queue().await.unwrap_or_default(),
         "transit_queue": state_mgr.get_all_transit_queue().await.unwrap_or_default(),
         "air_transit_queue": state_mgr.get_all_air_transit_queue().await.unwrap_or_default(),
+        "active_effects": state_mgr.get_all_active_effects().await.unwrap_or_default(),
         "weather": elim_weather,
     });
     broadcast_to_match(match_id, &tick_msg, &state.game_connections);
@@ -2002,47 +2003,57 @@ async fn auto_select_tutorial_bot_capital(
 
     let neighbor_map = state.django.get_neighbor_map().await.unwrap_or_default();
 
-    // BFS from human's capital to find closest unowned region that respects min_dist
-    let mut visited = HashSet::new();
-    visited.insert(human_capital_id.to_string());
-    let mut queue = VecDeque::new();
-    queue.push_back((human_capital_id.to_string(), 0usize));
+    // Assign capital to each bot, giving each a distinct region via BFS from the human capital.
+    // used_regions tracks regions already assigned in this loop so no two bots share the same capital.
+    let mut used_regions: HashSet<String> = HashSet::new();
+    used_regions.insert(human_capital_id.to_string());
 
-    let mut best_region: Option<String> = None;
-
-    while let Some((current, dist)) = queue.pop_front() {
-        // Check if this region is a valid capital location
-        if dist >= min_dist {
-            if let Some(r) = regions.get(&current) {
-                if r.owner_id.is_none() {
-                    best_region = Some(current.clone());
-                    break;
-                }
-            }
-        }
-
-        if let Some(neighbors) = neighbor_map.get(&current) {
-            for neighbor in neighbors {
-                if !visited.contains(neighbor) && regions.contains_key(neighbor) {
-                    visited.insert(neighbor.clone());
-                    queue.push_back((neighbor.clone(), dist + 1));
-                }
-            }
-        }
-    }
-
-    // Assign capital to each bot
     for bot_id in &bot_ids {
-        let region_id = match &best_region {
-            Some(id) => id.clone(),
+        // BFS from human's capital to find the closest unowned, unassigned region that
+        // respects min_dist. We re-run BFS for each bot so the search skips regions that
+        // were already assigned to earlier bots in this iteration.
+        let mut visited = HashSet::new();
+        visited.insert(human_capital_id.to_string());
+        let mut queue = VecDeque::new();
+        queue.push_back((human_capital_id.to_string(), 0usize));
+
+        let mut best_region: Option<String> = None;
+
+        while let Some((current, dist)) = queue.pop_front() {
+            if dist >= min_dist {
+                if let Some(r) = regions.get(&current) {
+                    if r.owner_id.is_none() && !used_regions.contains(&current) {
+                        best_region = Some(current.clone());
+                        break;
+                    }
+                }
+            }
+
+            if let Some(neighbors) = neighbor_map.get(&current) {
+                for neighbor in neighbors {
+                    if !visited.contains(neighbor) && regions.contains_key(neighbor) {
+                        visited.insert(neighbor.clone());
+                        queue.push_back((neighbor.clone(), dist + 1));
+                    }
+                }
+            }
+        }
+
+        let region_id = match best_region {
+            Some(id) => id,
             None => {
-                // Fallback: any unowned region
-                match regions.iter().find(|(_, r)| r.owner_id.is_none()) {
+                // Fallback: any unowned, unassigned region
+                match regions
+                    .iter()
+                    .find(|(id, r)| r.owner_id.is_none() && !used_regions.contains(*id))
+                {
                     Some((id, _)) => id.clone(),
                     None => continue,
                 }
             }
         };
+
+        used_regions.insert(region_id.clone());
 
         let mut players = match state_mgr.get_all_players().await {
             Ok(p) => p,

@@ -271,6 +271,37 @@ export default function GameCanvas({
   const airTransitQueueRef = useRef(airTransitQueue);
   airTransitQueueRef.current = airTransitQueue;
 
+  const unitManpowerMapRef = useRef(unitManpowerMap);
+  unitManpowerMapRef.current = unitManpowerMap;
+
+  // Track recently bombed provinces — keep showing unit count for 5s after bombing.
+  const recentlyBombedRef = useRef<Map<string, number>>(new Map());
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { regionId } = (e as CustomEvent<{ regionId: string; count: number }>).detail;
+      recentlyBombedRef.current.set(regionId, Date.now());
+    };
+    window.addEventListener("bomb-drop", handler);
+    // Also listen for path_damage via a dedicated event
+    const pathHandler = (e: Event) => {
+      const { regionId } = (e as CustomEvent<{ regionId: string }>).detail;
+      recentlyBombedRef.current.set(regionId, Date.now());
+    };
+    window.addEventListener("province-bombed", pathHandler);
+    // Cleanup stale entries every 5s
+    const interval = setInterval(() => {
+      const now = Date.now();
+      for (const [rid, ts] of recentlyBombedRef.current) {
+        if (now - ts > 8000) recentlyBombedRef.current.delete(rid);
+      }
+    }, 5000);
+    return () => {
+      window.removeEventListener("bomb-drop", handler);
+      window.removeEventListener("province-bombed", pathHandler);
+      clearInterval(interval);
+    };
+  }, []);
+
   // ── Province drawing helper ──────────────────────────────────
 
   const drawProvince = useCallback(
@@ -369,11 +400,13 @@ export default function GameCanvas({
           (e) => e.effect_type === "ab_pr_submarine" && e.affected_region_ids.includes(id)
         ) ?? false;
 
-        // Show unit count on enemy provinces being bombed (in active bomber flight paths).
+        // Show unit count on enemy provinces being bombed (in active bomber flight paths)
+        // OR recently bombed (keep visible for a few seconds after flight ends).
         const isBombed = airTransitQueueRef.current?.some(
           (f) => f.mission_type === "bomb_run" && f.flight_path?.includes(id)
         ) ?? false;
-        const showUnitCount = isOwner || isAnimTarget || isSubRevealed || isBombed;
+        const wasRecentlyBombed = recentlyBombedRef.current.has(id);
+        const showUnitCount = isOwner || isAnimTarget || isSubRevealed || isBombed || wasRecentlyBombed;
 
         if (showUnitCount) {
           // Calculate air units separately (fighter, bomber)
@@ -385,7 +418,7 @@ export default function GameCanvas({
             const count = units[slug] ?? 0;
             if (count > 0) {
               airCount += count;
-              airManpower += count * (unitManpowerMap?.[slug] ?? 1);
+              airManpower += count * (unitManpowerMapRef.current?.[slug] ?? 1);
             }
           }
           const groundCount = region.unit_count - airManpower;
@@ -835,8 +868,18 @@ export default function GameCanvas({
       const escortManpower = flight.escort_fighters * (unitManpowerMap?.["fighter"] ?? 1);
       const totalManpower = mainManpower + escortManpower;
 
-      // Animation flies straight line (source→target) — no waypoints needed.
-      // Path bombing uses geometric corridor in engine, not waypoints.
+      // Build bombing waypoints from flight_path province IDs → centroids.
+      // The bomber animation will fly through these centroids and drop bombs
+      // at each hop, synchronized with the engine's tick-by-tick path_damage.
+      let bombingWaypoints: [number, number][] | undefined;
+      let totalHops: number | undefined;
+      if (flight.unit_type === "bomber" && flight.flight_path && flight.flight_path.length >= 2) {
+        bombingWaypoints = flight.flight_path
+          .map((rid) => centroids.get(rid))
+          .filter((c): c is [number, number] => !!c);
+        totalHops = flight.flight_path.length;
+      }
+
       newAnims.push({
         id: flight.id,
         sourceId: flight.source_region_id,
@@ -849,7 +892,21 @@ export default function GameCanvas({
         startTime: Date.now() - (flight.progress / flight.speed_per_tick) * tickMs,
         durationMs: (1.0 / flight.speed_per_tick) * tickMs,
         playerId: flight.player_id,
+        bombingWaypoints,
+        totalHops,
       });
+    }
+
+    // Update unit count labels on already-registered bomber flights
+    // (bomber loses units during path bombing — engine updates air_transit_queue).
+    const manager = animManagerRef.current;
+    if (manager) {
+      for (const flight of airTransitQueue) {
+        if (!registeredFlightsRef.current.has(flight.id)) continue;
+        const mainManpower = flight.units * (unitManpowerMap?.[flight.unit_type] ?? 1);
+        const escortManpower = flight.escort_fighters * (unitManpowerMap?.["fighter"] ?? 1);
+        manager.updateAnimationLabel(flight.id, mainManpower + escortManpower);
+      }
     }
 
     // Clean up finished flights.
