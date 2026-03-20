@@ -131,7 +131,7 @@ const SHARED_IMPACT_ATTACK: ImpactConfig = {
   layers: [
     {
       type: "ring",
-      color: "#ef4444",
+      color: "#cc4400",
       radius: [6, 58],
       opacity_start: 0.9,
       opacity_curve: 1.5,
@@ -139,11 +139,19 @@ const SHARED_IMPACT_ATTACK: ImpactConfig = {
     },
     {
       type: "fill",
-      color: "#fca5a5",
+      color: "#ff8c00",
       radius: [4, 16],
       opacity_start: 0.8,
       opacity_curve: 2.0,
       duration_pct: 0.4,
+    },
+    {
+      type: "fill",
+      color: "#555555",
+      radius: [8, 35],
+      opacity_start: 0.4,
+      opacity_curve: 1.0,
+      duration_pct: 0.9,
     },
   ],
 };
@@ -234,15 +242,15 @@ const SHARED_ICON_BASE: Pick<
 export const ANIMATION_DEFAULTS: Record<string, AnimationConfig> = {
   fighter: {
     trail: {
-      color: "#f59e0b",
-      opacity: 0.85,
+      color: "#c0c0c0",
+      opacity: 0.5,
       width: 4.5,
       blur: 1.2,
       length: 0.18,
       line_style: "solid",
       dash_pattern: [4, 3],
-      glow: false,
-      glow_color: null,
+      glow: true,
+      glow_color: "#ffffff",
       glow_width: 8,
       particles: "circle",
       particle_count: 4,
@@ -274,16 +282,16 @@ export const ANIMATION_DEFAULTS: Record<string, AnimationConfig> = {
 
   ship: {
     trail: {
-      color: "#38bdf8",
+      color: "#a0c0d0",
       opacity: 0.5,
-      width: 3.2,
+      width: 2.5,
       blur: 0.2,
       length: 0.22,
       line_style: "solid",
       dash_pattern: [4, 3],
-      glow: false,
-      glow_color: null,
-      glow_width: 8,
+      glow: true,
+      glow_color: "#ffffff",
+      glow_width: 5,
       particles: "circle",
       particle_count: 5,
       particle_spacing: 0.055,
@@ -314,9 +322,9 @@ export const ANIMATION_DEFAULTS: Record<string, AnimationConfig> = {
 
   tank: {
     trail: {
-      color: null, // player color
-      opacity: 0.48,
-      width: 3.4,
+      color: "#4a6a3a",
+      opacity: 0.38,
+      width: 2.8,
       blur: 0.15,
       length: 0.3,
       line_style: "solid",
@@ -325,7 +333,7 @@ export const ANIMATION_DEFAULTS: Record<string, AnimationConfig> = {
       glow_color: null,
       glow_width: 8,
       particles: "circle",
-      particle_count: 6,
+      particle_count: 4,
       particle_spacing: 0.055,
       particle_head_size: 7,
       particle_decay: 0.35,
@@ -341,7 +349,7 @@ export const ANIMATION_DEFAULTS: Record<string, AnimationConfig> = {
     },
     pulse: {
       enabled: true,
-      color: "#ef4444",
+      color: "#4a6a3a",
       rings: 3,
       radius_base: 8,
       radius_expand: 44,
@@ -355,8 +363,8 @@ export const ANIMATION_DEFAULTS: Record<string, AnimationConfig> = {
   infantry: {
     trail: {
       color: null, // player color
-      opacity: 0.35,
-      width: 2.4,
+      opacity: 0.28,
+      width: 1.8,
       blur: 0.15,
       length: 0.3,
       line_style: "solid",
@@ -365,8 +373,7 @@ export const ANIMATION_DEFAULTS: Record<string, AnimationConfig> = {
       glow_color: null,
       glow_width: 8,
       particles: "circle",
-      // NUM_TRAIL_DOTS(8) + 2 = 10
-      particle_count: 10,
+      particle_count: 6,
       particle_spacing: 0.055,
       particle_head_size: 5.5,
       particle_decay: 0.22,
@@ -396,14 +403,14 @@ export const ANIMATION_DEFAULTS: Record<string, AnimationConfig> = {
   bomber: {
     trail: {
       color: "#f97316",       // orange — tactical bombing route
-      opacity: 0.55,
+      opacity: 0.45,
       width: 2.5,
       blur: 0,
       length: 0.85,           // long trail — shows full planned route
       line_style: "dashed",   // dashed line like tactical map overlays
       dash_pattern: [8, 5],   // military map dash pattern
       glow: true,
-      glow_color: "#f97316",
+      glow_color: "#8B4513",
       glow_width: 6,
       particles: "circle",
       particle_count: 4,

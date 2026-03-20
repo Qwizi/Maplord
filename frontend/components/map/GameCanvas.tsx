@@ -100,15 +100,15 @@ const EFFECT_CONFIG: Record<string, { color: string; borderColor: string; icon: 
 
 const BG_COLOR = 0x08111d;
 const DEFAULT_FILL = 0x1a2332;
-const DEFAULT_STROKE = 0x1a2a3d;
+const DEFAULT_STROKE = 0x1a3a2d;
 const SELECTED_STROKE = 0xffffff;
 const TARGET_STROKE = 0xef4444;
 const NEIGHBOR_TINT = 0x2a4060;
 const CAPITAL_FILL = 0xfbbf24;
 const DIMMED_ALPHA = 0.25;
-const NORMAL_ALPHA = 0.90; // semi-transparent so terrain texture shows through
+const NORMAL_ALPHA = 0.60; // semi-transparent so terrain texture shows through
 const UNCLAIMED_FILL_ALPHA = 0.0; // unclaimed provinces: no fill, terrain shows through
-const STROKE_WIDTH_DEFAULT = 1.5;
+const STROKE_WIDTH_DEFAULT = 2;
 const STROKE_WIDTH_SELECTED = 3;
 const STROKE_WIDTH_TARGET = 2;
 
@@ -219,6 +219,7 @@ export default function GameCanvas({
   const nukeLayerRef = useRef<Container | null>(null);
   const unitChangeLayerRef = useRef<Container | null>(null);
   const weatherOverlayRef = useRef<Graphics | null>(null);
+  const gridLayerRef = useRef<Graphics | null>(null);
   const animManagerRef = useRef<PixiAnimationManager | null>(null);
   const airTransitLayerRef = useRef<Container | null>(null);
 
@@ -390,6 +391,16 @@ export default function GameCanvas({
         const outerRing = subPoly[0];
         if (outerRing && outerRing.length >= 3) {
           drawPolygon(gfx, outerRing, baseFill, strokeColor, strokeWidth, alpha);
+          // Selected province: double stroke — player color at 3px, then white at 1.5px on top
+          if (isSelected) {
+            const playerColor = player ? hexStringToNumber(player.color) : SELECTED_STROKE;
+            const flatPoints: number[] = [];
+            for (const pt of outerRing) {
+              flatPoints.push(pt[0], pt[1]);
+            }
+            gfx.poly(flatPoints, true).stroke({ color: playerColor, width: 3, alpha: 1.0 });
+            gfx.poly(flatPoints, true).stroke({ color: 0xffffff, width: 1.5, alpha: 1.0 });
+          }
         }
       }
 
@@ -436,11 +447,11 @@ export default function GameCanvas({
           }
           const groundCount = region.unit_count - airManpower;
           if (groundCount > 0 && airCount > 0) {
-            label.text = `${groundCount}  ${airCount}✈(${airManpower})`;
+            label.text = `▸ ${groundCount} | ${airCount}✈`;
           } else if (airCount > 0) {
-            label.text = `${airCount}✈(${airManpower})`;
+            label.text = `▸ ${airCount}✈`;
           } else {
-            label.text = region.unit_count > 0 ? String(region.unit_count) : "";
+            label.text = region.unit_count > 0 ? `▸ ${region.unit_count}` : "";
           }
         } else if (ownerId && player) {
           // Show short username for enemies
@@ -454,15 +465,19 @@ export default function GameCanvas({
 
       label.alpha = isDimmed ? 0.5 : 1.0;
 
-      // Draw dark rounded rect behind unit count label for readability
+      // Draw sharp-cornered military stencil rect behind label for readability
       const bg = state.labelBg;
       bg.clear();
       if (label.text && label.text.length > 0) {
         const textW = Math.max(label.text.length * 9, 20);
         const textH = 18;
         const [lx, ly] = shape.centroid;
-        bg.roundRect(lx - textW / 2 - 4, ly - textH / 2 - 1, textW + 8, textH + 2, 4)
-          .fill({ color: 0x000000, alpha: 0.55 });
+        const isEnemy = ownerId !== null && ownerId !== myUserId;
+        const bgColor = isEnemy ? 0x1a0a0a : 0x0a1a0a;
+        const borderColor = isEnemy ? 0x4a2a2a : 0x2a4a2a;
+        bg.rect(lx - textW / 2 - 4, ly - textH / 2 - 1, textW + 8, textH + 2)
+          .fill({ color: bgColor, alpha: 0.72 })
+          .stroke({ color: borderColor, width: 1, alpha: 0.6 });
         bg.alpha = isDimmed ? 0.3 : 1.0;
       }
 
@@ -632,6 +647,27 @@ export default function GameCanvas({
       }
 
       viewport.addChildAt(terrainContainer, 0);
+    }
+
+    // Tactical grid overlay — draw after world bounds are known
+    {
+      const gridLayer = gridLayerRef.current;
+      if (gridLayer) {
+        gridLayer.clear();
+        const wt = shapesData.world_texture;
+        const gridSpacing = 200;
+        const minX = wt ? wt.x : shapesData.bounds.min_x;
+        const minY = wt ? wt.y : shapesData.bounds.min_y;
+        const maxX = wt ? wt.x + wt.w : shapesData.bounds.max_x;
+        const maxY = wt ? wt.y + wt.h : shapesData.bounds.max_y;
+        for (let x = minX; x <= maxX; x += gridSpacing) {
+          gridLayer.moveTo(x, minY).lineTo(x, maxY);
+        }
+        for (let y = minY; y <= maxY; y += gridSpacing) {
+          gridLayer.moveTo(minX, y).lineTo(maxX, y);
+        }
+        gridLayer.stroke({ color: 0x4a6a4a, width: 0.5 });
+      }
     }
 
     // Fit viewport to world on first load
@@ -1381,6 +1417,13 @@ export default function GameCanvas({
       weatherOverlay.eventMode = "none";
       weatherOverlayRef.current = weatherOverlay;
 
+      // Tactical grid overlay — drawn behind provinces, updated when shapesData loads
+      const gridLayer = new Graphics();
+      gridLayer.eventMode = "none";
+      gridLayer.alpha = 0.04;
+      gridLayerRef.current = gridLayer;
+
+      viewport.addChild(gridLayer);
       viewport.addChild(provinceLayer);
       viewport.addChild(capitalLayer);
       viewport.addChild(weatherOverlay);
@@ -1456,6 +1499,7 @@ export default function GameCanvas({
         nukeLayerRef.current = null;
         unitChangeLayerRef.current = null;
         weatherOverlayRef.current = null;
+        gridLayerRef.current = null;
       }
     };
     // Only run once on mount

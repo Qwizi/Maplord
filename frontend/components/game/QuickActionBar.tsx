@@ -126,7 +126,8 @@ export default memo(function QuickActionBar({
 
   return (
     <div className="absolute bottom-3 left-1/2 z-20 -translate-x-1/2 w-[min(95vw,480px)]">
-      <div className="rounded-2xl border border-border bg-card/95 shadow-lg backdrop-blur-xl overflow-hidden">
+      <div className="military-frame rounded-2xl border border-border bg-card/95 shadow-lg backdrop-blur-xl overflow-hidden">
+        <div className="military-frame-inner">
 
         {/* Header */}
         <div className="flex items-center gap-2 px-3 py-2">
@@ -334,6 +335,7 @@ export default memo(function QuickActionBar({
             )}
           </>
         )}
+        </div>
       </div>
     </div>
   );

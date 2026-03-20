@@ -121,8 +121,8 @@ export default memo(function GameHUD({
         tickIntervalMs={tickIntervalMs}
       />
 
-      <div className="hidden rounded-xl border border-border bg-card/80 p-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.22)] backdrop-blur-xl sm:block">
-        <div className="px-1 pb-1.5 text-[10px] sm:text-xs uppercase tracking-[0.16em] text-muted-foreground">
+      <div className="military-frame hidden rounded-xl border border-border bg-card/80 p-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.22)] backdrop-blur-xl sm:block">
+        <div className="military-frame-inner px-1 pb-1.5 text-[10px] sm:text-xs uppercase tracking-[0.16em] text-muted-foreground">
           Ranking
         </div>
         <div className="space-y-0.5">
