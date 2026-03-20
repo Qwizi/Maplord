@@ -223,6 +223,7 @@ export default function GameCanvas({
   const animManagerRef = useRef<PixiAnimationManager | null>(null);
   const airTransitLayerRef = useRef<Container | null>(null);
   const capitalRadarRef = useRef<Graphics | null>(null);
+  const weatherParticlesRef = useRef<Graphics | null>(null);
 
   /** Per-province render state — Graphics, Text, cached owner/fill */
   const stateMapRef = useRef<Map<string, ProvinceRenderState>>(new Map());
@@ -282,6 +283,9 @@ export default function GameCanvas({
 
   const shapesDataRef = useRef(shapesData);
   shapesDataRef.current = shapesData;
+
+  const weatherRef = useRef(weather);
+  weatherRef.current = weather;
 
   // Dirty-region rendering: track previous region snapshot + structural generation.
   const prevRegionSnapshotRef = useRef<Record<string, GameRegion>>({});
@@ -1453,6 +1457,10 @@ export default function GameCanvas({
       weatherOverlay.eventMode = "none";
       weatherOverlayRef.current = weatherOverlay;
 
+      const weatherParticles = new Graphics();
+      weatherParticles.eventMode = "none";
+      weatherParticlesRef.current = weatherParticles;
+
       // Tactical grid overlay — drawn behind provinces, updated when shapesData loads
       const gridLayer = new Graphics();
       gridLayer.eventMode = "none";
@@ -1464,6 +1472,7 @@ export default function GameCanvas({
       viewport.addChild(capitalLayer);
       viewport.addChild(capitalRadar);
       viewport.addChild(weatherOverlay);
+      viewport.addChild(weatherParticles);
       viewport.addChild(effectLayer);
       viewport.addChild(nukeLayer);
       viewport.addChild(animManager.container);
@@ -1484,11 +1493,12 @@ export default function GameCanvas({
       app.ticker.add(() => {
         animManager.update(Date.now());
 
+        const now = Date.now();
+
         // Capital radar ping — expanding concentric rings around owned capital provinces
         const radar = capitalRadarRef.current;
         if (radar) {
           radar.clear();
-          const now = Date.now();
           const regionEntries = Object.entries(regionsRef.current);
           for (const [rid, region] of regionEntries) {
             if (!region.is_capital || !region.owner_id) continue;
@@ -1504,6 +1514,47 @@ export default function GameCanvas({
               const radius = 15 + phase * 40;
               const alpha = (1 - phase) * (1 - phase) * 0.35;
               radar.circle(cx, cy, radius).stroke({ color: playerColor, width: 1.5, alpha });
+            }
+          }
+        }
+
+        // Weather particles — rain / storm diagonal streaks
+        const wp = weatherParticlesRef.current;
+        if (wp) {
+          wp.clear();
+          const currentWeather = weatherRef.current;
+          if (
+            currentWeather &&
+            (currentWeather.condition === "rain" || currentWeather.condition === "storm")
+          ) {
+            const vp = viewportRef.current;
+            if (vp) {
+              const particleCount = currentWeather.condition === "storm" ? 40 : 20;
+              const vx = vp.left ?? 0;
+              const vy = vp.top ?? 0;
+              const vw = vp.screenWidth / vp.scale.x;
+              const vh = vp.screenHeight / vp.scale.y;
+
+              for (let i = 0; i < particleCount; i++) {
+                // Each particle has a unique phase based on index
+                const seed = i * 7919; // prime for spread
+                const phase = ((now * 0.001 + seed) % 2.0) / 2.0; // 0..1 cycling every 2s
+                const x = vx + (((seed * 13) % 1000) / 1000) * vw;
+                const y = vy + phase * vh;
+                const length = currentWeather.condition === "storm" ? 12 : 8;
+                // Diagonal rain line (wind from left)
+                wp.moveTo(x, y).lineTo(x + 3, y + length);
+              }
+              wp.stroke({ color: 0xa0b0c0, width: 1, alpha: 0.2 });
+
+              // Storm: lightning flash every ~8 seconds
+              if (currentWeather.condition === "storm") {
+                const flashPhase = (now % 8000) / 8000;
+                if (flashPhase < 0.015) {
+                  // ~120ms flash
+                  wp.rect(vx, vy, vw, vh).fill({ color: 0xffffff, alpha: 0.08 });
+                }
+              }
             }
           }
         }
@@ -1560,6 +1611,7 @@ export default function GameCanvas({
         nukeLayerRef.current = null;
         unitChangeLayerRef.current = null;
         weatherOverlayRef.current = null;
+        weatherParticlesRef.current = null;
         gridLayerRef.current = null;
         capitalRadarRef.current = null;
       }
