@@ -14,8 +14,14 @@ STARTER_ITEMS = [
     'bp-port-1',       # Blueprint: Port Lvl 1
     'bp-carrier-1',    # Blueprint: Lotnisko Lvl 1
     'bp-radar-1',      # Blueprint: Elektrownia Lvl 1
-    'bp-tank-1',       # Blueprint: Czołg Lvl 1 (domyślna jednostka Fabryki)
-    'bp-fighter-1',    # Blueprint: Myśliwiec Lvl 1 (domyślna jednostka Lotniska)
+    'bp-tank-1',       # Blueprint: Czołg Lvl 1
+    'bp-artillery-1',  # Blueprint: Artyleria Lvl 1
+    'bp-commando-1',   # Blueprint: Komandos Lvl 1
+    'bp-sam-1',        # Blueprint: SAM Lvl 1
+    'bp-fighter-1',    # Blueprint: Myśliwiec Lvl 1
+    'bp-bomber-1',     # Blueprint: Bombowiec Lvl 1
+    'bp-ship-1',       # Blueprint: Okręt Lvl 1
+    'bp-submarine-1',  # Blueprint: Okręt podwodny Lvl 1
 ]
 STARTER_GOLD = 100
 DEFAULT_DECK_NAME = 'Domyślna talia'

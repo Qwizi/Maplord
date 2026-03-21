@@ -36,7 +36,7 @@ import TutorialOverlay from "@/components/game/TutorialOverlay";
 import MatchChatPanel from "@/components/chat/MatchChatPanel";
 import VoicePanel from "@/components/chat/VoicePanel";
 import DesktopChatVoice from "@/components/game/DesktopChatVoice";
-import WeatherIndicator from "@/components/game/WeatherIndicator";
+// WeatherIndicator removed — weather/day-night not used
 import { useVoiceChat } from "@/hooks/useVoiceChat";
 
 const BOOST_EFFECT_LABELS: Record<string, string> = {
@@ -2280,10 +2280,9 @@ export default function GamePage({
         connected={connected}
       />
 
-      {/* Weather indicator — top-right HUD */}
-      {gameState?.weather && (
+      {/* Weather indicator removed — weather/day-night not used */}
+      {false && gameState?.weather && (
         <div className="absolute right-2 top-2 z-10 sm:right-3 sm:top-3">
-          <WeatherIndicator weather={gameState.weather} />
         </div>
       )}
 
