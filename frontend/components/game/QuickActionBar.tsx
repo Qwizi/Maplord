@@ -437,16 +437,16 @@ export default memo(function QuickActionBar({
             )}
           </div>
           {/* Region bonuses */}
-          {isOwned && (region.defense_bonus > 0 || region.unit_generation_bonus > 0 || region.energy_generation_bonus > 0) && (
+          {isOwned && ((region.defense_bonus ?? 0) > 0 || (region.unit_generation_bonus ?? 0) > 0 || (region.energy_generation_bonus ?? 0) > 0) && (
             <div className="flex items-center gap-1.5 text-[10px] tabular-nums shrink-0">
-              {region.defense_bonus > 0 && (
-                <span className="text-blue-400" title="Bonus obrony">🛡+{+region.defense_bonus.toFixed(2)}</span>
+              {(region.defense_bonus ?? 0) > 0 && (
+                <span className="text-blue-400" title="Bonus obrony">🛡+{+(region.defense_bonus ?? 0).toFixed(2)}</span>
               )}
-              {region.unit_generation_bonus > 0 && (
-                <span className="text-green-400" title="Bonus gen. jednostek">♟+{+region.unit_generation_bonus.toFixed(1)}/t</span>
+              {(region.unit_generation_bonus ?? 0) > 0 && (
+                <span className="text-green-400" title="Bonus gen. jednostek">♟+{+(region.unit_generation_bonus ?? 0).toFixed(1)}/t</span>
               )}
-              {region.energy_generation_bonus > 0 && (
-                <span className="text-yellow-400" title="Bonus gen. energii">⚡+{+region.energy_generation_bonus.toFixed(1)}/t</span>
+              {(region.energy_generation_bonus ?? 0) > 0 && (
+                <span className="text-yellow-400" title="Bonus gen. energii">⚡+{+(region.energy_generation_bonus ?? 0).toFixed(1)}/t</span>
               )}
             </div>
           )}
