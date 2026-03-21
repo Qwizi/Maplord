@@ -1,19 +1,19 @@
 import { getAssetUrl, getOverrideUrl } from "./assetOverrides";
 
 export const BUILDING_ASSET_MAP: Record<string, string> = {
-  port: "/assets/buildings/v2/navyport_w300.webp",
-  barracks: "/assets/buildings/v2/barracks1_w300.webp",
-  carrier: "/assets/buildings/v2/airport_w300.webp",
-  radar: "/assets/buildings/v2/powerplant1_w300.webp",
-  tower: "/assets/buildings/v2/sentry_w300.webp",
-  factory: "/assets/buildings/v2/ironworks_w300.webp",
+  port: "/assets/buildings/svg/port.svg",
+  barracks: "/assets/buildings/svg/barracks.svg",
+  carrier: "/assets/buildings/svg/airport.svg",
+  radar: "/assets/buildings/svg/radar.svg",
+  tower: "/assets/buildings/svg/tower.svg",
+  factory: "/assets/buildings/svg/factory.svg",
   // legacy fallbacks
-  airport: "/assets/buildings/v2/airport_w300.webp",
-  navy_port: "/assets/buildings/v2/navyport_w300.webp",
-  power_plant: "/assets/buildings/v2/powerplant1_w300.webp",
-  military_base: "/assets/buildings/v2/militarybase_w300.webp",
-  ironworks: "/assets/buildings/v2/ironworks_w300.webp",
-  mine: "/assets/buildings/v2/mine_w300.webp",
+  airport: "/assets/buildings/svg/airport.svg",
+  navy_port: "/assets/buildings/svg/port.svg",
+  power_plant: "/assets/buildings/svg/radar.svg",
+  military_base: "/assets/buildings/svg/barracks.svg",
+  ironworks: "/assets/buildings/svg/factory.svg",
+  mine: "/assets/buildings/svg/factory.svg",
 };
 
 export function getBuildingAsset(slug: string | null | undefined, assetUrl?: string | null): string | null {
@@ -34,56 +34,122 @@ export function getUnitAsset(kind: string | null | undefined = "default", assetU
     case "moving":
       return "/assets/units/moving.webp";
     case "nuke_rocket":
-      return "/assets/units/nuke_icon.png";
+      return "/assets/units/svg/nuke.svg";
     case "air":
     case "fighter":
+      return "/assets/units/svg/fighter.svg";
     case "bomber":
-      return "/assets/units/planes/bomber_h300.webp";
+      return "/assets/units/svg/bomber.svg";
     case "ship":
     case "ship_1":
-      return "/assets/units/ships/ship1.png";
+      return "/assets/units/svg/ship.svg";
     case "tank":
     case "ground_unit_sphere":
-      return "/assets/units/ground_unit_sphere_h300.png";
+      return "/assets/units/svg/tank.svg";
     case "infantry":
     case "ground_unit":
-      return "/assets/units/ground_unit.webp";
+      return "/assets/units/svg/infantry.svg";
+    case "commando":
+      return "/assets/units/svg/commando.svg";
+    case "artillery":
+      return "/assets/units/svg/artillery.svg";
+    case "sam":
+      return "/assets/units/svg/sam.svg";
+    case "submarine":
+      return "/assets/units/svg/submarine.svg";
     default:
-      return "/assets/units/ground_unit_sphere_h300.png";
+      return "/assets/units/svg/infantry.svg";
   }
 }
 
+// Slot names for building cosmetics — canonical names used in playerCosmetics.
+const BUILDING_SLOT_MAP: Record<string, string> = {
+  barracks: "building_barracks",
+  factory: "building_factory",
+  tower: "building_tower",
+  port: "building_port",
+  carrier: "building_carrier",
+  radar: "building_radar",
+};
+
 /**
  * Resolve a building asset with player cosmetic priority.
- * Priority: playerCosmetics[slug] > global override > fallback
+ * Priority: playerCosmetics[building_<slug>] > global override > fallback
+ *
+ * The cosmetic slot key is derived from the building type using
+ * BUILDING_SLOT_MAP (e.g. "port" → "building_port").  Legacy slugs that are
+ * not in the slot map (airport, navy_port, …) skip the cosmetic lookup and go
+ * straight to the default asset.
  */
 export function getPlayerBuildingAsset(
   slug: string | null | undefined,
   playerCosmetics?: Record<string, unknown>,
   assetUrl?: string | null
 ): string | null {
-  if (slug && playerCosmetics?.[slug]) {
-    const v = playerCosmetics[slug];
-    const url = typeof v === "string" ? v : typeof v === "object" && v !== null && "url" in v ? (v as { url?: string | null }).url : null;
-    if (url) return url;
+  if (slug && playerCosmetics) {
+    const slot = BUILDING_SLOT_MAP[slug];
+    if (slot) {
+      const v = playerCosmetics[slot];
+      if (v) {
+        const url =
+          typeof v === "string"
+            ? v
+            : typeof v === "object" && v !== null && "url" in v
+              ? (v as { url?: string | null }).url ?? null
+              : null;
+        if (url) return url;
+      }
+    }
   }
   return getBuildingAsset(slug, assetUrl);
 }
 
+// Maps unit kind strings to their canonical cosmetic slot names.
+// Aliased kinds (air, bomber, ship_1, ground_unit, …) map to the same slot as
+// their canonical counterpart so cosmetics apply consistently.
+const UNIT_SLOT_MAP: Record<string, string> = {
+  infantry: "unit_infantry",
+  ground_unit: "unit_infantry",
+  tank: "unit_tank",
+  ground_unit_sphere: "unit_tank",
+  ship: "unit_ship",
+  ship_1: "unit_ship",
+  fighter: "unit_fighter",
+  air: "unit_fighter",
+  bomber: "unit_fighter",
+  commando: "unit_infantry",
+  artillery: "unit_tank",
+  submarine: "unit_ship",
+  sam: "unit_tank",
+};
+
 /**
  * Resolve a unit asset with player cosmetic priority.
- * Priority: playerCosmetics[kind] > global override > fallback
+ * Priority: playerCosmetics[unit_<kind>] > global override > fallback
+ *
+ * The cosmetic slot key is derived from the unit kind using UNIT_SLOT_MAP
+ * (e.g. "infantry" → "unit_infantry").  Special/internal kinds (nuke_rocket,
+ * moving, …) that are not in the slot map skip the cosmetic lookup.
  */
 export function getPlayerUnitAsset(
   kind: string | null | undefined,
   playerCosmetics?: Record<string, unknown>,
   assetUrl?: string | null
 ): string {
-  const resolvedKind = kind ?? "default";
-  if (playerCosmetics?.[resolvedKind]) {
-    const v = playerCosmetics[resolvedKind];
-    const url = typeof v === "string" ? v : typeof v === "object" && v !== null && "url" in v ? (v as { url?: string | null }).url : null;
-    if (url) return url;
+  if (kind && playerCosmetics) {
+    const slot = UNIT_SLOT_MAP[kind];
+    if (slot) {
+      const v = playerCosmetics[slot];
+      if (v) {
+        const url =
+          typeof v === "string"
+            ? v
+            : typeof v === "object" && v !== null && "url" in v
+              ? (v as { url?: string | null }).url ?? null
+              : null;
+        if (url) return url;
+      }
+    }
   }
   return getUnitAsset(kind, assetUrl);
 }

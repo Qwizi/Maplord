@@ -9,6 +9,8 @@ DEBUG = config('DEBUG', default=True, cast=bool)
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,backend', cast=Csv())
 CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='', cast=Csv())
 
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 5000
+
 INSTALLED_APPS = [
     'unfold',
     'unfold.contrib.filters',
@@ -30,7 +32,6 @@ INSTALLED_APPS = [
     'apps.matchmaking',
     'apps.game',
     'apps.chat',
-    'apps.shop',
     'apps.inventory',
     'apps.marketplace',
     'apps.crafting',
@@ -172,6 +173,14 @@ NINJA_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
+# Social Auth (Google OAuth2)
+GOOGLE_CLIENT_ID = config('GOOGLE_CLIENT_ID', default='')
+GOOGLE_CLIENT_SECRET = config('GOOGLE_CLIENT_SECRET', default='')
+
+# Social Auth (Discord OAuth2)
+DISCORD_CLIENT_ID = config('DISCORD_CLIENT_ID', default='')
+DISCORD_CLIENT_SECRET = config('DISCORD_CLIENT_SECRET', default='')
+
 # CORS
 # Internal API secret for Rust gateway
 INTERNAL_SECRET = config('INTERNAL_SECRET', default='dev-internal-secret')
@@ -217,6 +226,11 @@ UNFOLD = {
                         "icon": "person",
                         "link": "/admin/accounts/user/",
                     },
+                    {
+                        "title": "Social Accounts",
+                        "icon": "link",
+                        "link": "/admin/accounts/socialaccount/",
+                    },
                 ],
             },
             {
@@ -252,6 +266,16 @@ UNFOLD = {
                         "title": "Map Configs",
                         "icon": "public",
                         "link": "/admin/game_config/mapconfig/",
+                    },
+                    {
+                        "title": "Game Modules",
+                        "icon": "extension",
+                        "link": "/admin/game_config/gamemodule/",
+                    },
+                    {
+                        "title": "System Modules",
+                        "icon": "toggle_on",
+                        "link": "/admin/game_config/systemmodule/",
                     },
                 ],
             },
@@ -357,22 +381,6 @@ UNFOLD = {
                         "title": "Wallets",
                         "icon": "account_balance_wallet",
                         "link": "/admin/inventory/wallet/",
-                    },
-                ],
-            },
-            {
-                "title": "Shop",
-                "separator": True,
-                "items": [
-                    {
-                        "title": "Categories",
-                        "icon": "storefront",
-                        "link": "/admin/shop/shopcategory/",
-                    },
-                    {
-                        "title": "Items",
-                        "icon": "shopping_cart",
-                        "link": "/admin/shop/shopitem/",
                     },
                 ],
             },

@@ -5,11 +5,14 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useAuth } from "@/hooks/useAuth";
+import { useModuleConfig } from "@/hooks/useSystemModules";
+import { ModuleDisabledPage } from "@/components/ModuleGate";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import AuthScreen from "@/components/auth/AuthScreen";
+import SocialLoginButtons from "@/components/auth/SocialLoginButtons";
 import { toast } from "sonner";
 import { APIError } from "@/lib/api";
 
@@ -49,6 +52,12 @@ const strengthConfig = {
 };
 
 export default function RegisterPage() {
+  const { enabled } = useModuleConfig("registration");
+  if (!enabled) return <ModuleDisabledPage slug="registration" />;
+  return <RegisterContent />;
+}
+
+function RegisterContent() {
   const { register: registerUser, user } = useAuth();
   const router = useRouter();
   const [generalError, setGeneralError] = useState<string | null>(null);
@@ -227,6 +236,8 @@ export default function RegisterPage() {
             {isSubmitting ? "Rejestracja..." : "Utwórz konto"}
           </Button>
         </form>
+
+        <SocialLoginButtons />
       </div>
     </AuthScreen>
   );

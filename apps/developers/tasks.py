@@ -81,9 +81,9 @@ def deliver_webhook(self, webhook_id: str, event: str, payload: dict):
             webhook.save(update_fields=['failure_count'])
     else:
         webhook.failure_count += 1
-        if webhook.failure_count >= Webhook.MAX_FAILURES:
+        if webhook.failure_count >= webhook.max_failures:
             webhook.is_active = False
-            logger.warning(f"Webhook {webhook_id} deactivated after {Webhook.MAX_FAILURES} failures")
+            logger.warning(f"Webhook {webhook_id} deactivated after {webhook.max_failures} failures")
         webhook.save(update_fields=['failure_count', 'is_active'])
 
         # Retry with exponential backoff

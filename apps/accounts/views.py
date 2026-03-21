@@ -11,9 +11,11 @@ from ninja.errors import HttpError
 from ninja_extra import api_controller, route
 from ninja_extra.permissions import IsAuthenticated
 from apps.accounts.auth import ActiveUserJWTAuth
+from apps.game_config.modules import get_module_config
 
 from apps.accounts.models import PushSubscription
 from apps.accounts.schemas import LeaderboardEntrySchema, PushSubscriptionSchema, RegisterSchema, UserOutSchema
+from apps.game_config.decorators import require_module
 from apps.pagination import paginate_qs
 
 User = get_user_model()
@@ -23,6 +25,7 @@ User = get_user_model()
 class AuthController:
 
     @route.post('/register', response=UserOutSchema, auth=None)
+    @require_module('registration')
     def register(self, payload: RegisterSchema):
         if len(payload.username) < 3:
             raise HttpError(400, 'Nazwa uzytkownika musi miec co najmniej 3 znaki.')
@@ -49,23 +52,36 @@ class AuthController:
         try:
             from apps.inventory.models import Deck, DeckItem, Item, UserInventory, Wallet
 
-            STARTER_SLUGS = [
+            STARTER_SLUGS = get_module_config('registration', 'starter_items', [
                 'pkg-shield-1', 'bp-barracks-1', 'bp-factory-1',
                 'bp-tower-1', 'bp-port-1', 'bp-carrier-1', 'bp-radar-1',
-            ]
+                'bp-tank-1', 'bp-fighter-1',
+            ])
+            starter_gold = get_module_config('registration', 'starter_gold', 100)
 
-            Wallet.objects.get_or_create(user=user, defaults={'gold': 100})
+            Wallet.objects.get_or_create(user=user, defaults={'gold': starter_gold})
 
+            from apps.inventory.models import ItemInstance
+
+            instance_map = {}
             for slug in STARTER_SLUGS:
                 item = Item.objects.filter(slug=slug).first()
-                if item:
+                if not item:
+                    continue
+                if item.is_stackable:
                     UserInventory.objects.get_or_create(user=user, item=item, defaults={'quantity': 1})
+                else:
+                    inst = ItemInstance.objects.create(
+                        item=item, owner=user,
+                        pattern_seed=0, wear=0.0, stattrak=False, first_owner=user,
+                    )
+                    instance_map[slug] = inst
 
-            deck = Deck.objects.create(user=user, name='Domyślna talia', is_default=True)
+            deck = Deck.objects.create(user=user, name='Domyślna talia', is_default=True, is_editable=False)
             for slug in STARTER_SLUGS:
                 item = Item.objects.filter(slug=slug).first()
                 if item:
-                    DeckItem.objects.create(deck=deck, item=item, quantity=1)
+                    DeckItem.objects.create(deck=deck, item=item, quantity=1, instance=instance_map.get(slug))
         except Exception:
             pass
 
@@ -83,6 +99,7 @@ class AuthController:
         return {'ok': True}
 
     @route.get('/leaderboard', response=dict, auth=ActiveUserJWTAuth(), permissions=[IsAuthenticated])
+    @require_module('leaderboard')
     def leaderboard(self, request, limit: int = 50, offset: int = 0):
         qs = (
             User.objects.filter(game_results__isnull=False, is_bot=False)
@@ -99,7 +116,8 @@ class AuthController:
     def ws_ticket(self, request):
         ticket = str(uuid.uuid4())
         challenge = os.urandom(16).hex()
-        difficulty = 16
+        difficulty = get_module_config('registration', 'pow_difficulty', 16)
+        ws_ticket_expiry = get_module_config('registration', 'ws_ticket_expiry_seconds', 30)
         r = redis_lib.Redis(
             host=settings.REDIS_HOST,
             port=settings.REDIS_PORT,
@@ -107,7 +125,7 @@ class AuthController:
         )
         r.setex(
             f"ws_ticket:{ticket}",
-            30,
+            ws_ticket_expiry,
             json.dumps({
                 'user_id': str(request.auth.id),
                 'challenge': challenge,

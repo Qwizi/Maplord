@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import AuthScreen from "@/components/auth/AuthScreen";
+import SocialLoginButtons from "@/components/auth/SocialLoginButtons";
 import { toast } from "sonner";
 import { APIError, BannedError, type User } from "@/lib/api";
 import { Plus, X, ArrowLeft, Save, SkipForward } from "lucide-react";
@@ -467,6 +468,8 @@ function LoginForm() {
             {isSubmitting ? "Logowanie..." : "Wejdź do gry"}
           </Button>
         </form>
+
+        <SocialLoginButtons />
       </div>
     </AuthScreen>
   );

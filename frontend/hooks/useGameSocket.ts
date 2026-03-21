@@ -85,6 +85,18 @@ export interface ActiveEffect {
   params: Record<string, number>;
 }
 
+export interface WeatherState {
+  time_of_day: number;
+  phase: string;
+  cloud_coverage: number;
+  visibility: number;
+  condition: string;
+  defense_modifier: number;
+  randomness_modifier: number;
+  energy_modifier: number;
+  unit_gen_modifier: number;
+}
+
 export interface BuildingQueueItem {
   region_id: string;
   building_type: string;
@@ -100,6 +112,30 @@ export interface UnitQueueItem {
   quantity: number;
   ticks_remaining: number;
   total_ticks: number;
+}
+
+export interface InterceptorGroup {
+  player_id: string;
+  source_region_id: string;
+  fighters: number;
+  progress: number;
+  speed_per_tick: number;
+}
+
+export interface AirTransitItem {
+  id: string;
+  mission_type: string; // "bomb_run" | "fighter_attack" | "escort_return"
+  source_region_id: string;
+  target_region_id: string;
+  player_id: string;
+  unit_type: string;
+  units: number;
+  escort_fighters: number;
+  progress: number; // 0.0 = source, 1.0 = arrived
+  speed_per_tick: number;
+  total_distance: number;
+  interceptors: InterceptorGroup[];
+  flight_path?: string[]; // province IDs along the route
 }
 
 export interface GameState {
@@ -118,7 +154,9 @@ export interface GameState {
   buildings_queue: BuildingQueueItem[];
   unit_queue: UnitQueueItem[];
   transit_queue?: Array<Record<string, unknown>>;
+  air_transit_queue?: AirTransitItem[];
   active_effects?: ActiveEffect[];
+  weather?: WeatherState;
 }
 
 export interface GameEvent {
@@ -144,8 +182,10 @@ interface UseGameSocketReturn {
   bannedReason: string | null;
   ping: number | undefined;
   selectCapital: (regionId: string) => void;
-  attack: (sourceRegionId: string, targetRegionId: string, units: number, unitType?: string | null) => void;
+  attack: (sourceRegionId: string, targetRegionId: string, units: number, unitType?: string | null, escortFighters?: number) => void;
   move: (sourceRegionId: string, targetRegionId: string, units: number, unitType?: string | null) => void;
+  bombard: (sourceRegionId: string, targetRegionIds: string[], units?: number) => void;
+  interceptFlight: (sourceRegionId: string, flightId: string, units: number) => void;
   build: (regionId: string, buildingType: string) => void;
   upgradeBuilding: (regionId: string, buildingType: string) => void;
   produceUnit: (regionId: string, unitType: string) => void;
@@ -170,9 +210,14 @@ export function useGameSocket(matchId: string): UseGameSocketReturn {
 
   const handleMessage = useCallback((msg: WSMessage) => {
     switch (msg.type) {
-      case "game_state":
-        setGameState(msg.state as GameState);
+      case "game_state": {
+        const initialState = msg.state as GameState;
+        if (msg.weather) {
+          initialState.weather = msg.weather as WeatherState;
+        }
+        setGameState(initialState);
         break;
+      }
       case "game_tick": {
         const tickBase = String(msg.tick ?? "0");
         const rawTickEvents = (msg.events as GameEvent[]) || [];
@@ -220,9 +265,13 @@ export function useGameSocket(matchId: string): UseGameSocketReturn {
             buildings_queue: (msg.buildings_queue as BuildingQueueItem[]) ?? prev.buildings_queue,
             unit_queue: (msg.unit_queue as UnitQueueItem[]) ?? prev.unit_queue,
             transit_queue: (msg.transit_queue as Array<Record<string, unknown>>) ?? prev.transit_queue,
+            air_transit_queue: (msg.air_transit_queue as AirTransitItem[]) ?? prev.air_transit_queue,
             active_effects: shallowEqualEffects(prev.active_effects, msg.active_effects as ActiveEffect[] | undefined)
               ? prev.active_effects
               : (msg.active_effects as ActiveEffect[]) ?? prev.active_effects,
+            weather: msg.weather !== undefined
+              ? (msg.weather as WeatherState)
+              : prev.weather,
           };
         });
         if (tickEvents.length > 0) {
@@ -425,13 +474,14 @@ export function useGameSocket(matchId: string): UseGameSocketReturn {
   );
 
   const attack = useCallback(
-    (sourceRegionId: string, targetRegionId: string, units: number, unitType?: string | null) =>
+    (sourceRegionId: string, targetRegionId: string, units: number, unitType?: string | null, escortFighters?: number) =>
       send({
         action: "attack",
         source_region_id: sourceRegionId,
         target_region_id: targetRegionId,
         units,
         unit_type: unitType,
+        ...(escortFighters && escortFighters > 0 ? { escort_fighters: escortFighters } : {}),
       }),
     [send]
   );
@@ -444,6 +494,29 @@ export function useGameSocket(matchId: string): UseGameSocketReturn {
         target_region_id: targetRegionId,
         units,
         unit_type: unitType,
+      }),
+    [send]
+  );
+
+  const bombard = useCallback(
+    (sourceRegionId: string, targetRegionIds: string[], units?: number) =>
+      send({
+        action: "bombard",
+        source_region_id: sourceRegionId,
+        target_region_ids: targetRegionIds,
+        unit_type: "artillery",
+        ...(units != null ? { units } : {}),
+      }),
+    [send]
+  );
+
+  const interceptFlight = useCallback(
+    (sourceRegionId: string, flightId: string, units: number) =>
+      send({
+        action: "intercept",
+        region_id: sourceRegionId,
+        target_flight_id: flightId,
+        units,
       }),
     [send]
   );
@@ -512,6 +585,8 @@ export function useGameSocket(matchId: string): UseGameSocketReturn {
     selectCapital,
     attack,
     move,
+    bombard,
+    interceptFlight,
     build,
     upgradeBuilding,
     produceUnit,

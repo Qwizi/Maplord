@@ -77,6 +77,27 @@ async fn handle_matchmaking_socket(
     use futures::{SinkExt, StreamExt};
     let (mut ws_sender, mut ws_receiver) = socket.split();
 
+    // Check that the matchmaking module is enabled
+    match state.django.get_system_modules().await {
+        Ok(modules) => {
+            if let Some(mm_module) = modules.get("matchmaking") {
+                if !mm_module.enabled {
+                    let _ = ws_sender
+                        .send(Message::Close(Some(axum::extract::ws::CloseFrame {
+                            code: 4503,
+                            reason: "Matchmaking is currently disabled".into(),
+                        })))
+                        .await;
+                    return;
+                }
+            }
+        }
+        Err(e) => {
+            tracing::warn!("Matchmaking: failed to check system modules: {e}");
+            // fail-open: allow connection if we can't check
+        }
+    }
+
     // Check that the account is active (not banned)
     match state.django.get_user(&user_id).await {
         Ok(user_info) if !user_info.is_active => {

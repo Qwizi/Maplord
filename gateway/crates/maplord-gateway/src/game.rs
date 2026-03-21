@@ -27,6 +27,14 @@ pub fn new_game_connections() -> GameConnections {
     Arc::new(DashMap::new())
 }
 
+/// Read weather/day-night flags from match meta and compute weather.
+async fn compute_weather_from_meta(state_mgr: &GameStateManager, now_secs: i64) -> maplord_engine::WeatherState {
+    let meta = state_mgr.get_meta().await.unwrap_or_default();
+    let weather_enabled = meta.get("weather_enabled").map(|v| v != "0").unwrap_or(true);
+    let day_night_enabled = meta.get("day_night_enabled").map(|v| v != "0").unwrap_or(true);
+    maplord_engine::compute_weather_with_flags(now_secs, weather_enabled, day_night_enabled)
+}
+
 #[derive(Deserialize)]
 pub struct TokenQuery {
     pub token: Option<String>,
@@ -185,7 +193,12 @@ async fn handle_game_socket(socket: WebSocket, match_id: String, user_id: String
 
     // Send initial state
     if let Ok(full_state) = state_mgr.get_full_state().await {
-        let msg = json!({"type": "game_state", "state": full_state});
+        let now_secs = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+        let current_weather = compute_weather_from_meta(&state_mgr, now_secs).await;
+        let msg = json!({"type": "game_state", "state": full_state, "weather": current_weather});
         let _ = tx.try_send(Message::Text(msg.to_string().into()));
     }
 
@@ -202,8 +215,12 @@ async fn handle_game_socket(socket: WebSocket, match_id: String, user_id: String
         });
     }
 
-    // Send LiveKit voice chat token
-    {
+    // Send LiveKit voice chat token (only if voice-chat module enabled)
+    // Note: settings are not yet loaded at this point, so check via Django API
+    let voice_chat_enabled = state.django.get_system_modules().await
+        .map(|m| m.get("voice-chat").map(|v| v.enabled).unwrap_or(true))
+        .unwrap_or(true);
+    if voice_chat_enabled {
         let config = state.config.clone();
         let mid = match_id.clone();
         let uid = user_id.clone();
@@ -326,11 +343,14 @@ async fn handle_game_message(
     tx: &mpsc::Sender<Message>,
 ) {
     let action = content.get("action").and_then(|v| v.as_str()).unwrap_or("");
+    if action != "ping" {
+        eprintln!("[WS] Received action='{}' from user={}", action, user_id);
+    }
 
     // Rate limit game actions (not chat/leave_match/set_tick_multiplier)
     if matches!(
         action,
-        "attack" | "move" | "build" | "produce_unit" | "use_ability" | "select_capital"
+        "attack" | "move" | "build" | "produce_unit" | "use_ability" | "intercept" | "bombard" | "activate_boost" | "select_capital"
     ) {
         if check_action_rate_limit(state, user_id) {
             let _ = tx.try_send(Message::Text(
@@ -368,7 +388,7 @@ async fn handle_game_message(
                 let _ = state_mgr.set_meta_field("tick_multiplier", &multiplier.to_string()).await;
             }
         }
-        "attack" | "move" | "build" | "produce_unit" | "use_ability" => {
+        "attack" | "move" | "build" | "produce_unit" | "use_ability" | "intercept" | "bombard" | "activate_boost" => {
             let mut action_data: serde_json::Map<String, serde_json::Value> =
                 content.as_object().cloned().unwrap_or_default();
             action_data.remove("action");
@@ -855,9 +875,10 @@ async fn game_loop(
     let neighbor_map = state.django.get_neighbor_map().await
         .map_err(|e| format!("Failed to get neighbor map: {e}"))?;
 
-    let engine = GameEngine::new(settings.clone(), neighbor_map.clone());
+    let mut engine = GameEngine::new(settings.clone(), neighbor_map.clone());
+    let anticheat_enabled = settings.is_system_module_enabled("anticheat");
     let mut anticheat = AnticheatEngine::new(match_id.to_string(), state_mgr.redis());
-    let snapshot_interval = 30u64;
+    let snapshot_interval = settings.snapshot_interval_ticks;
     let mut next_tick_at = tokio::time::Instant::now() + tick_interval;
 
     // Save initial state snapshot (tick 0)
@@ -963,6 +984,11 @@ async fn game_loop(
             let _ = state_mgr.set_players_bulk(&tick_data.players).await;
             let _ = state_mgr.set_meta_field("status", "finished").await;
             let _ = state.django.update_match_status(match_id, "finished").await;
+            let early_now_secs = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs() as i64;
+            let early_weather = maplord_engine::compute_weather_with_settings(early_now_secs, &settings);
             let game_over_msg = json!({
                 "type": "game_tick",
                 "tick": tick,
@@ -972,6 +998,8 @@ async fn game_loop(
                 "buildings_queue": tick_data.buildings_queue,
                 "unit_queue": tick_data.unit_queue,
                 "transit_queue": tick_data.transit_queue,
+                "air_transit_queue": tick_data.air_transit_queue,
+                "weather": early_weather,
             });
             broadcast_to_match(match_id, &game_over_msg, &state.game_connections);
             dispatch_finalization(state_mgr, match_id, winner_id.as_deref(), tick, state).await;
@@ -998,16 +1026,20 @@ async fn game_loop(
             }
         }
 
-        // Anti-cheat analysis (pre-tick)
-        let ac_verdict = anticheat
-            .analyze_tick(
-                &tick_data.actions,
-                tick,
-                &tick_data.regions,
-                &tick_data.players,
-                &neighbor_map,
-            )
-            .await;
+        // Anti-cheat analysis (pre-tick) — skip if module disabled
+        let ac_verdict = if anticheat_enabled {
+            anticheat
+                .analyze_tick(
+                    &tick_data.actions,
+                    tick,
+                    &tick_data.regions,
+                    &tick_data.players,
+                    &neighbor_map,
+                )
+                .await
+        } else {
+            AnticheatVerdict::Allow
+        };
 
         match &ac_verdict {
             AnticheatVerdict::CancelMatch { reason } => {
@@ -1080,6 +1112,11 @@ async fn game_loop(
                 let _ = state.django.set_player_alive(match_id, player_id, false).await;
 
                 // Notify all players
+                let cheat_now_secs = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs() as i64;
+                let cheat_weather = maplord_engine::compute_weather_with_settings(cheat_now_secs, &settings);
                 let flag_msg = json!({
                     "type": "game_tick",
                     "tick": tick,
@@ -1093,7 +1130,9 @@ async fn game_loop(
                     "buildings_queue": tick_data.buildings_queue,
                     "unit_queue": tick_data.unit_queue,
                     "transit_queue": tick_data.transit_queue,
+                    "air_transit_queue": tick_data.air_transit_queue,
                     "active_effects": tick_data.active_effects,
+                    "weather": cheat_weather,
                 });
                 broadcast_to_match(match_id, &flag_msg, &state.game_connections);
 
@@ -1138,6 +1177,13 @@ async fn game_loop(
 
         let regions_before = tick_data.regions.clone();
 
+        let now_secs = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+        let weather = maplord_engine::compute_weather_with_settings(now_secs, &settings);
+        engine.set_weather(&weather);
+
         let mut events = engine.process_tick(
             &mut tick_data.players,
             &mut tick_data.regions,
@@ -1145,6 +1191,7 @@ async fn game_loop(
             &mut tick_data.buildings_queue,
             &mut tick_data.unit_queue,
             &mut tick_data.transit_queue,
+            &mut tick_data.air_transit_queue,
             tick,
             &mut tick_data.active_effects,
         );
@@ -1177,6 +1224,7 @@ async fn game_loop(
                 &tick_data.buildings_queue,
                 &tick_data.unit_queue,
                 &tick_data.transit_queue,
+                &tick_data.air_transit_queue,
                 &tick_data.active_effects,
                 Some(&dirty_ids),
             )
@@ -1186,6 +1234,17 @@ async fn game_loop(
         for event in &events {
             if let Event::PlayerEliminated { player_id, .. } = event {
                 let _ = state.django.set_player_alive(match_id, player_id, false).await;
+            }
+        }
+
+        // Log bombarded regions in the delta to verify state is correct
+        for event in &events {
+            if let Event::Bombard { target_region_id, total_killed, .. } = event {
+                let after_units = tick_data.regions.get(target_region_id)
+                    .map(|r| r.unit_count).unwrap_or(-1);
+                let in_delta = changed_regions.contains_key(target_region_id);
+                eprintln!("[TICK] Bombarded {} killed={} after_unit_count={} in_delta={}",
+                    target_region_id, total_killed, after_units, in_delta);
             }
         }
 
@@ -1199,7 +1258,9 @@ async fn game_loop(
             "buildings_queue": tick_data.buildings_queue,
             "unit_queue": tick_data.unit_queue,
             "transit_queue": tick_data.transit_queue,
+            "air_transit_queue": tick_data.air_transit_queue,
             "active_effects": tick_data.active_effects,
+            "weather": weather,
         });
         broadcast_to_match(match_id, &tick_msg, &state.game_connections);
 
@@ -1232,6 +1293,13 @@ async fn game_loop(
 
                 let extra_regions_before = extra_tick.regions.clone();
 
+                let extra_now_secs = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs() as i64;
+                let extra_weather = maplord_engine::compute_weather_with_settings(extra_now_secs, &settings);
+                engine.set_weather(&extra_weather);
+
                 let mut extra_events = engine.process_tick(
                     &mut extra_tick.players,
                     &mut extra_tick.regions,
@@ -1239,6 +1307,7 @@ async fn game_loop(
                     &mut extra_tick.buildings_queue,
                     &mut extra_tick.unit_queue,
                     &mut extra_tick.transit_queue,
+                    &mut extra_tick.air_transit_queue,
                     extra_tick_num,
                     &mut extra_tick.active_effects,
                 );
@@ -1267,6 +1336,7 @@ async fn game_loop(
                     &extra_tick.buildings_queue,
                     &extra_tick.unit_queue,
                     &extra_tick.transit_queue,
+                    &extra_tick.air_transit_queue,
                     &extra_tick.active_effects,
                     Some(&extra_dirty),
                 ).await?;
@@ -1287,7 +1357,9 @@ async fn game_loop(
                     "buildings_queue": extra_tick.buildings_queue,
                     "unit_queue": extra_tick.unit_queue,
                     "transit_queue": extra_tick.transit_queue,
+                    "air_transit_queue": extra_tick.air_transit_queue,
                     "active_effects": extra_tick.active_effects,
+                    "weather": extra_weather,
                 });
                 broadcast_to_match(match_id, &extra_msg, &state.game_connections);
 
@@ -1586,6 +1658,11 @@ async fn eliminate_player(
     }
 
     let regions = state_mgr.get_all_regions().await.unwrap_or_default();
+    let elim_now_secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+    let elim_weather = compute_weather_from_meta(state_mgr, elim_now_secs).await;
     let tick_msg = json!({
         "type": "game_tick",
         "tick": current_tick,
@@ -1595,6 +1672,9 @@ async fn eliminate_player(
         "buildings_queue": state_mgr.get_all_buildings().await.unwrap_or_default(),
         "unit_queue": state_mgr.get_all_unit_queue().await.unwrap_or_default(),
         "transit_queue": state_mgr.get_all_transit_queue().await.unwrap_or_default(),
+        "air_transit_queue": state_mgr.get_all_air_transit_queue().await.unwrap_or_default(),
+        "active_effects": state_mgr.get_all_active_effects().await.unwrap_or_default(),
+        "weather": elim_weather,
     });
     broadcast_to_match(match_id, &tick_msg, &state.game_connections);
 
@@ -1726,8 +1806,14 @@ async fn initialize_game(
         )
         .await?;
     state_mgr
-        .set_meta_field("disconnect_grace_seconds", "180")
+        .set_meta_field("disconnect_grace_seconds", &settings.disconnect_grace_seconds.to_string())
         .await?;
+    if !settings.weather_enabled {
+        state_mgr.set_meta_field("weather_enabled", "0").await?;
+    }
+    if !settings.day_night_enabled {
+        state_mgr.set_meta_field("day_night_enabled", "0").await?;
+    }
     if match_data.is_tutorial {
         state_mgr.set_meta_field("is_tutorial", "1").await?;
     }
@@ -1765,6 +1851,7 @@ async fn initialize_game(
             active_match_boosts: Vec::new(),
             ability_levels: p.ability_levels.clone(),
             building_levels: p.building_levels.clone(),
+            unit_levels: p.unit_levels.clone(),
             cosmetics: p.cosmetics.clone(),
         };
         players.insert(p.user_id.clone(), player);
@@ -1930,47 +2017,57 @@ async fn auto_select_tutorial_bot_capital(
 
     let neighbor_map = state.django.get_neighbor_map().await.unwrap_or_default();
 
-    // BFS from human's capital to find closest unowned region that respects min_dist
-    let mut visited = HashSet::new();
-    visited.insert(human_capital_id.to_string());
-    let mut queue = VecDeque::new();
-    queue.push_back((human_capital_id.to_string(), 0usize));
+    // Assign capital to each bot, giving each a distinct region via BFS from the human capital.
+    // used_regions tracks regions already assigned in this loop so no two bots share the same capital.
+    let mut used_regions: HashSet<String> = HashSet::new();
+    used_regions.insert(human_capital_id.to_string());
 
-    let mut best_region: Option<String> = None;
-
-    while let Some((current, dist)) = queue.pop_front() {
-        // Check if this region is a valid capital location
-        if dist >= min_dist {
-            if let Some(r) = regions.get(&current) {
-                if r.owner_id.is_none() {
-                    best_region = Some(current.clone());
-                    break;
-                }
-            }
-        }
-
-        if let Some(neighbors) = neighbor_map.get(&current) {
-            for neighbor in neighbors {
-                if !visited.contains(neighbor) && regions.contains_key(neighbor) {
-                    visited.insert(neighbor.clone());
-                    queue.push_back((neighbor.clone(), dist + 1));
-                }
-            }
-        }
-    }
-
-    // Assign capital to each bot
     for bot_id in &bot_ids {
-        let region_id = match &best_region {
-            Some(id) => id.clone(),
+        // BFS from human's capital to find the closest unowned, unassigned region that
+        // respects min_dist. We re-run BFS for each bot so the search skips regions that
+        // were already assigned to earlier bots in this iteration.
+        let mut visited = HashSet::new();
+        visited.insert(human_capital_id.to_string());
+        let mut queue = VecDeque::new();
+        queue.push_back((human_capital_id.to_string(), 0usize));
+
+        let mut best_region: Option<String> = None;
+
+        while let Some((current, dist)) = queue.pop_front() {
+            if dist >= min_dist {
+                if let Some(r) = regions.get(&current) {
+                    if r.owner_id.is_none() && !used_regions.contains(&current) {
+                        best_region = Some(current.clone());
+                        break;
+                    }
+                }
+            }
+
+            if let Some(neighbors) = neighbor_map.get(&current) {
+                for neighbor in neighbors {
+                    if !visited.contains(neighbor) && regions.contains_key(neighbor) {
+                        visited.insert(neighbor.clone());
+                        queue.push_back((neighbor.clone(), dist + 1));
+                    }
+                }
+            }
+        }
+
+        let region_id = match best_region {
+            Some(id) => id,
             None => {
-                // Fallback: any unowned region
-                match regions.iter().find(|(_, r)| r.owner_id.is_none()) {
+                // Fallback: any unowned, unassigned region
+                match regions
+                    .iter()
+                    .find(|(id, r)| r.owner_id.is_none() && !used_regions.contains(*id))
+                {
                     Some((id, _)) => id.clone(),
                     None => continue,
                 }
             }
         };
+
+        used_regions.insert(region_id.clone());
 
         let mut players = match state_mgr.get_all_players().await {
             Ok(p) => p,
@@ -2103,6 +2200,11 @@ async fn mark_player_disconnected(
         return;
     }
 
+    let disc_now_secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+    let disc_weather = compute_weather_from_meta(state_mgr, disc_now_secs).await;
     let tick_msg = json!({
         "type": "game_tick",
         "tick": current_tick,
@@ -2115,6 +2217,8 @@ async fn mark_player_disconnected(
         "buildings_queue": state_mgr.get_all_buildings().await.unwrap_or_default(),
         "unit_queue": state_mgr.get_all_unit_queue().await.unwrap_or_default(),
         "transit_queue": state_mgr.get_all_transit_queue().await.unwrap_or_default(),
+        "air_transit_queue": state_mgr.get_all_air_transit_queue().await.unwrap_or_default(),
+        "weather": disc_weather,
     });
     broadcast_to_match(match_id, &tick_msg, &state.game_connections);
 }
@@ -2428,6 +2532,11 @@ async fn finish_match_with_current_state(
     let _ = state_mgr.set_meta_field("status", "finished").await;
     let _ = state.django.update_match_status(match_id, "finished").await;
 
+    let finish_now_secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+    let finish_weather = compute_weather_from_meta(state_mgr, finish_now_secs).await;
     let tick_msg = json!({
         "type": "game_tick",
         "tick": current_tick,
@@ -2437,6 +2546,8 @@ async fn finish_match_with_current_state(
         "buildings_queue": state_mgr.get_all_buildings().await.unwrap_or_default(),
         "unit_queue": state_mgr.get_all_unit_queue().await.unwrap_or_default(),
         "transit_queue": state_mgr.get_all_transit_queue().await.unwrap_or_default(),
+        "air_transit_queue": state_mgr.get_all_air_transit_queue().await.unwrap_or_default(),
+        "weather": finish_weather,
     });
     broadcast_to_match(match_id, &tick_msg, &state.game_connections);
 

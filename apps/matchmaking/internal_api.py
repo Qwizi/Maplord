@@ -31,21 +31,28 @@ def _consume_default_deck(user) -> dict:
     ability_scrolls: dict[str, int] = {'ab_shield': 999}
     ability_levels: dict[str, int] = {'ab_shield': 1}
 
-    unlocked_buildings: list[str] = []
-    building_levels: dict[str, int] = {}
+    # Default: all active buildings unlocked at level 1
+    from apps.game_config.models import BuildingType as BuildingTypeModel
+    all_building_slugs = list(BuildingTypeModel.objects.filter(is_active=True).values_list('slug', flat=True))
+    unlocked_buildings: list[str] = list(all_building_slugs)
+    building_levels: dict[str, int] = {slug: 1 for slug in all_building_slugs}
     unlocked_units: list[str] = []
+    unit_levels: dict[str, int] = {}
     active_boosts: list[dict] = []
     instance_ids: list[str] = []
 
     try:
         deck = Deck.objects.prefetch_related(
             'items__item'
-        ).get(user=user, is_default=True)
+        ).filter(user=user, is_default=True).order_by('-created_at').first()
+        if deck is None:
+            raise Deck.DoesNotExist
     except Deck.DoesNotExist:
         return {
             'unlocked_buildings': unlocked_buildings,
             'building_levels': building_levels,
             'unlocked_units': unlocked_units,
+            'unit_levels': unit_levels,
             'ability_scrolls': ability_scrolls,
             'ability_levels': ability_levels,
             'active_boosts': active_boosts,
@@ -85,8 +92,12 @@ def _consume_default_deck(user) -> dict:
                             building_levels.get(item.blueprint_ref, 0), item.level
                         )
                 elif item.item_type == Item.ItemType.BLUEPRINT_UNIT:
-                    if item.blueprint_ref and item.blueprint_ref not in unlocked_units:
-                        unlocked_units.append(item.blueprint_ref)
+                    if item.blueprint_ref:
+                        if item.blueprint_ref not in unlocked_units:
+                            unlocked_units.append(item.blueprint_ref)
+                        unit_levels[item.blueprint_ref] = max(
+                            unit_levels.get(item.blueprint_ref, 0), item.level
+                        )
 
                 # Track instance IDs for post-match StatTrak updates
                 if not item.is_stackable and deck_item.instance_id:
@@ -134,12 +145,12 @@ def _consume_default_deck(user) -> dict:
                     'slug': item.slug,
                     'params': {**(item.boost_params or {}), 'level': item.level},
                 })
-                ability_scrolls[item.slug] = 1
 
     return {
         'unlocked_buildings': unlocked_buildings,
         'building_levels': building_levels,
         'unlocked_units': unlocked_units,
+        'unit_levels': unit_levels,
         'ability_scrolls': ability_scrolls,
         'ability_levels': ability_levels,
         'active_boosts': active_boosts,
@@ -159,13 +170,21 @@ def _build_cosmetic_snapshot(user) -> dict:
 
         if ec.slot.startswith('vfx_'):
             # VFX slot: include params alongside URL
-            snapshot[ec.slot] = {
+            entry = {
                 'url': url,
                 'params': ec.item.cosmetic_params or {},
             }
+            if ec.instance_id:
+                entry['instance_id'] = str(ec.instance_id)
+            snapshot[ec.slot] = entry
         else:
-            # Static skin slot: just the URL
-            if url:
+            # Static skin slot: URL string when no instance, dict when instance exists
+            if ec.instance_id:
+                snapshot[ec.slot] = {
+                    'url': url,
+                    'instance_id': str(ec.instance_id),
+                }
+            elif url:
                 snapshot[ec.slot] = url
     return snapshot
 
@@ -376,9 +395,9 @@ class MatchmakingInternalController(ControllerBase):
         # Snapshot building types
         building_types = {
             bt.slug: {
-                'cost': bt.cost,
-                'energy_cost': bt.energy_cost,
-                'build_time_ticks': bt.build_time_ticks,
+                'cost': (bt.level_stats or {}).get('1', {}).get('cost', 0),
+                'energy_cost': (bt.level_stats or {}).get('1', {}).get('energy_cost', 0),
+                'build_time_ticks': (bt.level_stats or {}).get('1', {}).get('build_time_ticks', 1),
                 'max_per_region': bt.max_per_region,
                 'defense_bonus': bt.defense_bonus,
                 'vision_range': bt.vision_range,
@@ -414,11 +433,21 @@ class MatchmakingInternalController(ControllerBase):
                 'sea_hop_distance_km': int(ut.sea_hop_distance_km),
                 'movement_type': ut.movement_type,
                 'produced_by_slug': ut.produced_by.slug if ut.produced_by_id else None,
-                'production_cost': int(ut.production_cost),
-                'production_time_ticks': int(ut.production_time_ticks),
-                'manpower_cost': int(ut.manpower_cost),
+                'production_cost': (ut.level_stats or {}).get('1', {}).get('production_cost', 0),
+                'production_time_ticks': (ut.level_stats or {}).get('1', {}).get('production_time_ticks', 0),
+                'manpower_cost': (ut.level_stats or {}).get('1', {}).get('manpower_cost', 1),
                 'max_level': ut.max_level,
                 'level_stats': ut.level_stats or {},
+                'is_stealth': ut.is_stealth,
+                'path_damage': ut.path_damage,
+                'aoe_damage': ut.aoe_damage,
+                'blockade_port': ut.blockade_port,
+                'intercept_air': ut.intercept_air,
+                'can_station_anywhere': ut.can_station_anywhere,
+                'lifetime_ticks': ut.lifetime_ticks,
+                'combat_target': ut.combat_target,
+                'ticks_per_hop': ut.ticks_per_hop,
+                'air_speed_ticks_per_hop': ut.air_speed_ticks_per_hop,
             }
             for ut in UnitType.objects.select_related('produced_by').filter(is_active=True)
         }
@@ -477,8 +506,35 @@ class MatchmakingInternalController(ControllerBase):
                 'min_capital_distance': map_config.min_capital_distance if map_config else 3,
                 'elo_k_factor': src.elo_k_factor,
                 'match_duration_limit_minutes': src.match_duration_limit_minutes,
+                'weather_enabled': src.weather_enabled,
+                'day_night_enabled': src.day_night_enabled,
+                'night_defense_modifier': src.night_defense_modifier,
+                'dawn_dusk_defense_modifier': src.dawn_dusk_defense_modifier,
+                'storm_randomness_modifier': src.storm_randomness_modifier,
+                'fog_randomness_modifier': src.fog_randomness_modifier,
+                'rain_randomness_modifier': src.rain_randomness_modifier,
+                'storm_energy_modifier': src.storm_energy_modifier,
+                'rain_energy_modifier': src.rain_energy_modifier,
+                'storm_unit_gen_modifier': src.storm_unit_gen_modifier,
+                'rain_unit_gen_modifier': src.rain_unit_gen_modifier,
+                'disconnect_grace_seconds': src.disconnect_grace_seconds,
+                'max_build_queue_per_region': src.max_build_queue_per_region,
+                'max_unit_queue_per_region': src.max_unit_queue_per_region,
+                'casualty_factor': src.casualty_factor,
+                'snapshot_interval_ticks': src.snapshot_interval_ticks,
             },
         )
+
+        # Apply game module overrides to settings_snapshot
+        from apps.game_config.modules import get_modules_snapshot, get_all_module_configs
+        modules_dict, flat_overrides = get_modules_snapshot(src)
+        snapshot = match.settings_snapshot
+        snapshot.update(flat_overrides)
+        snapshot['modules'] = modules_dict
+        # Include system module configs so gateway has access to anticheat/chat/etc settings
+        snapshot['system_modules'] = get_all_module_configs()
+        match.settings_snapshot = snapshot
+        match.save(update_fields=['settings_snapshot'])
 
         colors = ['#FF4444', '#4444FF', '#44FF44', '#FFFF44', '#FF44FF', '#44FFFF', '#FF8844', '#8844FF']
 
@@ -540,9 +596,9 @@ def _create_match_from_users(users, game_mode):
     # Snapshot building types
     building_types = {
         bt.slug: {
-            'cost': bt.cost,
-            'energy_cost': bt.energy_cost,
-            'build_time_ticks': bt.build_time_ticks,
+            'cost': (bt.level_stats or {}).get('1', {}).get('cost', 0),
+            'energy_cost': (bt.level_stats or {}).get('1', {}).get('energy_cost', 0),
+            'build_time_ticks': (bt.level_stats or {}).get('1', {}).get('build_time_ticks', 1),
             'max_per_region': bt.max_per_region,
             'defense_bonus': bt.defense_bonus,
             'vision_range': bt.vision_range,
@@ -578,11 +634,21 @@ def _create_match_from_users(users, game_mode):
             'sea_hop_distance_km': int(ut.sea_hop_distance_km),
             'movement_type': ut.movement_type,
             'produced_by_slug': ut.produced_by.slug if ut.produced_by_id else None,
-            'production_cost': int(ut.production_cost),
-            'production_time_ticks': int(ut.production_time_ticks),
-            'manpower_cost': int(ut.manpower_cost),
+            'production_cost': (ut.level_stats or {}).get('1', {}).get('production_cost', 0),
+            'production_time_ticks': (ut.level_stats or {}).get('1', {}).get('production_time_ticks', 0),
+            'manpower_cost': (ut.level_stats or {}).get('1', {}).get('manpower_cost', 1),
             'max_level': ut.max_level,
             'level_stats': ut.level_stats or {},
+            'is_stealth': ut.is_stealth,
+            'path_damage': ut.path_damage,
+            'aoe_damage': ut.aoe_damage,
+            'blockade_port': ut.blockade_port,
+            'intercept_air': ut.intercept_air,
+            'can_station_anywhere': ut.can_station_anywhere,
+            'lifetime_ticks': ut.lifetime_ticks,
+            'combat_target': ut.combat_target,
+            'ticks_per_hop': ut.ticks_per_hop,
+            'air_speed_ticks_per_hop': ut.air_speed_ticks_per_hop,
         }
         for ut in UnitType.objects.select_related('produced_by').filter(is_active=True)
     }
@@ -641,8 +707,34 @@ def _create_match_from_users(users, game_mode):
             'min_capital_distance': map_config.min_capital_distance if map_config else 3,
             'elo_k_factor': src.elo_k_factor,
             'match_duration_limit_minutes': src.match_duration_limit_minutes,
+            'weather_enabled': src.weather_enabled,
+            'day_night_enabled': src.day_night_enabled,
+            'night_defense_modifier': src.night_defense_modifier,
+            'dawn_dusk_defense_modifier': src.dawn_dusk_defense_modifier,
+            'storm_randomness_modifier': src.storm_randomness_modifier,
+            'fog_randomness_modifier': src.fog_randomness_modifier,
+            'rain_randomness_modifier': src.rain_randomness_modifier,
+            'storm_energy_modifier': src.storm_energy_modifier,
+            'rain_energy_modifier': src.rain_energy_modifier,
+            'storm_unit_gen_modifier': src.storm_unit_gen_modifier,
+            'rain_unit_gen_modifier': src.rain_unit_gen_modifier,
+            'disconnect_grace_seconds': src.disconnect_grace_seconds,
+            'max_build_queue_per_region': src.max_build_queue_per_region,
+            'max_unit_queue_per_region': src.max_unit_queue_per_region,
+            'casualty_factor': src.casualty_factor,
+            'snapshot_interval_ticks': src.snapshot_interval_ticks,
         },
     )
+
+    # Apply game module overrides to settings_snapshot
+    from apps.game_config.modules import get_modules_snapshot, get_all_module_configs
+    modules_dict, flat_overrides = get_modules_snapshot(src)
+    snapshot = match.settings_snapshot
+    snapshot.update(flat_overrides)
+    snapshot['modules'] = modules_dict
+    snapshot['system_modules'] = get_all_module_configs()
+    match.settings_snapshot = snapshot
+    match.save(update_fields=['settings_snapshot'])
 
     colors = ['#FF4444', '#4444FF', '#44FF44', '#FFFF44', '#FF44FF', '#44FFFF', '#FF8844', '#8844FF']
 

@@ -35,6 +35,28 @@ class GameSettings(models.Model):
         default=3, help_text='Garrison units in unowned (neutral) regions'
     )
 
+    # Weather & day/night
+    weather_enabled = models.BooleanField(default=True, help_text='Enable weather effects (rain, fog, storm)')
+    day_night_enabled = models.BooleanField(default=True, help_text='Enable day/night cycle')
+
+    # Weather gameplay modifiers
+    night_defense_modifier = models.FloatField(default=1.15, help_text='Defense multiplier at night (e.g. 1.15 = +15%)')
+    dawn_dusk_defense_modifier = models.FloatField(default=1.05, help_text='Defense multiplier at dawn/dusk (e.g. 1.05 = +5%)')
+    storm_randomness_modifier = models.FloatField(default=1.4, help_text='Combat randomness multiplier during storms (e.g. 1.4 = +40%)')
+    fog_randomness_modifier = models.FloatField(default=1.25, help_text='Combat randomness multiplier during fog (e.g. 1.25 = +25%)')
+    rain_randomness_modifier = models.FloatField(default=1.1, help_text='Combat randomness multiplier during rain (e.g. 1.1 = +10%)')
+    storm_energy_modifier = models.FloatField(default=0.85, help_text='Energy generation multiplier during storms (e.g. 0.85 = -15%)')
+    rain_energy_modifier = models.FloatField(default=0.95, help_text='Energy generation multiplier during rain (e.g. 0.95 = -5%)')
+    storm_unit_gen_modifier = models.FloatField(default=0.90, help_text='Unit generation multiplier during storms (e.g. 0.90 = -10%)')
+    rain_unit_gen_modifier = models.FloatField(default=0.95, help_text='Unit generation multiplier during rain (e.g. 0.95 = -5%)')
+
+    # Gameplay limits
+    disconnect_grace_seconds = models.PositiveIntegerField(default=180, help_text='Seconds before disconnected player is eliminated')
+    max_build_queue_per_region = models.PositiveIntegerField(default=3, help_text='Max simultaneous build orders per region')
+    max_unit_queue_per_region = models.PositiveIntegerField(default=4, help_text='Max simultaneous unit production orders per region')
+    casualty_factor = models.FloatField(default=0.5, help_text='Portion of power difference that kills units (0-1)')
+    snapshot_interval_ticks = models.PositiveIntegerField(default=30, help_text='Save state snapshot every N ticks')
+
     # ELO
     elo_k_factor = models.PositiveIntegerField(default=32, help_text='K-factor for ELO calculation')
 
@@ -72,15 +94,10 @@ class BuildingType(models.Model):
     description = models.TextField(blank=True)
     icon = models.CharField(max_length=50, blank=True, default='🏗️')
     
-    # Costs & timing
-    cost = models.PositiveIntegerField(default=50, help_text='Unit cost to build')
-    energy_cost = models.PositiveIntegerField(default=50, help_text='Energy cost to build')
-    build_time_ticks = models.PositiveIntegerField(default=10, help_text='Ticks to complete building')
-    
     # Constraints
     max_per_region = models.PositiveIntegerField(default=1, help_text='Max buildings of this type per region')
     requires_coastal = models.BooleanField(default=False, help_text='Only buildable in coastal regions')
-    
+
     # Passive bonuses
     defense_bonus = models.FloatField(default=0.0, help_text='Defense bonus for region (e.g. 0.2 = 20%)')
     vision_range = models.PositiveIntegerField(default=0, help_text='Extra vision range in regions')
@@ -133,10 +150,7 @@ class UnitType(models.Model):
         BuildingType, on_delete=models.CASCADE, related_name='unit_types',
         null=True, blank=True, help_text='Building required to produce this unit (null=default unit)'
     )
-    production_cost = models.PositiveIntegerField(default=5, help_text='Unit cost to produce')
-    production_time_ticks = models.PositiveIntegerField(default=5, help_text='Ticks to produce')
-    manpower_cost = models.PositiveIntegerField(default=1, help_text='How many base units are consumed to produce one token of this unit')
-    
+
     # Type
     movement_type = models.CharField(max_length=10, choices=MovementType.choices, default=MovementType.LAND)
 
@@ -148,6 +162,18 @@ class UnitType(models.Model):
                   'Example: {"1": {"attack": 3.0, "defense": 2.5}, "2": {"attack": 4.0}}. '
                   'Supported keys: attack, defense, speed, production_cost, production_time_ticks, manpower_cost'
     )
+
+    # Advanced unit attributes
+    is_stealth = models.BooleanField(default=False, help_text='Unit is invisible to enemies until it attacks')
+    path_damage = models.FloatField(default=0.0, help_text='Fraction of damage dealt to provinces along flight path (bomber)')
+    aoe_damage = models.FloatField(default=0.0, help_text='Fraction of damage dealt to neighboring provinces of target (artillery)')
+    blockade_port = models.BooleanField(default=False, help_text='Blocks enemy port production when stationed nearby')
+    intercept_air = models.BooleanField(default=False, help_text='Automatically intercepts enemy air units passing through')
+    can_station_anywhere = models.BooleanField(default=False, help_text='Does not require producer building to station in region')
+    lifetime_ticks = models.PositiveIntegerField(default=0, help_text='Auto-destruct after N ticks (0 = permanent)')
+    combat_target = models.CharField(max_length=10, default='ground', choices=[('air', 'Air'), ('ground', 'Ground'), ('both', 'Both')], help_text='What this unit targets in combat')
+    ticks_per_hop = models.PositiveIntegerField(default=0, help_text='Ticks per province hop for ground/sea units (0 = use legacy speed formula)')
+    air_speed_ticks_per_hop = models.PositiveIntegerField(default=0, help_text='Ticks per province hop for air transit (0 = use legacy speed formula)')
 
     is_active = models.BooleanField(default=True)
     order = models.PositiveIntegerField(default=0)
@@ -197,6 +223,28 @@ class GameMode(models.Model):
     neutral_region_units = models.PositiveIntegerField(
         default=3, help_text='Garrison units in unowned (neutral) regions'
     )
+
+    # Weather & day/night
+    weather_enabled = models.BooleanField(default=True, help_text='Enable weather effects (rain, fog, storm)')
+    day_night_enabled = models.BooleanField(default=True, help_text='Enable day/night cycle')
+
+    # Weather gameplay modifiers
+    night_defense_modifier = models.FloatField(default=1.15, help_text='Defense multiplier at night (e.g. 1.15 = +15%)')
+    dawn_dusk_defense_modifier = models.FloatField(default=1.05, help_text='Defense multiplier at dawn/dusk (e.g. 1.05 = +5%)')
+    storm_randomness_modifier = models.FloatField(default=1.4, help_text='Combat randomness multiplier during storms (e.g. 1.4 = +40%)')
+    fog_randomness_modifier = models.FloatField(default=1.25, help_text='Combat randomness multiplier during fog (e.g. 1.25 = +25%)')
+    rain_randomness_modifier = models.FloatField(default=1.1, help_text='Combat randomness multiplier during rain (e.g. 1.1 = +10%)')
+    storm_energy_modifier = models.FloatField(default=0.85, help_text='Energy generation multiplier during storms (e.g. 0.85 = -15%)')
+    rain_energy_modifier = models.FloatField(default=0.95, help_text='Energy generation multiplier during rain (e.g. 0.95 = -5%)')
+    storm_unit_gen_modifier = models.FloatField(default=0.90, help_text='Unit generation multiplier during storms (e.g. 0.90 = -10%)')
+    rain_unit_gen_modifier = models.FloatField(default=0.95, help_text='Unit generation multiplier during rain (e.g. 0.95 = -5%)')
+
+    # Gameplay limits
+    disconnect_grace_seconds = models.PositiveIntegerField(default=180, help_text='Seconds before disconnected player is eliminated')
+    max_build_queue_per_region = models.PositiveIntegerField(default=3, help_text='Max simultaneous build orders per region')
+    max_unit_queue_per_region = models.PositiveIntegerField(default=4, help_text='Max simultaneous unit production orders per region')
+    casualty_factor = models.FloatField(default=0.5, help_text='Portion of power difference that kills units (0-1)')
+    snapshot_interval_ticks = models.PositiveIntegerField(default=30, help_text='Save state snapshot every N ticks')
 
     # ELO
     elo_k_factor = models.PositiveIntegerField(default=32, help_text='K-factor for ELO calculation')
@@ -300,3 +348,166 @@ class MapConfig(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class ModuleType(models.TextChoices):
+    SYSTEM = 'system', 'System'
+    GAME = 'game', 'Game'
+
+
+class SystemModule(models.Model):
+    """
+    Unified module system — both application-wide feature toggles (system)
+    and per-match game modules (game).
+
+    System modules gate backend API endpoints, frontend UI sections, and gateway features.
+    Game modules configure per-match settings (weather, combat, economy, etc.)
+    with override support via GameSettingsModuleOverride / GameModeModuleOverride.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    slug = models.SlugField(max_length=100, unique=True, db_index=True)
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    icon = models.CharField(max_length=50, blank=True, default='')
+
+    module_type = models.CharField(
+        max_length=20, choices=ModuleType.choices, default=ModuleType.SYSTEM,
+        help_text='System = app-wide feature toggle, Game = per-match configurable module'
+    )
+
+    enabled = models.BooleanField(default=True, help_text='Whether this module is currently active')
+    config = models.JSONField(
+        default=dict, blank=True,
+        help_text='Module-specific configuration as JSON'
+    )
+    config_schema = models.JSONField(
+        default=list, blank=True,
+        help_text='Describes available config fields for admin UI'
+    )
+
+    # Which layers this module affects
+    affects_backend = models.BooleanField(default=True, help_text='Controls backend API endpoints')
+    affects_frontend = models.BooleanField(default=True, help_text='Controls frontend UI sections')
+    affects_gateway = models.BooleanField(default=False, help_text='Controls Rust gateway features')
+
+    is_core = models.BooleanField(
+        default=False,
+        help_text='Core modules cannot be disabled (auth, config, geo)'
+    )
+    order = models.PositiveIntegerField(default=0)
+
+    # Game module fields (only used when module_type='game')
+    default_enabled = models.BooleanField(default=True, help_text='Default enabled state for new matches')
+    default_config = models.JSONField(
+        default=dict, blank=True,
+        help_text='Default config parameters for game modules (merged with overrides per match)'
+    )
+    field_mapping = models.JSONField(
+        default=dict, blank=True,
+        help_text='Maps module to flat settings fields: {"enabled_field": "weather_enabled", "config_fields": {"key": "snapshot_field"}}'
+    )
+
+    class Meta:
+        ordering = ['order', 'name']
+
+    def __str__(self):
+        status = 'ON' if self.enabled else 'OFF'
+        core = ' [CORE]' if self.is_core else ''
+        return f'{self.name} [{status}]{core}'
+
+    def clean(self):
+        if self.is_core and not self.enabled:
+            raise ValidationError('Core modules cannot be disabled.')
+
+    @classmethod
+    def is_enabled(cls, slug: str) -> bool:
+        """Check if a system module is enabled. Cached for 60 seconds."""
+        from django.core.cache import cache
+        cache_key = f'sysmodule:{slug}'
+        result = cache.get(cache_key)
+        if result is None:
+            try:
+                module = cls.objects.get(slug=slug)
+                result = module.enabled
+            except cls.DoesNotExist:
+                # Unknown modules are considered enabled (fail-open for dev)
+                result = True
+            cache.set(cache_key, result, 60)
+        return result
+
+    @classmethod
+    def get_all_states(cls) -> dict:
+        """Return {slug: enabled} dict for all modules. Cached for 60 seconds."""
+        from django.core.cache import cache
+        cache_key = 'sysmodules:all'
+        result = cache.get(cache_key)
+        if result is None:
+            result = dict(cls.objects.values_list('slug', 'enabled'))
+            cache.set(cache_key, result, 60)
+        return result
+
+    @classmethod
+    def invalidate_cache(cls):
+        """Invalidate all system module caches."""
+        from django.core.cache import cache
+        for slug in cls.objects.values_list('slug', flat=True):
+            cache.delete(f'sysmodule:{slug}')
+            cache.delete(f'sysmodule_cfg:{slug}')
+        cache.delete('sysmodules:all')
+        cache.delete('sysmodules:full')
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        SystemModule.invalidate_cache()
+
+    def delete(self, *args, **kwargs):
+        super().delete(*args, **kwargs)
+        SystemModule.invalidate_cache()
+
+
+class GameSettingsModuleOverride(models.Model):
+    """Per-module override for global GameSettings."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    game_settings = models.ForeignKey(
+        GameSettings, on_delete=models.CASCADE, related_name='module_overrides'
+    )
+    module = models.ForeignKey(
+        SystemModule, on_delete=models.CASCADE, related_name='settings_overrides'
+    )
+    enabled = models.BooleanField(default=True)
+    config = models.JSONField(
+        default=dict, blank=True,
+        help_text='Override config values (merged with module defaults)'
+    )
+
+    class Meta:
+        unique_together = ('game_settings', 'module')
+        ordering = ['module__order']
+
+    def __str__(self):
+        status = 'ON' if self.enabled else 'OFF'
+        return f'{self.module.name} [{status}]'
+
+
+class GameModeModuleOverride(models.Model):
+    """Per-module override for a GameMode."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    game_mode = models.ForeignKey(
+        GameMode, on_delete=models.CASCADE, related_name='module_overrides'
+    )
+    module = models.ForeignKey(
+        SystemModule, on_delete=models.CASCADE, related_name='mode_overrides'
+    )
+    enabled = models.BooleanField(default=True)
+    config = models.JSONField(
+        default=dict, blank=True,
+        help_text='Override config values (merged with module defaults)'
+    )
+
+    class Meta:
+        unique_together = ('game_mode', 'module')
+        ordering = ['module__order']
+
+    def __str__(self):
+        status = 'ON' if self.enabled else 'OFF'
+        return f'{self.module.name} [{status}]'

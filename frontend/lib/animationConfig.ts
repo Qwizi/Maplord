@@ -131,7 +131,7 @@ const SHARED_IMPACT_ATTACK: ImpactConfig = {
   layers: [
     {
       type: "ring",
-      color: "#ef4444",
+      color: "#cc4400",
       radius: [6, 58],
       opacity_start: 0.9,
       opacity_curve: 1.5,
@@ -139,11 +139,19 @@ const SHARED_IMPACT_ATTACK: ImpactConfig = {
     },
     {
       type: "fill",
-      color: "#fca5a5",
+      color: "#ff8c00",
       radius: [4, 16],
       opacity_start: 0.8,
       opacity_curve: 2.0,
       duration_pct: 0.4,
+    },
+    {
+      type: "fill",
+      color: "#555555",
+      radius: [8, 35],
+      opacity_start: 0.4,
+      opacity_curve: 1.0,
+      duration_pct: 0.9,
     },
   ],
 };
@@ -234,15 +242,15 @@ const SHARED_ICON_BASE: Pick<
 export const ANIMATION_DEFAULTS: Record<string, AnimationConfig> = {
   fighter: {
     trail: {
-      color: "#f59e0b",
-      opacity: 0.85,
+      color: "#c0c0c0",
+      opacity: 0.5,
       width: 4.5,
       blur: 1.2,
       length: 0.18,
       line_style: "solid",
       dash_pattern: [4, 3],
-      glow: false,
-      glow_color: null,
+      glow: true,
+      glow_color: "#ffffff",
       glow_width: 8,
       particles: "circle",
       particle_count: 4,
@@ -255,7 +263,7 @@ export const ANIMATION_DEFAULTS: Record<string, AnimationConfig> = {
       particle_scale_decay: 0,
     },
     icon: {
-      size: 0.42,
+      size: 0.3,
       rotate: true,
       ...SHARED_ICON_BASE,
     },
@@ -274,16 +282,16 @@ export const ANIMATION_DEFAULTS: Record<string, AnimationConfig> = {
 
   ship: {
     trail: {
-      color: "#38bdf8",
+      color: "#a0c0d0",
       opacity: 0.5,
-      width: 3.2,
+      width: 2.5,
       blur: 0.2,
       length: 0.22,
       line_style: "solid",
       dash_pattern: [4, 3],
-      glow: false,
-      glow_color: null,
-      glow_width: 8,
+      glow: true,
+      glow_color: "#ffffff",
+      glow_width: 5,
       particles: "circle",
       particle_count: 5,
       particle_spacing: 0.055,
@@ -314,9 +322,9 @@ export const ANIMATION_DEFAULTS: Record<string, AnimationConfig> = {
 
   tank: {
     trail: {
-      color: null, // player color
-      opacity: 0.48,
-      width: 3.4,
+      color: "#4a6a3a",
+      opacity: 0.38,
+      width: 2.8,
       blur: 0.15,
       length: 0.3,
       line_style: "solid",
@@ -325,7 +333,7 @@ export const ANIMATION_DEFAULTS: Record<string, AnimationConfig> = {
       glow_color: null,
       glow_width: 8,
       particles: "circle",
-      particle_count: 6,
+      particle_count: 4,
       particle_spacing: 0.055,
       particle_head_size: 7,
       particle_decay: 0.35,
@@ -341,7 +349,7 @@ export const ANIMATION_DEFAULTS: Record<string, AnimationConfig> = {
     },
     pulse: {
       enabled: true,
-      color: "#ef4444",
+      color: "#4a6a3a",
       rings: 3,
       radius_base: 8,
       radius_expand: 44,
@@ -355,8 +363,8 @@ export const ANIMATION_DEFAULTS: Record<string, AnimationConfig> = {
   infantry: {
     trail: {
       color: null, // player color
-      opacity: 0.35,
-      width: 2.4,
+      opacity: 0.28,
+      width: 1.8,
       blur: 0.15,
       length: 0.3,
       line_style: "solid",
@@ -365,8 +373,7 @@ export const ANIMATION_DEFAULTS: Record<string, AnimationConfig> = {
       glow_color: null,
       glow_width: 8,
       particles: "circle",
-      // NUM_TRAIL_DOTS(8) + 2 = 10
-      particle_count: 10,
+      particle_count: 6,
       particle_spacing: 0.055,
       particle_head_size: 5.5,
       particle_decay: 0.22,
@@ -391,6 +398,89 @@ export const ANIMATION_DEFAULTS: Record<string, AnimationConfig> = {
     },
     impact_attack: structuredClone(SHARED_IMPACT_ATTACK),
     impact_move: structuredClone(SHARED_IMPACT_MOVE),
+  },
+
+  bomber: {
+    trail: {
+      color: "#f97316",       // orange — tactical bombing route
+      opacity: 0.45,
+      width: 2.5,
+      blur: 0,
+      length: 0.85,           // long trail — shows full planned route
+      line_style: "dashed",   // dashed line like tactical map overlays
+      dash_pattern: [8, 5],   // military map dash pattern
+      glow: true,
+      glow_color: "#8B4513",
+      glow_width: 6,
+      particles: "circle",
+      particle_count: 4,
+      particle_spacing: 0.06,
+      particle_head_size: 3,
+      particle_decay: 0.25,
+      particle_decay_base: 3,
+      particle_min_size: 1.5,
+      particle_color: "#fbbf24", // yellow-orange dots along the route
+      particle_scale_decay: 0.7,
+    },
+    icon: {
+      size: 0.55,
+      rotate: true,
+      breathe_amplitude: 0.03,
+      breathe_speed: Math.PI * 3,
+      fade_start: 0.95,
+      fade_blend_min: 0.7,
+    },
+    pulse: {
+      enabled: true,
+      color: "#ef4444",       // red pulse at target
+      rings: 2,
+      radius_base: 10,
+      radius_expand: 36,
+      start_at: 0.65,
+      opacity: 0.6,
+    },
+    impact_attack: {
+      duration: 1200,
+      layers: [
+        {
+          type: "ring",
+          color: "#f97316",
+          radius: [10, 40],
+          opacity_start: 0.9,
+          opacity_curve: 2.5,
+          duration_pct: 1.0,
+        },
+        {
+          type: "fill",
+          color: "#ef4444",
+          radius: [6, 30],
+          opacity_start: 0.6,
+          opacity_curve: 2.0,
+          duration_pct: 0.8,
+        },
+        {
+          type: "fill",
+          color: "#fbbf24",
+          radius: [4, 18],
+          opacity_start: 0.8,
+          opacity_curve: 1.5,
+          duration_pct: 0.6,
+        },
+      ],
+    },
+    impact_move: {
+      duration: 400,
+      layers: [
+        {
+          type: "ring",
+          color: "#78716c",
+          radius: [6, 18],
+          opacity_start: 0.5,
+          opacity_curve: 2.0,
+          duration_pct: 1.0,
+        },
+      ],
+    },
   },
 
   nuke: {
@@ -435,6 +525,57 @@ export const ANIMATION_DEFAULTS: Record<string, AnimationConfig> = {
     impact_move: structuredClone(NUKE_IMPACT_ATTACK),
   },
 };
+
+/**
+ * Set of unit type strings (and kind names) that have an explicit entry in
+ * `ANIMATION_DEFAULTS`. Consumers can use this to prefer a unit-type-specific
+ * config over the generic animKind fallback.
+ */
+export const ANIMATION_DEFAULTS_KEYS: Set<string> = new Set(
+  Object.keys(ANIMATION_DEFAULTS)
+);
+
+// ── Cosmetic slot helpers ─────────────────────────────────────────────────────
+//
+// Helpers for cosmetic slots that are not part of the per-unit animation
+// pipeline but are used in other parts of the game UI (overlays, HUD, etc.).
+
+/**
+ * Returns the `vfx_elimination` cosmetic value for the given player cosmetics.
+ * Call this when a player eliminates another player to obtain the VFX asset
+ * that should be triggered for the eliminating player.
+ *
+ * Usage (placeholder — VFX rendering not yet implemented):
+ *   const vfx = getEliminationVfx(eliminatingPlayer?.cosmetics);
+ *   if (vfx) { /* trigger elimination VFX overlay * / }
+ */
+export function getEliminationVfx(
+  playerCosmetics?: Record<string, unknown>
+): CosmeticValue | undefined {
+  return playerCosmetics?.vfx_elimination as CosmeticValue | undefined;
+}
+
+/**
+ * Returns the `vfx_victory` cosmetic value for the given player cosmetics.
+ * Call this when the local player wins a match to obtain the VFX asset
+ * that should be triggered for the victory screen.
+ *
+ * Usage (placeholder — VFX rendering not yet implemented):
+ *   const vfx = getVictoryVfx(myPlayer?.cosmetics);
+ *   if (vfx) { /* trigger victory VFX overlay * / }
+ */
+export function getVictoryVfx(
+  playerCosmetics?: Record<string, unknown>
+): CosmeticValue | undefined {
+  return playerCosmetics?.vfx_victory as CosmeticValue | undefined;
+}
+
+// TODO: sound_attack cosmetic - play custom attack sound effect when the player
+//   sends an attack. Resolve via playerCosmetics?.sound_attack and pass the URL
+//   to the audio subsystem instead of the default attack sound.
+// TODO: music_theme cosmetic - play custom background music loop for the player.
+//   Resolve via playerCosmetics?.music_theme and swap the active track in
+//   useAudio when the match starts and the cosmetic is present.
 
 // ── Deep-merge helper ─────────────────────────────────────────────────────────
 
@@ -498,8 +639,11 @@ export type CosmeticValue =
 /**
  * Resolve the final AnimationConfig for a given unit kind + player cosmetics.
  *
- * VFX slot selection:
+ * VFX slot selection (evaluated in order, first match wins):
+ *   - If `vfxSlotOverride` is provided:  `playerCosmetics[vfxSlotOverride]`
  *   - Nuke units:  `vfx_nuke` → fallback `vfx_attack`
+ *   - Capture:     `vfx_capture`
+ *   - Defend:      `vfx_defend`
  *   - Attack:      `vfx_attack`
  *   - Move:        `vfx_move`
  *
@@ -508,9 +652,10 @@ export type CosmeticValue =
  */
 export function resolveAnimConfig(
   animKind: string,
-  actionType: "attack" | "move",
+  actionType: "attack" | "move" | "capture" | "defend",
   isNuke: boolean,
-  playerCosmetics?: Record<string, CosmeticValue>
+  playerCosmetics?: Record<string, CosmeticValue>,
+  vfxSlotOverride?: string
 ): AnimationConfig {
   const base = structuredClone(
     ANIMATION_DEFAULTS[animKind] ?? ANIMATION_DEFAULTS.infantry
@@ -519,8 +664,14 @@ export function resolveAnimConfig(
   if (!playerCosmetics) return base;
 
   let vfxEntry: CosmeticValue | undefined;
-  if (isNuke) {
+  if (vfxSlotOverride) {
+    vfxEntry = playerCosmetics[vfxSlotOverride];
+  } else if (isNuke) {
     vfxEntry = playerCosmetics["vfx_nuke"] ?? playerCosmetics["vfx_attack"];
+  } else if (actionType === "capture") {
+    vfxEntry = playerCosmetics["vfx_capture"];
+  } else if (actionType === "defend") {
+    vfxEntry = playerCosmetics["vfx_defend"];
   } else {
     vfxEntry =
       playerCosmetics[actionType === "attack" ? "vfx_attack" : "vfx_move"];

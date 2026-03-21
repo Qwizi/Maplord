@@ -46,6 +46,8 @@ pub struct MatchPlayerInfo {
     /// Building max levels from deck: building_slug → max level (1-3).
     #[serde(default)]
     pub building_levels: HashMap<String, i64>,
+    #[serde(default)]
+    pub unit_levels: HashMap<String, i64>,
     /// Visual cosmetics metadata — passed through to clients, never processed by the engine.
     #[serde(default)]
     pub cosmetics: HashMap<String, serde_json::Value>,
@@ -860,6 +862,21 @@ impl DjangoClient {
         let result: ActiveLobbyResult = self.get(&path).await?;
         Ok(result.lobby_id)
     }
+
+    /// Fetch system module states from Django.
+    pub async fn get_system_modules(
+        &self,
+    ) -> Result<HashMap<String, SystemModuleState>, DjangoError> {
+        self.get("/api/v1/internal/game/system-modules/").await
+    }
+}
+
+/// State of a system module as returned by Django.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SystemModuleState {
+    pub enabled: bool,
+    #[serde(default)]
+    pub config: HashMap<String, serde_json::Value>,
 }
 
 #[derive(Debug)]

@@ -28,3 +28,4 @@ celerybeat-schedule-wal
 
 # OS
 .DS_Store
+pixi/

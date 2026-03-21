@@ -80,8 +80,6 @@ class APIKey(models.Model):
 
 
 class Webhook(models.Model):
-    MAX_FAILURES = 10
-
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     app = models.ForeignKey(
         DeveloperApp,
@@ -94,6 +92,11 @@ class Webhook(models.Model):
     is_active = models.BooleanField(default=True)
     failure_count = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    @property
+    def max_failures(self):
+        from apps.game_config.modules import get_module_config
+        return get_module_config('developers', 'max_webhook_failures', 10)
 
     def save(self, *args, **kwargs):
         if not self.secret:

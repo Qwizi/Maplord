@@ -10,7 +10,6 @@ from apps.geo.views import GeoController
 from apps.game_config.views import ConfigController
 from apps.matchmaking.views import MatchController, TutorialController
 from apps.game.views import GameController, ShareController
-from apps.shop.views import ShopController
 from apps.inventory.views import DeckController, InventoryController
 from apps.marketplace.views import MarketplaceController
 from apps.crafting.views import CraftingController
@@ -21,6 +20,7 @@ from apps.developers.views import DeveloperController
 from apps.developers.public_views import PublicAPIController
 from apps.developers.oauth_views import OAuthController
 from apps.assets.api import AssetController
+from apps.accounts.social_auth import SocialAuthController
 
 api = NinjaExtraAPI(title='MapLord API', version='1.0.0')
 api.register_controllers(
@@ -32,7 +32,6 @@ api.register_controllers(
     TutorialController,
     GameController,
     ShareController,
-    ShopController,
     InventoryController,
     DeckController,
     MarketplaceController,
@@ -45,6 +44,7 @@ api.register_controllers(
     PublicAPIController,
     OAuthController,
     AssetController,
+    SocialAuthController,
 )
 
 def health_check(request):

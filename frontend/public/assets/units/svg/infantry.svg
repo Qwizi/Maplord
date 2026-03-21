@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" fill-opacity="0.85">
+  <!-- Shadow -->
+  <ellipse cx="150" cy="268" rx="30" ry="7" fill="#ffffff" opacity="0.15"/>
+  <!-- Legs -->
+  <rect x="130" y="205" width="13" height="50" rx="4" fill="#ffffff" stroke="#ffffff" stroke-width="1.5"/>
+  <rect x="157" y="205" width="13" height="50" rx="4" fill="#ffffff" stroke="#ffffff" stroke-width="1.5"/>
+  <!-- Boots -->
+  <rect x="127" y="247" width="19" height="12" rx="3" fill="#ffffff" stroke="#ffffff" stroke-width="1"/>
+  <rect x="154" y="247" width="19" height="12" rx="3" fill="#ffffff" stroke="#ffffff" stroke-width="1"/>
+  <!-- Body -->
+  <polygon points="127,130 173,130 180,205 120,205" fill="#ffffff" stroke="#ffffff" stroke-width="2"/>
+  <!-- Belt -->
+  <rect x="122" y="185" width="56" height="6" rx="2" fill="#ffffff" stroke="#ffffff" stroke-width="1"/>
+  <!-- Chest pockets -->
+  <rect x="132" y="145" width="14" height="14" rx="2" fill="#ffffff" stroke="#ffffff" stroke-width="1"/>
+  <rect x="154" y="145" width="14" height="14" rx="2" fill="#ffffff" stroke="#ffffff" stroke-width="1"/>
+  <!-- Arms -->
+  <rect x="108" y="132" width="14" height="50" rx="5" fill="#ffffff" stroke="#ffffff" stroke-width="1.5" transform="rotate(8, 115, 132)"/>
+  <rect x="178" y="132" width="14" height="50" rx="5" fill="#ffffff" stroke="#ffffff" stroke-width="1.5" transform="rotate(-12, 185, 132)"/>
+  <!-- Rifle (across body) -->
+  <rect x="170" y="120" width="5" height="65" rx="2" fill="#ffffff" stroke="#ffffff" stroke-width="1" transform="rotate(-20, 172, 152)"/>
+  <!-- Head -->
+  <circle cx="150" cy="110" r="20" fill="#ffffff" stroke="#ffffff" stroke-width="2"/>
+  <!-- Helmet -->
+  <path d="M130,105 Q130,85 150,82 Q170,85 170,105" fill="#ffffff" stroke="#ffffff" stroke-width="2"/>
+  <!-- Helmet rim -->
+  <path d="M128,108 Q150,112 172,108" fill="none" stroke="#ffffff" stroke-width="2"/>
+  <!-- Face shadow -->
+  <ellipse cx="150" cy="115" rx="12" ry="8" fill="#ffffff" opacity="0.5"/>
+  <!-- Helmet strap -->
+  <line x1="133" y1="110" x2="133" y2="120" stroke="#ffffff" stroke-width="1.5"/>
+</svg>

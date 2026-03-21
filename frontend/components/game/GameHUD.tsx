@@ -2,30 +2,24 @@
 
 import { memo, useMemo, type ReactNode } from "react";
 import Image from "next/image";
-import { Zap, Shield, Swords, TrendingUp, Coins } from "lucide-react";
+import { Zap } from "lucide-react";
 import type { GamePlayer } from "@/hooks/useGameSocket";
 import { Badge } from "@/components/ui/badge";
+import type { CosmeticValue } from "@/lib/animationConfig";
+import ActiveBoosts from "@/components/game/ActiveBoosts";
 
-const BOOST_ICONS: Record<string, ReactNode> = {
-  unit_bonus: <TrendingUp className="h-3 w-3" />,
-  defense_bonus: <Shield className="h-3 w-3" />,
-  attack_bonus: <Swords className="h-3 w-3" />,
-  energy_bonus: <Coins className="h-3 w-3" />,
-};
+/**
+ * Resolve the `emblem` cosmetic slot to a URL string, or return null if absent.
+ * The cosmetic value may be a bare URL string or an object with a `url` field.
+ */
+function resolveEmblemUrl(cosmetics?: Record<string, unknown>): string | null {
+  if (!cosmetics) return null;
+  const raw = cosmetics.emblem as CosmeticValue | undefined;
+  if (!raw) return null;
+  if (typeof raw === "string") return raw;
+  return raw.url ?? null;
+}
 
-const BOOST_COLORS: Record<string, string> = {
-  unit_bonus: "text-emerald-300 border-emerald-500/30 bg-emerald-500/10",
-  defense_bonus: "text-blue-300 border-blue-500/30 bg-blue-500/10",
-  attack_bonus: "text-red-300 border-red-500/30 bg-red-500/10",
-  energy_bonus: "text-amber-300 border-amber-500/30 bg-amber-500/10",
-};
-
-const BOOST_LABELS: Record<string, string> = {
-  unit_bonus: "Mobilizacja",
-  defense_bonus: "Fortyfikacja",
-  attack_bonus: "Blitzkrieg",
-  energy_bonus: "Ekonomia",
-};
 
 interface GameHUDProps {
   tick: number;
@@ -40,6 +34,8 @@ interface GameHUDProps {
     unitCount: number;
     isAlive: boolean;
     isBot: boolean;
+    /** Player's equipped cosmetics — used to render the emblem slot icon. */
+    cosmetics?: Record<string, unknown>;
   }>;
   myUserId: string;
   myRegionCount: number;
@@ -119,78 +115,60 @@ export default memo(function GameHUD({
         <CompactStat icon="/assets/units/ground_unit.webp" label="Siła" value={myUnitCount} />
       </div>
 
-      <ActiveBoostsPanel players={players} myUserId={myUserId} tickIntervalMs={tickIntervalMs} />
+      <ActiveBoosts
+        boosts={players[myUserId]?.active_boosts ?? []}
+        matchBoosts={players[myUserId]?.active_match_boosts}
+        tickIntervalMs={tickIntervalMs}
+      />
 
-      <div className="hidden rounded-xl border border-border bg-card/80 p-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.22)] backdrop-blur-xl sm:block">
-        <div className="px-1 pb-1.5 text-[10px] sm:text-xs uppercase tracking-[0.16em] text-muted-foreground">
+      <div className="military-frame hidden rounded-xl border border-border bg-card/80 p-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.22)] backdrop-blur-xl sm:block">
+        <div className="military-frame-inner px-1 pb-1.5 text-[10px] sm:text-xs uppercase tracking-[0.16em] text-muted-foreground">
           Ranking
         </div>
         <div className="space-y-0.5">
-          {rankedPlayers.map((player, index) => (
-            <div
-              key={player.user_id}
-              className={`grid grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-2 rounded-lg px-2 py-1 text-xs sm:text-sm ${
-                player.user_id === myUserId ? "bg-muted/30" : "bg-transparent"
-              }`}
-            >
-              <div className="font-display text-muted-foreground">{index + 1}</div>
-              <div className="min-w-0">
-                <div className={`truncate ${player.isAlive ? "text-foreground" : "text-muted-foreground line-through"}`}>
-                  <span className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ backgroundColor: player.color }} />
-                  {player.username}
-                  {player.user_id === myUserId ? " (Ty)" : ""}
-                  {player.isBot && <span className="ml-1 text-[10px] font-medium uppercase tracking-widest text-muted-foreground" title="Bot AI">BOT</span>}
+          {rankedPlayers.map((player, index) => {
+            const emblemUrl = resolveEmblemUrl(player.cosmetics);
+            return (
+              <div
+                key={player.user_id}
+                className={`grid grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-2 rounded-lg px-2 py-1 text-xs sm:text-sm ${
+                  player.user_id === myUserId ? "bg-muted/30" : "bg-transparent"
+                }`}
+              >
+                <div className="font-display text-muted-foreground">{index + 1}</div>
+                <div className="min-w-0">
+                  <div className={`flex items-center gap-1 truncate ${player.isAlive ? "text-foreground" : "text-muted-foreground line-through"}`}>
+                    <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: player.color }} />
+                    {/* Emblem cosmetic — small icon shown next to the player color dot */}
+                    {emblemUrl && (
+                      <Image
+                        src={emblemUrl}
+                        alt=""
+                        width={16}
+                        height={16}
+                        className="h-4 w-4 shrink-0 rounded-sm object-contain"
+                        title="Emblem"
+                      />
+                    )}
+                    <span className="truncate">
+                      {player.username}
+                      {player.user_id === myUserId ? " (Ty)" : ""}
+                    </span>
+                    {player.isBot && <span className="ml-1 shrink-0 text-[10px] font-medium uppercase tracking-widest text-muted-foreground" title="Bot AI">BOT</span>}
+                  </div>
+                </div>
+                <div className="text-right font-display text-xs sm:text-sm tabular-nums text-muted-foreground">
+                  {player.regionCount}r · {player.unitCount}u
                 </div>
               </div>
-              <div className="text-right font-display text-xs sm:text-sm tabular-nums text-muted-foreground">
-                {player.regionCount}r · {player.unitCount}u
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
   );
 });
 
-const ActiveBoostsPanel = memo(function ActiveBoostsPanel({
-  players, myUserId, tickIntervalMs,
-}: { players: Record<string, GamePlayer>; myUserId: string; tickIntervalMs: number }) {
-  const myPlayer = players[myUserId];
-  const deckBoosts = myPlayer?.active_boosts ?? [];
-  const matchBoosts = myPlayer?.active_match_boosts ?? [];
-
-  if (deckBoosts.length === 0 && matchBoosts.length === 0) return null;
-
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {deckBoosts.map((b) => {
-        const effectType = (b.params?.effect_type as string) ?? "";
-        const value = (b.params?.value as number) ?? 0;
-        const colors = BOOST_COLORS[effectType] ?? "text-muted-foreground border-border bg-muted/30";
-        return (
-          <div key={b.slug} className={`flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] sm:text-xs font-medium ${colors}`}
-            title={`${BOOST_LABELS[effectType] ?? effectType}: +${Math.round(value * 100)}% (cały mecz)`}>
-            {BOOST_ICONS[effectType] ?? <Zap className="h-3 w-3" />}
-            <span>+{Math.round(value * 100)}%</span>
-          </div>
-        );
-      })}
-      {matchBoosts.map((b, i) => {
-        const colors = BOOST_COLORS[b.effect_type] ?? "text-muted-foreground border-border bg-muted/30";
-        const remainingSec = Math.ceil((b.ticks_remaining * tickIntervalMs) / 1000);
-        return (
-          <div key={`${b.slug}-${i}`} className={`flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] sm:text-xs font-medium ${colors}`}
-            title={`${BOOST_LABELS[b.effect_type] ?? b.effect_type}: +${Math.round(b.value * 100)}% (${remainingSec}s)`}>
-            {BOOST_ICONS[b.effect_type] ?? <Zap className="h-3 w-3" />}
-            <span>+{Math.round(b.value * 100)}%</span>
-            <span className="font-display text-[10px] tabular-nums opacity-70">{remainingSec}s</span>
-          </div>
-        );
-      })}
-    </div>
-  );
-});
 
 const CompactStat = memo(function CompactStat({
   icon, label, value,

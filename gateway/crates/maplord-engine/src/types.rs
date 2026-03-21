@@ -42,8 +42,95 @@ pub struct GameSettings {
     pub elo_k_factor: i64,
     #[serde(default)]
     pub match_duration_limit_minutes: u64,
+    #[serde(default = "default_true")]
+    pub weather_enabled: bool,
+    #[serde(default = "default_true")]
+    pub day_night_enabled: bool,
+
+    // Weather gameplay modifiers
+    #[serde(default = "default_night_defense_modifier")]
+    pub night_defense_modifier: f64,
+    #[serde(default = "default_dawn_dusk_defense_modifier")]
+    pub dawn_dusk_defense_modifier: f64,
+    #[serde(default = "default_storm_randomness_modifier")]
+    pub storm_randomness_modifier: f64,
+    #[serde(default = "default_fog_randomness_modifier")]
+    pub fog_randomness_modifier: f64,
+    #[serde(default = "default_rain_randomness_modifier")]
+    pub rain_randomness_modifier: f64,
+    #[serde(default = "default_storm_energy_modifier")]
+    pub storm_energy_modifier: f64,
+    #[serde(default = "default_rain_energy_modifier")]
+    pub rain_energy_modifier: f64,
+    #[serde(default = "default_storm_unit_gen_modifier")]
+    pub storm_unit_gen_modifier: f64,
+    #[serde(default = "default_rain_unit_gen_modifier")]
+    pub rain_unit_gen_modifier: f64,
+
+    // Gameplay limits
+    #[serde(default = "default_disconnect_grace_seconds")]
+    pub disconnect_grace_seconds: u64,
+    #[serde(default = "default_max_build_queue_per_region")]
+    pub max_build_queue_per_region: u64,
+    #[serde(default = "default_max_unit_queue_per_region")]
+    pub max_unit_queue_per_region: u64,
+    #[serde(default = "default_casualty_factor")]
+    pub casualty_factor: f64,
+    #[serde(default = "default_snapshot_interval_ticks")]
+    pub snapshot_interval_ticks: u64,
+
+    // Game module system (weather, combat, economy, etc.)
+    #[serde(default)]
+    pub modules: HashMap<String, ModuleConfig>,
+
+    // System module configs (anticheat, chat, matchmaking, etc.)
+    #[serde(default)]
+    pub system_modules: HashMap<String, SystemModuleSnapshot>,
 }
 
+/// Configuration for a single game module.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModuleConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub config: HashMap<String, serde_json::Value>,
+}
+
+/// Snapshot of a system module's state and config.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SystemModuleSnapshot {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub config: HashMap<String, serde_json::Value>,
+}
+
+impl GameSettings {
+    /// Check if a system module is enabled.
+    pub fn is_system_module_enabled(&self, slug: &str) -> bool {
+        self.system_modules
+            .get(slug)
+            .map(|m| m.enabled)
+            .unwrap_or(true) // fail-open
+    }
+
+    /// Get a system module config value as a specific type.
+    pub fn system_module_config<T: serde::de::DeserializeOwned>(
+        &self,
+        slug: &str,
+        key: &str,
+        default: T,
+    ) -> T {
+        self.system_modules
+            .get(slug)
+            .and_then(|m| m.config.get(key))
+            .and_then(|v| serde_json::from_value(v.clone()).ok())
+            .unwrap_or(default)
+    }
+}
+
+fn default_true() -> bool { true }
 fn default_tick_interval() -> u64 { 1000 }
 fn default_capital_selection_time() -> u64 { 30 }
 fn default_base_unit_generation_rate() -> f64 { 1.0 }
@@ -57,6 +144,64 @@ fn default_starting_units() -> i64 { 10 }
 fn default_neutral_region_units() -> i64 { 3 }
 fn default_min_capital_distance() -> i64 { 3 }
 fn default_elo_k_factor() -> i64 { 32 }
+fn default_night_defense_modifier() -> f64 { 1.15 }
+fn default_dawn_dusk_defense_modifier() -> f64 { 1.05 }
+fn default_storm_randomness_modifier() -> f64 { 1.4 }
+fn default_fog_randomness_modifier() -> f64 { 1.25 }
+fn default_rain_randomness_modifier() -> f64 { 1.1 }
+fn default_storm_energy_modifier() -> f64 { 0.85 }
+fn default_rain_energy_modifier() -> f64 { 0.95 }
+fn default_storm_unit_gen_modifier() -> f64 { 0.90 }
+fn default_rain_unit_gen_modifier() -> f64 { 0.95 }
+fn default_disconnect_grace_seconds() -> u64 { 180 }
+fn default_max_build_queue_per_region() -> u64 { 3 }
+fn default_max_unit_queue_per_region() -> u64 { 4 }
+fn default_casualty_factor() -> f64 { 0.5 }
+fn default_snapshot_interval_ticks() -> u64 { 30 }
+
+impl Default for GameSettings {
+    fn default() -> Self {
+        Self {
+            tick_interval_ms: default_tick_interval(),
+            capital_selection_time_seconds: default_capital_selection_time(),
+            base_unit_generation_rate: default_base_unit_generation_rate(),
+            capital_generation_bonus: default_capital_generation_bonus(),
+            starting_energy: default_starting_energy(),
+            base_energy_per_tick: default_base_energy_per_tick(),
+            region_energy_per_tick: default_region_energy_per_tick(),
+            attacker_advantage: 0.0,
+            defender_advantage: default_defender_advantage(),
+            combat_randomness: default_combat_randomness(),
+            starting_units: default_starting_units(),
+            neutral_region_units: default_neutral_region_units(),
+            building_types: HashMap::new(),
+            unit_types: HashMap::new(),
+            ability_types: HashMap::new(),
+            default_unit_type_slug: None,
+            min_capital_distance: default_min_capital_distance(),
+            elo_k_factor: default_elo_k_factor(),
+            match_duration_limit_minutes: 0,
+            weather_enabled: true,
+            day_night_enabled: true,
+            night_defense_modifier: default_night_defense_modifier(),
+            dawn_dusk_defense_modifier: default_dawn_dusk_defense_modifier(),
+            storm_randomness_modifier: default_storm_randomness_modifier(),
+            fog_randomness_modifier: default_fog_randomness_modifier(),
+            rain_randomness_modifier: default_rain_randomness_modifier(),
+            storm_energy_modifier: default_storm_energy_modifier(),
+            rain_energy_modifier: default_rain_energy_modifier(),
+            storm_unit_gen_modifier: default_storm_unit_gen_modifier(),
+            rain_unit_gen_modifier: default_rain_unit_gen_modifier(),
+            disconnect_grace_seconds: default_disconnect_grace_seconds(),
+            max_build_queue_per_region: default_max_build_queue_per_region(),
+            max_unit_queue_per_region: default_max_unit_queue_per_region(),
+            casualty_factor: default_casualty_factor(),
+            snapshot_interval_ticks: default_snapshot_interval_ticks(),
+            modules: HashMap::new(),
+            system_modules: HashMap::new(),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BuildingConfig {
@@ -130,6 +275,34 @@ pub struct UnitConfig {
     pub max_level: i64,
     #[serde(default)]
     pub level_stats: HashMap<String, serde_json::Value>,
+    #[serde(default)]
+    pub is_stealth: bool,
+    #[serde(default)]
+    pub path_damage: f64,
+    #[serde(default)]
+    pub aoe_damage: f64,
+    #[serde(default)]
+    pub blockade_port: bool,
+    #[serde(default)]
+    pub intercept_air: bool,
+    #[serde(default)]
+    pub can_station_anywhere: bool,
+    #[serde(default)]
+    pub lifetime_ticks: i64,
+    #[serde(default = "default_combat_target")]
+    pub combat_target: String,
+    /// Ticks per province-hop for air transit (0 = use ground speed formula).
+    /// Higher = slower. E.g. bomber=4 means 4 ticks per hop, fighter=2.
+    #[serde(default)]
+    pub air_speed_ticks_per_hop: i64,
+    /// Ticks per province-hop for ground/sea transit (0 = use legacy speed formula).
+    /// Higher = slower. E.g. infantry=3 means 3 ticks per hop, commando=1.
+    #[serde(default)]
+    pub ticks_per_hop: i64,
+}
+
+fn default_combat_target() -> String {
+    "ground".to_string()
 }
 
 /// Ability config — mirrors Django AbilityType snapshot.
@@ -285,12 +458,13 @@ pub struct Player {
     /// Building max levels from deck: building_slug → max level (1-3).
     #[serde(default)]
     pub building_levels: HashMap<String, i64>,
+    /// Unit max levels from deck: unit_slug -> max level (1-3).
+    #[serde(default)]
+    pub unit_levels: HashMap<String, i64>,
     /// Visual cosmetics metadata — passed through to clients, never processed by the engine.
     #[serde(default)]
     pub cosmetics: HashMap<String, serde_json::Value>,
 }
-
-fn default_true() -> bool { true }
 
 /// Region state stored in Redis.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -356,6 +530,15 @@ pub struct Action {
     /// Expected keys: "effect_type" (String), "value" (f64), "duration_ticks" (i64).
     #[serde(default)]
     pub boost_params: Option<serde_json::Value>,
+    /// Number of escort fighters to send with a bomber (launch_bomber action).
+    #[serde(default)]
+    pub escort_fighters: Option<i64>,
+    /// ID of an in-flight air mission to intercept (intercept action).
+    #[serde(default)]
+    pub target_flight_id: Option<String>,
+    /// Multiple target regions for bombardment (artillery salvo across provinces).
+    #[serde(default)]
+    pub target_region_ids: Option<Vec<String>>,
 }
 
 /// Building queue item.
@@ -399,6 +582,73 @@ pub struct TransitQueueItem {
     pub units: i64,
     pub ticks_remaining: i64,
     pub travel_ticks: i64,
+}
+
+/// A group of interceptor fighters chasing an in-flight air mission.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InterceptorGroup {
+    pub player_id: String,
+    pub source_region_id: String,
+    pub fighters: i64,
+    /// 0.0 = just launched, 1.0 = reached the target flight.
+    pub progress: f64,
+    pub speed_per_tick: f64,
+}
+
+/// Air transit item — represents a bomber or fighter mission in flight.
+/// Progress advances each tick; interceptors can attach mid-flight.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AirTransitItem {
+    pub id: String,
+    /// "bomb_run" | "fighter_attack" | "escort_return"
+    pub mission_type: String,
+    pub source_region_id: String,
+    pub target_region_id: String,
+    pub player_id: String,
+    pub unit_type: String,
+    pub units: i64,
+    /// Escort fighters traveling with a bomber (only for bomb_run).
+    #[serde(default)]
+    pub escort_fighters: i64,
+    /// 0.0 = source, 1.0 = arrived at target.
+    pub progress: f64,
+    /// How much progress advances per tick.
+    pub speed_per_tick: f64,
+    /// Total distance in province hops (for frontend path rendering).
+    #[serde(default)]
+    pub total_distance: i64,
+    /// Interceptor groups chasing this flight.
+    #[serde(default)]
+    pub interceptors: Vec<InterceptorGroup>,
+    /// Province IDs along the flight path (from BFS), for path bombing.
+    #[serde(default)]
+    pub flight_path: Vec<String>,
+    /// Index of last province in flight_path that was bombed (to avoid re-bombing).
+    #[serde(default)]
+    pub last_bombed_hop: usize,
+}
+
+/// Weather/day-night state computed from UTC time.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WeatherState {
+    /// 0.0 = midnight, 0.5 = noon, 1.0 = midnight again
+    pub time_of_day: f64,
+    /// "day", "night", "dawn", "dusk"
+    pub phase: String,
+    /// 0.0 = clear, 1.0 = heavy overcast
+    pub cloud_coverage: f64,
+    /// Overall visibility: 1.0 = full, 0.0 = zero (never actually zero)
+    pub visibility: f64,
+    /// Current weather condition: "clear", "cloudy", "rain", "fog", "storm"
+    pub condition: String,
+    /// Multiplier applied to defender_advantage (night = stronger defense)
+    pub defense_modifier: f64,
+    /// Multiplier applied to combat_randomness (fog/storm = more chaos)
+    pub randomness_modifier: f64,
+    /// Multiplier applied to energy generation (storm = reduced)
+    pub energy_modifier: f64,
+    /// Multiplier applied to unit generation rate (rain = slightly reduced)
+    pub unit_gen_modifier: f64,
 }
 
 /// Events produced by the engine.
@@ -556,5 +806,95 @@ pub enum Event {
         building_type: String,
         player_id: String,
         new_level: i64,
+    },
+    /// Emitted when AOE units (e.g. artillery) deal splash damage to neighboring provinces.
+    #[serde(rename = "aoe_damage")]
+    AoeDamage {
+        source_region_id: String,
+        affected_region_ids: Vec<String>,
+        player_id: String,
+        damage_factor: f64,
+    },
+    /// Emitted when a unit with path_damage > 0 softens the target before arrival.
+    #[serde(rename = "path_damage")]
+    PathDamage {
+        target_region_id: String,
+        player_id: String,
+        units_killed: i64,
+    },
+    /// Emitted when the flash ability creates a disorientation effect.
+    #[serde(rename = "flash_effect")]
+    FlashEffect {
+        source_player_id: String,
+        target_region_id: String,
+        affected_region_ids: Vec<String>,
+        ticks_remaining: i64,
+    },
+    /// Emitted when artillery fires a bombardment at a target region from range.
+    /// No movement occurs — artillery stays in the source region.
+    #[serde(rename = "bombard")]
+    Bombard {
+        player_id: String,
+        source_region_id: String,
+        target_region_id: String,
+        /// 1 rocket per artillery unit (after SAM interception).
+        rocket_count: i64,
+        total_killed: i64,
+        /// Number of rockets intercepted by SAM units before reaching the target.
+        #[serde(default)]
+        intercepted_count: i64,
+        /// Region IDs that contributed SAM units to intercept the bombardment.
+        #[serde(default)]
+        sam_region_ids: Vec<String>,
+    },
+    /// An air mission (bomber/fighter) has been launched and is in flight.
+    #[serde(rename = "air_mission_launched")]
+    AirMissionLaunched {
+        flight_id: String,
+        mission_type: String,
+        player_id: String,
+        source_region_id: String,
+        target_region_id: String,
+        unit_type: String,
+        units: i64,
+        escort_fighters: i64,
+        speed_per_tick: f64,
+    },
+    /// Interceptor fighters dispatched toward an in-flight air mission.
+    #[serde(rename = "air_intercept_dispatched")]
+    AirInterceptDispatched {
+        flight_id: String,
+        interceptor_player_id: String,
+        source_region_id: String,
+        fighters: i64,
+    },
+    /// Mid-air combat resolved between interceptors and a flight (escorts/bomber).
+    #[serde(rename = "air_combat_resolved")]
+    AirCombatResolved {
+        flight_id: String,
+        interceptor_player_id: String,
+        target_player_id: String,
+        interceptors_lost: i64,
+        escorts_lost: i64,
+        bombers_lost: i64,
+        interceptors_remaining: i64,
+        escorts_remaining: i64,
+        bombers_remaining: i64,
+    },
+    /// Bomber arrived and struck the target — destruction results.
+    #[serde(rename = "bomber_strike")]
+    BomberStrike {
+        player_id: String,
+        target_region_id: String,
+        bombers: i64,
+        ground_units_destroyed: i64,
+        buildings_destroyed: Vec<String>,
+        province_neutralized: bool,
+    },
+    /// Province lost all defenders and became neutral (no owner).
+    #[serde(rename = "province_neutralized")]
+    ProvinceNeutralized {
+        region_id: String,
+        previous_owner_id: String,
     },
 }

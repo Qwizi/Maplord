@@ -31,13 +31,16 @@ class ItemOutSchema(Schema):
     item_type: str
     rarity: str
     icon: str
-    asset_key: str
+    cosmetic_slot: str
     is_stackable: bool
     is_tradeable: bool
     is_consumable: bool
     base_value: int
     level: int
     blueprint_ref: str = ''
+    boost_params: dict | None = None
+    cosmetic_params: dict | None = None
+    crate_loot_table: list | None = None
 
     class Config:
         from_attributes = True
@@ -138,6 +141,7 @@ class DeckOutSchema(Schema):
     id: uuid.UUID
     name: str
     is_default: bool
+    is_editable: bool
     items: list[DeckItemOutSchema] = []
 
     class Config:
@@ -146,6 +150,7 @@ class DeckOutSchema(Schema):
 
 class EquipCosmeticInSchema(Schema):
     item_slug: str
+    instance_id: str | None = None
 
 
 class UnequipCosmeticInSchema(Schema):

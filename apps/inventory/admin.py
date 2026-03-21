@@ -108,7 +108,7 @@ class ItemAdmin(ModelAdmin):
     raw_id_fields = ('cosmetic_asset', 'opens_crate')
     inlines = [EquippedByInline, ItemInventoryInline]
     fieldsets = (
-        (None, {'fields': ('name', 'slug', 'description', 'category', 'item_type', 'rarity', 'icon', 'asset_key', 'cosmetic_asset', 'cosmetic_params')}),
+        (None, {'fields': ('name', 'slug', 'description', 'category', 'item_type', 'rarity', 'icon', 'cosmetic_slot', 'cosmetic_asset', 'cosmetic_params')}),
         ('Properties', {'fields': ('is_stackable', 'is_tradeable', 'is_consumable', 'max_stack', 'base_value')}),
         ('Crate / Key', {'classes': ('collapse',), 'fields': ('crate_loot_table', 'opens_crate')}),
         ('Boost / Blueprint', {'classes': ('collapse',), 'fields': ('boost_params', 'blueprint_ref')}),

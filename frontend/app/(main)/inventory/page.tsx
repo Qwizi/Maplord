@@ -25,13 +25,19 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { useAuth } from "@/hooks/useAuth";
+import { useModuleConfig } from "@/hooks/useSystemModules";
+import { ModuleDisabledPage } from "@/components/ModuleGate";
+import { CrateOpenModal } from "@/components/inventory/CrateOpenModal";
+import ItemIcon from "@/components/ui/ItemIcon";
 import {
   getMyInventory,
   getMyWallet,
   getMyDrops,
+  getItemCategories,
   openCrate,
   type InventoryItemOut,
   type ItemInstanceOut,
+  type ItemOut,
   type WalletOut,
   type ItemDropOut,
 } from "@/lib/api";
@@ -229,7 +235,7 @@ function FilledSlot({ entry, isSelected, onClick }: SlotProps) {
       )}
 
       {/* Icon */}
-      <span className="text-3xl leading-none select-none">{entry.item.icon || "📦"}</span>
+      <ItemIcon slug={entry.item.slug} icon={entry.item.icon} size={32} />
 
       {/* Name / nametag */}
       <p className="mt-1 max-w-full truncate px-1 text-center text-xs leading-none text-muted-foreground">
@@ -344,21 +350,19 @@ function DetailPanel({ entry, hasMatchingKey, onOpenCrate, onClose }: DetailPane
   const rarity = item.rarity;
   const inst = entry.instance;
 
-  const displayIcon = item.icon || TYPE_LETTER[item.item_type] || "?";
-
   return (
     <div className="rounded-xl p-5 sm:p-6">
       <div className="flex items-start justify-between gap-3 sm:gap-4">
         {/* Left: icon */}
         <div
           className={[
-            "flex h-20 w-20 shrink-0 items-center justify-center rounded-xl border border-l-[3px] text-4xl",
+            "flex h-20 w-20 shrink-0 items-center justify-center rounded-xl border border-l-[3px]",
             "border-border",
             RARITY_BORDER[rarity] ?? "border-l-slate-400",
             "bg-muted/30",
           ].join(" ")}
         >
-          {displayIcon}
+          <ItemIcon slug={item.slug} icon={item.icon} size={48} />
         </div>
 
         {/* Center: info */}
@@ -487,6 +491,12 @@ function timeAgo(dateStr: string): string {
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function InventoryPage() {
+  const { enabled } = useModuleConfig("inventory");
+  if (!enabled) return <ModuleDisabledPage slug="inventory" />;
+  return <InventoryContent />;
+}
+
+function InventoryContent() {
   const { user, loading: authLoading, token } = useAuth();
   const router = useRouter();
 
@@ -496,6 +506,14 @@ export default function InventoryPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("all");
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Crate opening modal state
+  const [crateModalOpen, setCrateModalOpen] = useState(false);
+  const [openingCrateItem, setOpeningCrateItem] = useState<ItemOut | null>(null);
+  const [crateDrops, setCrateDrops] = useState<
+    Array<{ item_name: string; item_slug: string; rarity: string; quantity: number }> | null
+  >(null);
+  const [allItemCatalog, setAllItemCatalog] = useState<ItemOut[]>([]);
 
   useGSAP(() => {
     if (!containerRef.current || loading) return;
@@ -509,14 +527,16 @@ export default function InventoryPage() {
   const loadData = useCallback(async () => {
     if (!token) return;
     try {
-      const [invRes, wal, drRes] = await Promise.all([
+      const [invRes, wal, drRes, categories] = await Promise.all([
         getMyInventory(token, 200),
         getMyWallet(token),
         getMyDrops(token, 10),
+        getItemCategories(),
       ]);
       setInventory(invRes.items);
       setWallet(wal);
       setDrops(drRes.items);
+      setAllItemCatalog(categories.flatMap((c) => c.items));
     } catch {
       toast.error("Nie udało się załadować ekwipunku");
     } finally {
@@ -547,17 +567,22 @@ export default function InventoryPage() {
       toast.error("Nie masz odpowiedniego klucza!");
       return;
     }
+    const crateEntry = inventory.find((i) => i.item.slug === crateSlug);
     try {
       const result = await openCrate(token, crateSlug, matchingKey.item.slug);
-      toast.success(
-        `Otwarto skrzynię! Otrzymano: ${result.drops
-          .map((d) => `${d.item_name} x${d.quantity}`)
-          .join(", ")}`
-      );
-      loadData();
+      setOpeningCrateItem(crateEntry?.item ?? null);
+      setCrateDrops(result.drops);
+      setCrateModalOpen(true);
     } catch {
       toast.error("Nie udało się otworzyć skrzynki");
     }
+  };
+
+  const handleCrateModalClose = () => {
+    setCrateModalOpen(false);
+    setOpeningCrateItem(null);
+    setCrateDrops(null);
+    loadData();
   };
 
   const filteredInventory =
@@ -573,6 +598,14 @@ export default function InventoryPage() {
 
   return (
     <div ref={containerRef} className="space-y-3 md:space-y-8 -mx-4 md:mx-0 -mt-2 md:mt-0">
+
+      <CrateOpenModal
+        isOpen={crateModalOpen}
+        onClose={handleCrateModalClose}
+        crateItem={openingCrateItem}
+        drops={crateDrops}
+        allItems={allItemCatalog}
+      />
 
       {/* ── Page header ─────────────────────────────────────────────────────── */}
       <div className="px-4 md:px-0">
@@ -749,12 +782,12 @@ export default function InventoryPage() {
                             {/* Icon */}
                             <div
                               className={[
-                                "flex h-9 w-9 md:h-11 md:w-11 shrink-0 items-center justify-center rounded-lg md:rounded-md border border-l-[2px] text-base md:text-lg",
+                                "flex h-9 w-9 md:h-11 md:w-11 shrink-0 items-center justify-center rounded-lg md:rounded-md border border-l-[2px]",
                                 "border-border bg-muted/20",
                                 RARITY_BORDER[rarity] ?? "border-l-slate-400",
                               ].join(" ")}
                             >
-                              {drop.item.icon || TYPE_LETTER[drop.item.item_type] || "?"}
+                              <ItemIcon slug={drop.item.slug} icon={drop.item.icon} size={28} />
                             </div>
 
                             {/* Name + qty */}
@@ -782,7 +815,7 @@ export default function InventoryPage() {
                       />
                       <HoverCardContent side="left" sideOffset={8} className="w-[min(320px,calc(100vw-2rem))] p-4">
                         <div className="flex items-center gap-3 mb-2">
-                          <span className="text-2xl">{drop.item.icon || "📦"}</span>
+                          <ItemIcon slug={drop.item.slug} icon={drop.item.icon} size={32} />
                           <div>
                             <p className={`text-base font-semibold ${RARITY_TEXT[rarity]}`}>{drop.item.name}</p>
                             <Badge className={`text-xs ${RARITY_BG_BADGE[rarity]}`} variant="outline">

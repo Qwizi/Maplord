@@ -122,6 +122,78 @@ export async function getMe(token: string): Promise<User> {
   return fetchAPI<User>("/auth/me", { token });
 }
 
+// --- Social Auth ---
+
+export interface SocialAuthURL {
+  url: string;
+}
+
+export interface SocialAuthTokens {
+  access: string;
+  refresh: string;
+  is_new_user: boolean;
+}
+
+export async function getSocialAuthURL(
+  provider: 'google' | 'discord',
+  redirectUri: string
+): Promise<SocialAuthURL> {
+  return fetchAPI<SocialAuthURL>(
+    `/auth/social/${provider}/authorize?redirect_uri=${encodeURIComponent(redirectUri)}`
+  );
+}
+
+export async function socialAuthCallback(
+  provider: 'google' | 'discord',
+  code: string,
+  redirectUri: string,
+  state?: string | null
+): Promise<SocialAuthTokens> {
+  return fetchAPI<SocialAuthTokens>(`/auth/social/${provider}/callback`, {
+    method: 'POST',
+    body: JSON.stringify({ code, redirect_uri: redirectUri, state }),
+  });
+}
+
+export interface SocialAccountOut {
+  id: string;
+  provider: string;
+  display_name: string;
+  email: string;
+  avatar_url: string;
+  created_at: string;
+}
+
+export async function getLinkedSocialAccounts(
+  token: string
+): Promise<SocialAccountOut[]> {
+  return fetchAPI<SocialAccountOut[]>('/auth/social/accounts', { token });
+}
+
+export async function linkSocialAccount(
+  token: string,
+  provider: 'google' | 'discord',
+  code: string,
+  redirectUri: string,
+  state?: string | null
+): Promise<SocialAccountOut> {
+  return fetchAPI<SocialAccountOut>(`/auth/social/${provider}/link`, {
+    method: 'POST',
+    token,
+    body: JSON.stringify({ code, redirect_uri: redirectUri, state }),
+  });
+}
+
+export async function unlinkSocialAccount(
+  token: string,
+  accountId: string
+): Promise<void> {
+  await fetchAPI(`/auth/social/${accountId}/unlink`, {
+    method: 'DELETE',
+    token,
+  });
+}
+
 // --- Push Notifications ---
 
 export async function getVapidKey(): Promise<string> {
@@ -225,6 +297,16 @@ export interface UnitType {
   order: number;
   max_level: number;
   level_stats: Record<string, Record<string, number>>;
+  is_stealth: boolean;
+  path_damage: number;
+  aoe_damage: number;
+  blockade_port: boolean;
+  intercept_air: boolean;
+  can_station_anywhere: boolean;
+  lifetime_ticks: number;
+  combat_target: string;
+  ticks_per_hop: number;
+  air_speed_ticks_per_hop: number;
 }
 
 export interface GameSettings {
@@ -298,6 +380,52 @@ export interface AbilityType {
   level_stats: Record<string, Record<string, number>>;
 }
 
+export interface GameModuleItem {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  icon: string;
+  default_enabled: boolean;
+  default_config: Record<string, unknown>;
+  config_schema: Array<{
+    key: string;
+    label: string;
+    type: string;
+    default: unknown;
+    min?: number;
+    max?: number;
+  }>;
+  order: number;
+}
+
+export interface SystemModule {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  icon: string;
+  module_type: 'system' | 'game';
+  enabled: boolean;
+  config: Record<string, unknown>;
+  config_schema: Array<{
+    key: string;
+    label: string;
+    type: string;
+    default: unknown;
+    min?: number;
+    max?: number;
+  }>;
+  affects_backend: boolean;
+  affects_frontend: boolean;
+  affects_gateway: boolean;
+  is_core: boolean;
+  order: number;
+  default_enabled: boolean;
+  default_config: Record<string, unknown>;
+  field_mapping: Record<string, unknown>;
+}
+
 export interface FullConfig {
   settings: GameSettings;
   buildings: BuildingType[];
@@ -305,13 +433,19 @@ export interface FullConfig {
   abilities: AbilityType[];
   maps: MapConfigItem[];
   game_modes: GameModeListItem[];
+  modules: GameModuleItem[];
+  system_modules: SystemModule[];
 }
 
 let _configCache: FullConfig | null = null;
+let _configCacheTime = 0;
+const CONFIG_CACHE_TTL_MS = 30_000; // refresh config every 30s
 export async function getConfig(): Promise<FullConfig> {
-  if (_configCache) return _configCache;
+  const now = Date.now();
+  if (_configCache && now - _configCacheTime < CONFIG_CACHE_TTL_MS) return _configCache;
   const config = await fetchAPI<FullConfig>("/config/");
   _configCache = config;
+  _configCacheTime = now;
   return config;
 }
 
@@ -803,13 +937,16 @@ export interface ItemOut {
   item_type: string;
   rarity: string;
   icon: string;
-  asset_key: string;
+  cosmetic_slot: string;
   is_stackable: boolean;
   is_tradeable: boolean;
   is_consumable: boolean;
   base_value: number;
   level: number;
   blueprint_ref: string;
+  boost_params?: Record<string, unknown> | null;
+  cosmetic_params?: Record<string, unknown> | null;
+  crate_loot_table?: Array<unknown> | null;
 }
 
 export interface ItemInstanceOut {
@@ -989,6 +1126,8 @@ export interface EquippedCosmeticOut {
   item_slug: string;
   item_name: string;
   asset_url: string | null;
+  cosmetic_params: Record<string, unknown> | null;
+  instance: ItemInstanceOut | null;
 }
 
 export interface EquippedCosmeticDetail {
@@ -996,20 +1135,27 @@ export interface EquippedCosmeticDetail {
   item_slug: string;
   item_name: string;
   asset_url: string | null;
+  cosmetic_params: Record<string, unknown> | null;
+  instance: ItemInstanceOut | null;
 }
 
 export async function getEquippedCosmetics(token: string): Promise<EquippedCosmeticOut[]> {
   return fetchAPI<EquippedCosmeticOut[]>("/inventory/cosmetics/equipped/", { token });
 }
 
+export interface EquipCosmeticPayload {
+  item_slug: string;
+  instance_id?: string;
+}
+
 export async function equipCosmetic(
   token: string,
-  item_slug: string
+  payload: EquipCosmeticPayload
 ): Promise<EquippedCosmeticDetail> {
   return fetchAPI<EquippedCosmeticDetail>("/inventory/cosmetics/equip/", {
     method: "POST",
     token,
-    body: JSON.stringify({ item_slug }),
+    body: JSON.stringify(payload),
   });
 }
 
@@ -1078,6 +1224,7 @@ export interface DeckOut {
   id: string;
   name: string;
   is_default: boolean;
+  is_editable: boolean;
   items: DeckItemOut[];
 }
 

@@ -2,6 +2,7 @@ import logging
 import random
 from ninja_extra import api_controller, route
 from apps.accounts.auth import ActiveUserJWTAuth
+from apps.game_config.decorators import require_module_controller
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from apps.pagination import paginate_qs
@@ -121,6 +122,7 @@ def remove_item_from_inventory(user, item, quantity=1):
 
 
 @api_controller('/inventory', tags=['Inventory'])
+@require_module_controller('inventory')
 class InventoryController:
 
     @route.get('/items/', response=list[ItemCategoryOutSchema], auth=None)
@@ -136,7 +138,7 @@ class InventoryController:
         """List user's inventory: stackable stacks + unique instances."""
         from apps.inventory.models import ItemInstance
 
-        # Stackable items from UserInventory
+        # Stackable items only
         stacks_qs = UserInventory.objects.filter(
             user=request.user, item__is_stackable=True,
         ).select_related('item', 'item__category')
@@ -280,21 +282,51 @@ class InventoryController:
     @route.post('/cosmetics/equip/', response={200: EquippedCosmeticOutSchema, 400: dict, 404: dict}, auth=ActiveUserJWTAuth())
     def equip_cosmetic(self, request, payload: EquipCosmeticInSchema):
         """Equip a cosmetic item."""
-        inv = UserInventory.objects.filter(user=request.user, item__slug=payload.item_slug).select_related('item', 'item__cosmetic_asset').first()
-        if not inv:
+        from apps.inventory.models import ItemInstance
+
+        item = None
+        instance = None
+
+        if payload.instance_id:
+            # Look up specific instance
+            inst = ItemInstance.objects.filter(
+                id=payload.instance_id, owner=request.user
+            ).select_related('item', 'item__cosmetic_asset').first()
+            if inst:
+                item = inst.item
+                instance = inst
+        else:
+            # Look up by slug - try instances first (cosmetics are always instances)
+            inst = ItemInstance.objects.filter(
+                owner=request.user, item__slug=payload.item_slug
+            ).select_related('item', 'item__cosmetic_asset').first()
+            if inst:
+                item = inst.item
+                instance = inst
+            else:
+                # Fallback to stackable inventory
+                inv = UserInventory.objects.filter(
+                    user=request.user, item__slug=payload.item_slug
+                ).select_related('item', 'item__cosmetic_asset').first()
+                if inv:
+                    item = inv.item
+
+        if not item:
             return 404, {'detail': 'Item not found in inventory.'}
 
-        item = inv.item
         if item.item_type != Item.ItemType.COSMETIC:
             return 400, {'detail': 'Item is not a cosmetic.'}
 
-        if not item.asset_key:
-            return 400, {'detail': 'Item has no asset_key configured.'}
+        if not item.cosmetic_slot:
+            return 400, {'detail': 'Item has no cosmetic_slot configured.'}
 
+        defaults = {'item': item}
+        if instance:
+            defaults['instance'] = instance
         equipped, _ = EquippedCosmetic.objects.update_or_create(
             user=request.user,
-            slot=item.asset_key,
-            defaults={'item': item},
+            slot=item.cosmetic_slot,
+            defaults=defaults,
         )
         return 200, equipped
 
@@ -360,6 +392,7 @@ def _cleanup_stale_deck_items(user, deck):
 
 
 @api_controller('/inventory/decks', tags=['Decks'])
+@require_module_controller('cosmetics')
 class DeckController:
 
     @route.get('/', response=dict, auth=ActiveUserJWTAuth())
@@ -401,6 +434,9 @@ class DeckController:
           (not just this one).
         """
         deck = get_object_or_404(Deck, id=deck_id, user=request.user)
+
+        if not deck.is_editable:
+            return self.create_response({'error': 'Domyślna talia nie może być edytowana. Utwórz nową talię.'}, status_code=403)
 
         with transaction.atomic():
             if payload.name is not None:
@@ -497,7 +533,11 @@ class DeckController:
                 # Replace deck items
                 DeckItem.objects.filter(deck=deck).delete()
                 for item, qty in validated_items:
-                    DeckItem.objects.create(deck=deck, item=item, quantity=qty)
+                    instance = None
+                    if not item.is_stackable:
+                        from apps.inventory.models import ItemInstance
+                        instance = ItemInstance.objects.filter(owner=request.user, item=item).first()
+                    DeckItem.objects.create(deck=deck, item=item, quantity=qty, instance=instance)
 
         return (
             Deck.objects.prefetch_related('items__item', 'items__item__category')
@@ -508,6 +548,8 @@ class DeckController:
     def delete_deck(self, request, deck_id: str):
         """Delete a deck."""
         deck = get_object_or_404(Deck, id=deck_id, user=request.user)
+        if not deck.is_editable:
+            return self.create_response({'error': 'Domyślna talia nie może być usunięta.'}, status_code=403)
         deck.delete()
         return {'ok': True}
 

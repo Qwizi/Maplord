@@ -104,6 +104,10 @@ Next.js 16 App Router with TypeScript:
 
 Key libraries: MapLibre GL (map rendering), shadcn/ui + Tailwind CSS 4 (UI), React Hook Form + Zod (form validation), Sonner (toasts).
 
+# PixiJS Project
+## Documentation
+For PixiJS API reference, fetch: https://pixijs.com/llms-full.txt
+
 ### Infrastructure
 
 - **Caddy** — Reverse proxy, routes `/api/` to backend, `/ws/` to Rust gateway, serves static/media files

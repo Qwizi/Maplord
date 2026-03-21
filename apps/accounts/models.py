@@ -29,6 +29,31 @@ class User(AbstractUser):
         return self.role == self.Role.ADMIN
 
 
+class SocialAccount(models.Model):
+    class Provider(models.TextChoices):
+        GOOGLE = 'google', 'Google'
+        DISCORD = 'discord', 'Discord'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='social_accounts')
+    provider = models.CharField(max_length=20, choices=Provider.choices)
+    provider_user_id = models.CharField(max_length=255)
+    email = models.EmailField(blank=True, default='')
+    display_name = models.CharField(max_length=255, blank=True, default='')
+    avatar_url = models.URLField(max_length=500, blank=True, default='')
+    access_token = models.TextField(blank=True, default='')
+    refresh_token = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('provider', 'provider_user_id')
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.provider}:{self.provider_user_id} -> {self.user.email}"
+
+
 class PushSubscription(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='push_subscriptions')
