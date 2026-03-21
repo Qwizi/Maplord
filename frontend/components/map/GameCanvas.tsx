@@ -1837,6 +1837,7 @@ export default function GameCanvas({
 
         // SAM intercept animations — SAM rocket flies to meet point + explosion
         const samAnims = samInterceptsRef.current;
+        if (airLayer) {
         for (let si = samAnims.length - 1; si >= 0; si--) {
           const sa = samAnims[si];
           const elapsed = now - sa.startTime;
@@ -1875,6 +1876,7 @@ export default function GameCanvas({
             samAnims.splice(si, 1);
           }
         }
+        } // end airLayer guard
 
         // Weather particles — rain / storm diagonal streaks
         const wp = weatherParticlesRef.current;
