@@ -1375,18 +1375,36 @@ export default function GamePage({
   const executePlannedMoves = useCallback(() => {
     const now = Date.now();
     let executed = 0;
-    for (const pm of plannedMoves) {
-      if (now - pm.createdAt > PLAN_EXPIRY_S * 1000) continue;
+    let skipped = 0;
+    const currentRegions = gameStateRef.current?.regions ?? {};
 
-      // No dedup keys for planned moves — let server events create animations.
-      // dispatchTroops would create local animations + dedup keys, but we skip it
-      // because it needs reachability data. Server events will handle visuals.
+    // Track how many units we've already committed from each source+unitType
+    const committed = new Map<string, number>();
+
+    for (const pm of plannedMoves) {
+      if (now - pm.createdAt > PLAN_EXPIRY_S * 1000) { skipped++; continue; }
+
+      const source = currentRegions[pm.sourceId];
+      // Skip if province lost or no longer ours
+      if (!source || source.owner_id !== myUserId) { skipped++; continue; }
+
+      const key = `${pm.sourceId}:${pm.unitType}`;
+      const alreadySent = committed.get(key) ?? 0;
+      const available = (source.units?.[pm.unitType] ?? 0) - alreadySent;
+
+      // Skip if not enough units left
+      if (available <= 0) { skipped++; continue; }
+
+      // Clamp to what's actually available
+      const units = Math.min(pm.unitCount, available);
+      committed.set(key, alreadySent + units);
+
       if (pm.actionType === "bombard") {
-        bombard(pm.sourceId, [pm.targetId], pm.unitCount);
+        bombard(pm.sourceId, [pm.targetId], units);
       } else if (pm.actionType === "attack") {
-        attack(pm.sourceId, pm.targetId, pm.unitCount, pm.unitType);
+        attack(pm.sourceId, pm.targetId, units, pm.unitType);
       } else {
-        move(pm.sourceId, pm.targetId, pm.unitCount, pm.unitType);
+        move(pm.sourceId, pm.targetId, units, pm.unitType);
       }
       executed++;
     }
@@ -1395,9 +1413,14 @@ export default function GamePage({
     setSelectedRegion(null);
     setSelectedActionUnitType(null);
     if (executed > 0) {
-      toast.success(`Wykonano ${executed} ruchow!`, { id: "plan-exec", duration: 2000 });
+      const msg = skipped > 0
+        ? `Wykonano ${executed} ruchow (${skipped} pominieto — brak jednostek)`
+        : `Wykonano ${executed} ruchow!`;
+      toast.success(msg, { id: "plan-exec", duration: 3000 });
+    } else if (skipped > 0) {
+      toast.warning("Nie wykonano zadnych ruchow — brak jednostek lub prowincje utracone", { id: "plan-exec", duration: 3000 });
     }
-  }, [plannedMoves, attack, move, bombard]);
+  }, [plannedMoves, attack, move, bombard, myUserId]);
 
   const clearPlannedMoves = useCallback(() => {
     if (plannedMoves.length > 0 || planningMode) {
