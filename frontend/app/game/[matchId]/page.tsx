@@ -897,11 +897,13 @@ export default function GamePage({
         const SALVO_GAP_MS = 200;
         const PAIR_STAGGER_MS = 60;
 
-        // Split total kills evenly across rockets so each shows its damage on landing
-        const killPerRocket = rocketCount > 0 ? Math.floor(totalKilled / rocketCount) : 0;
-        let killRemainder = rocketCount > 0 ? totalKilled % rocketCount : 0;
+        // Only rockets that get through SAM fly to target
+        const rocketsThrough = rocketCount - interceptedCount;
+        const killPerRocket = rocketsThrough > 0 ? Math.floor(totalKilled / rocketsThrough) : 0;
+        let killRemainder = rocketsThrough > 0 ? totalKilled % rocketsThrough : 0;
 
-        for (let i = 0; i < visibleRockets; i++) {
+        // 1. Animate rockets that get through (fly to target, deal damage)
+        for (let i = 0; i < rocketsThrough; i++) {
           const salvoIdx = Math.floor(i / 2);
           const inPairIdx = i % 2;
           const delay = salvoIdx * SALVO_GAP_MS + inPairIdx * PAIR_STAGGER_MS;
@@ -921,17 +923,64 @@ export default function GamePage({
             playerId,
           });
 
-          // Each rocket shows its portion of damage exactly when it lands
           const thisRocketKill = killPerRocket + (killRemainder > 0 ? 1 : 0);
           if (killRemainder > 0) killRemainder--;
           if (thisRocketKill > 0) {
             const capturedKill = thisRocketKill;
-            const isLastRocket = i === visibleRockets - 1;
             setTimeout(() => {
               window.dispatchEvent(new CustomEvent("bombard-damage", {
-                detail: { regionId: targetId, killed: capturedKill, isLast: isLastRocket },
+                detail: { regionId: targetId, killed: capturedKill },
               }));
             }, landingTime);
+          }
+        }
+
+        // 2. SAM intercepts: artillery rocket (full animation) + SAM rocket (ticker-drawn)
+        //    Both meet mid-air, artillery animation gets killed, explosion spawns.
+        if (interceptedCount > 0 && samRegionIds.length > 0) {
+          for (let i = 0; i < interceptedCount; i++) {
+            const samRegion = samRegionIds[i % samRegionIds.length];
+            const interceptDelay = (rocketsThrough + i) * (SALVO_GAP_MS / 2);
+
+            // Artillery rocket — full TroopAnimation with rocket rendering
+            const artAnimId = crypto.randomUUID();
+            newAnims.push({
+              id: artAnimId,
+              sourceId,
+              targetId,
+              color,
+              units: rocketDmg,
+              unitCount: rocketDmg,
+              unitType: "artillery",
+              type: "attack" as const,
+              startTime: Date.now() + interceptDelay,
+              durationMs: ROCKET_FLIGHT_MS,
+              playerId,
+            });
+
+            // SAM rocket launches immediately, artillery gets killed when SAM arrives
+            const SAM_FLIGHT_MS = 600; // SAM is faster than artillery
+            const capturedArtId = artAnimId;
+            const capturedSamRegion = samRegion;
+
+            // Launch SAM rocket right when artillery launches
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent("sam-intercept-visual", {
+                detail: {
+                  sourceId,
+                  targetId,
+                  samRegionId: capturedSamRegion,
+                  flightMs: ROCKET_FLIGHT_MS,
+                  samFlightMs: SAM_FLIGHT_MS,
+                },
+              }));
+            }, interceptDelay);
+
+            // Kill artillery animation when SAM reaches it
+            setTimeout(() => {
+              setAnimations(prev => prev.filter(a => a.id !== capturedArtId));
+              window.dispatchEvent(new CustomEvent("kill-animation", { detail: { animId: capturedArtId } }));
+            }, interceptDelay + SAM_FLIGHT_MS);
           }
         }
 
@@ -1602,15 +1651,16 @@ export default function GamePage({
   useEffect(() => {
     if (status !== "finished" || isTutorial) return;
     setGameEndCountdown(10);
+    let count = 10;
     const interval = setInterval(() => {
-      setGameEndCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          router.push(`/match/${matchId}`);
-          return 0;
-        }
-        return prev - 1;
-      });
+      count--;
+      if (count <= 0) {
+        clearInterval(interval);
+        setGameEndCountdown(0);
+        router.push(`/match/${matchId}`);
+        return;
+      }
+      setGameEndCountdown(count);
     }, 1000);
     return () => clearInterval(interval);
   }, [status, matchId, router, isTutorial]);

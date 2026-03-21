@@ -5,7 +5,7 @@ import { Application, Graphics, Text, Container, TextStyle, Assets, Sprite, Text
 import { Viewport } from "pixi-viewport";
 import type { GameRegion, ActiveEffect, WeatherState, AirTransitItem } from "@/hooks/useGameSocket";
 import type { TroopAnimation, PlannedMove } from "@/lib/gameTypes";
-import { PixiAnimationManager } from "@/lib/pixiAnimations";
+import { PixiAnimationManager, computeCurvePath } from "@/lib/pixiAnimations";
 import type { CosmeticValue } from "@/lib/animationConfig";
 import { getBuildingAsset, getUnitAsset } from "@/lib/gameAssets";
 
@@ -247,6 +247,16 @@ export default function GameCanvas({
    *  until the next tick confirms the actual state. Keyed by region ID. */
   const bombardAdjustRef = useRef<Map<string, number>>(new Map());
 
+  /** Active SAM intercept animations drawn in the ticker. */
+  const samInterceptsRef = useRef<Array<{
+    startTime: number;
+    meetMs: number;
+    artFrom: [number, number];
+    samFrom: [number, number];
+    meetPoint: [number, number];
+    exploded: boolean;
+  }>>([]);
+
   // Stable ref wrappers for props used inside Pixi event callbacks so we
   // don't have to tear down / rebuild interactivity on every render.
   const onRegionClickRef = useRef(onRegionClick);
@@ -370,6 +380,44 @@ export default function GameCanvas({
       recentlyBombedRef.current.delete(regionId);
     };
     window.addEventListener("bombard-complete", bombardCompleteHandler);
+    // SAM intercept: SAM rocket flies from samRegion to interception point + explosion
+    // Artillery rocket was already killed by page.tsx setTimeout — we just draw the SAM side.
+    const samInterceptHandler = (e: Event) => {
+      const { sourceId, targetId, samRegionId, flightMs, samFlightMs } = (e as CustomEvent<{
+        sourceId: string; targetId: string; samRegionId: string; flightMs: number; samFlightMs?: number;
+      }>).detail;
+      const sd = shapesDataRef.current;
+      if (!sd) return;
+      const artSrc = sd.regions.find((s) => s.id === sourceId)?.centroid;
+      const tgt = sd.regions.find((s) => s.id === targetId)?.centroid;
+      const samSrc = sd.regions.find((s) => s.id === samRegionId)?.centroid;
+      if (!artSrc || !tgt || !samSrc) return;
+      // Interception point = where artillery is when SAM arrives
+      // SAM flies for samFlightMs, artillery progress = samFlightMs / flightMs
+      const samMs = samFlightMs ?? 600;
+      const artProgress = Math.min(samMs / flightMs, 0.9);
+      const curvePath = computeCurvePath(artSrc, tgt, 0.55, 20);
+      const meetIdx = Math.floor(curvePath.length * artProgress);
+      const meetPt = curvePath[Math.min(meetIdx, curvePath.length - 1)] ?? artSrc;
+      const meetX = meetPt[0];
+      const meetY = meetPt[1];
+      // SAM rocket flies to where artillery will be
+      samInterceptsRef.current.push({
+        startTime: Date.now(),
+        meetMs: samMs,
+        artFrom: artSrc,
+        samFrom: samSrc,
+        meetPoint: [meetX, meetY],
+        exploded: false,
+      });
+    };
+    window.addEventListener("sam-intercept-visual", samInterceptHandler);
+    // Kill animation mid-flight (used by SAM intercept)
+    const killAnimHandler = (e: Event) => {
+      const { animId } = (e as CustomEvent<{ animId: string }>).detail;
+      animManagerRef.current?.removeAnimation(animId);
+    };
+    window.addEventListener("kill-animation", killAnimHandler);
     // Cleanup stale entries every 5s
     const interval = setInterval(() => {
       const now = Date.now();
@@ -383,6 +431,8 @@ export default function GameCanvas({
       window.removeEventListener("path-damage-bomb", pathDamageBombHandler);
       window.removeEventListener("bombard-damage", bombardDamageHandler);
       window.removeEventListener("bombard-complete", bombardCompleteHandler);
+      window.removeEventListener("sam-intercept-visual", samInterceptHandler);
+      window.removeEventListener("kill-animation", killAnimHandler);
       clearInterval(interval);
     };
   }, []);
@@ -1782,6 +1832,47 @@ export default function GameCanvas({
               const alpha = (1 - phase) * (1 - phase) * 0.35;
               radar.circle(cx, cy, radius).stroke({ color: playerColor, width: 1.5, alpha });
             }
+          }
+        }
+
+        // SAM intercept animations — SAM rocket flies to meet point + explosion
+        const samAnims = samInterceptsRef.current;
+        for (let si = samAnims.length - 1; si >= 0; si--) {
+          const sa = samAnims[si];
+          const elapsed = now - sa.startTime;
+          const progress = Math.min(elapsed / sa.meetMs, 1);
+
+          if (progress < 1) {
+            // Draw SAM rocket flying toward interception point
+            const samX = sa.samFrom[0] + (sa.meetPoint[0] - sa.samFrom[0]) * progress;
+            const samY = sa.samFrom[1] + (sa.meetPoint[1] - sa.samFrom[1]) * progress;
+            const samGfx = new Graphics();
+            // Bright cyan rocket head
+            samGfx.circle(samX, samY, 3).fill({ color: 0x22d3ee, alpha: 0.95 });
+            samGfx.circle(samX, samY, 7).fill({ color: 0x22d3ee, alpha: 0.2 });
+            // Cyan trail
+            const tailP = Math.max(0, progress - 0.2);
+            const tailX = sa.samFrom[0] + (sa.meetPoint[0] - sa.samFrom[0]) * tailP;
+            const tailY = sa.samFrom[1] + (sa.meetPoint[1] - sa.samFrom[1]) * tailP;
+            samGfx.moveTo(tailX, tailY).lineTo(samX, samY)
+              .stroke({ color: 0x22d3ee, width: 2.5, alpha: 0.6 });
+            // Glow trail
+            samGfx.moveTo(tailX, tailY).lineTo(samX, samY)
+              .stroke({ color: 0x22d3ee, width: 5, alpha: 0.15 });
+            airLayer.addChild(samGfx);
+          } else if (!sa.exploded) {
+            // Explosion at interception point
+            sa.exploded = true;
+            const mgr = animManagerRef.current;
+            if (mgr) {
+              mgr.spawnParticleEffect("explosion", sa.meetPoint[0], sa.meetPoint[1]);
+              mgr.spawnParticleEffect("sparks", sa.meetPoint[0], sa.meetPoint[1]);
+            }
+          }
+
+          // Cleanup after explosion fade
+          if (elapsed > sa.meetMs + 1500) {
+            samAnims.splice(si, 1);
           }
         }
 

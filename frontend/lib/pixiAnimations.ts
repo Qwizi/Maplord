@@ -285,7 +285,7 @@ export function buildAnimationPath(
   if (unitType === "submarine") return computeCurvePath(from, to, 0.04, 34);
   if (unitType === "artillery") return computeCurvePath(from, to, 0.55, 40);
   if (unitType === "commando") return computeMarchPath(from, to, 26);
-  if (unitType === "sam") return computeMarchPath(from, to, 26);
+  if (unitType === "sam") return computeCurvePath(from, to, 0.65, 30);
   if (kind === "fighter") {
     if (actionType === "attack") return computeFighterAttackPath(from, to);
     return computeCurvePath(from, to, 0.24, 52);
@@ -705,6 +705,16 @@ export class PixiAnimationManager {
     this._particles.removeEmitter(id);
   }
 
+  /** Remove an animation mid-flight (e.g. SAM intercept kills a rocket). */
+  removeAnimation(animId: string): void {
+    const a = this.anims.get(animId);
+    if (a) {
+      this._removeAnimGraphics(a);
+      this.anims.delete(animId);
+      this._removePulseRing(animId);
+    }
+  }
+
   /**
    * Update the unit count label on an active animation (e.g. bomber losing units).
    */
@@ -809,15 +819,15 @@ export class PixiAnimationManager {
       const tailIdx = Math.max(0, Math.floor(tailProgress * (pathLen - 1)));
 
       // ── Trail line ────────────────────────────────────────────────────────
-      if (a.unitType === "artillery") {
-        // Artillery rocket: fiery smoke trail (orange→gray gradient)
+      if (a.unitType === "artillery" || a.unitType === "sam") {
+        // Artillery/SAM rocket: fiery smoke trail
         this._drawArtilleryTrail(a, tailIdx, headIdx, fadeOut);
       } else {
         this._drawTrail(a, trailColorNum, tailIdx, headIdx, fadeOut);
       }
 
       // ── Trail particles ───────────────────────────────────────────────────
-      if (a.unitType !== "artillery") {
+      if (a.unitType !== "artillery" && a.unitType !== "sam") {
         this._drawParticles(
           a,
           dotColorNum,
@@ -830,14 +840,15 @@ export class PixiAnimationManager {
 
       // ── Unit icon ─────────────────────────────────────────────────────────
       const isArtillery = a.unitType === "artillery";
+      const isSamRocket = a.unitType === "sam";
       const currentPoint = isNuke
         ? lerpPath(a.path, progress)
-        : isArtillery
+        : (isArtillery || isSamRocket)
           ? lerpPath(a.path, progress)
           : a.path[headIdx];
 
-      if (isArtillery) {
-        // Artillery rockets: small projectile with fiery trail, no unit icon/label
+      if (isArtillery || isSamRocket) {
+        // Artillery/SAM rockets: projectile with fiery trail, no unit icon/label
         this._drawArtilleryRocket(a, currentPoint, progress, rawLinear, fadeOut);
       } else {
         this._drawIcon(a, currentPoint, rawLinear, progress, isNuke, fadeOut);
@@ -845,20 +856,22 @@ export class PixiAnimationManager {
 
       // ── Pulse rings (during approach, attack only) ────────────────────────
       if (
-        !isArtillery &&
+        !isArtillery && !isSamRocket &&
         a.config.pulse.enabled &&
         a.actionType === "attack" &&
         progress > a.config.pulse.start_at
       ) {
         this._upsertPulseRing(a, now, progress, fadeOut);
-      } else if (!isArtillery) {
+      } else if (!isArtillery && !isSamRocket) {
         this._removePulseRing(a.id);
       }
 
       // ── Arrival trigger ───────────────────────────────────────────────────
       if (rawLinear >= 1 && !this.arrived.has(a.id)) {
         this.arrived.add(a.id);
-        if (isArtillery) {
+        if (isSamRocket) {
+          // SAM rocket: no impact effect — explosion handled by sam-intercept-visual event
+        } else if (isArtillery) {
           // Cinematic artillery impact — fireball, debris, smoke column, shockwave
           const [tx, ty] = a.targetCentroid;
           const pc = this._particleContainer;

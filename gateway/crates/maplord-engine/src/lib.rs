@@ -2139,8 +2139,25 @@ impl GameEngine {
         let intercepted_count = total_sam.min(rocket_count);
         let effective_rockets = rocket_count - intercepted_count;
 
+        // Consume SAM units — each SAM that intercepts is destroyed (one-shot)
         if intercepted_count > 0 {
-            eprintln!("[BOMBARD] SAM intercepted {} of {} rockets (SAM regions: {:?})",
+            let mut remaining_to_consume = intercepted_count;
+            for rid in &sam_region_ids {
+                if remaining_to_consume <= 0 { break; }
+                if let Some(region) = regions.get_mut(rid) {
+                    let sam_count = region.units.get("sam").copied().unwrap_or(0);
+                    let consumed = sam_count.min(remaining_to_consume);
+                    let left = sam_count - consumed;
+                    if left > 0 {
+                        region.units.insert("sam".into(), left);
+                    } else {
+                        region.units.remove("sam");
+                    }
+                    remaining_to_consume -= consumed;
+                    sync_region_unit_meta(region, self);
+                }
+            }
+            eprintln!("[BOMBARD] SAM intercepted {} of {} rockets, SAM units consumed (regions: {:?})",
                 intercepted_count, rocket_count, sam_region_ids);
         }
 
@@ -2204,7 +2221,7 @@ impl GameEngine {
             player_id: player_id.clone(),
             source_region_id: source_id.clone(),
             target_region_id: target_id,
-            rocket_count: effective_rockets,
+            rocket_count,
             total_killed,
             intercepted_count,
             sam_region_ids,
