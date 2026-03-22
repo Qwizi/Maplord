@@ -974,7 +974,7 @@ function NotificationBell({
             ) : (
               <div className="divide-y divide-border">
                 {unreadNotifs.map((n) => {
-                  const isGameInvite = n.type === "game_invite" && n.data.lobby_id;
+                  const isGameInvite = n.type === "game_invite" && !!n.data.lobby_id;
 
                   return (
                     <div

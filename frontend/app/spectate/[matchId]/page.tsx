@@ -31,7 +31,7 @@ export default function SpectatePage({
 
   // Map data
   const { shapesData: shapes } = useShapesData();
-  const [regionGraph, setRegionGraph] = useState<Record<string, RegionGraphEntry>>({});
+  const [regionGraph, setRegionGraph] = useState<RegionGraphEntry[]>([]);
   const [buildings, setBuildings] = useState<BuildingType[]>([]);
   const [units, setUnits] = useState<UnitType[]>([]);
   const [buildingIcons, setBuildingIcons] = useState<Record<string, string>>({});
@@ -40,10 +40,10 @@ export default function SpectatePage({
     Promise.all([getRegionsGraph(), getConfig(), loadAssetOverrides()])
       .then(([graph, config]) => {
         setRegionGraph(graph);
-        setBuildings(config.building_types);
-        setUnits(config.unit_types);
+        setBuildings(config.buildings);
+        setUnits(config.units);
         const icons: Record<string, string> = {};
-        for (const b of config.building_types) {
+        for (const b of config.buildings) {
           if (b.icon) icons[b.slug] = b.icon;
         }
         setBuildingIcons(icons);
@@ -85,8 +85,8 @@ export default function SpectatePage({
   // Neighbor map for GameCanvas
   const neighborMap = useMemo(() => {
     const map: Record<string, string[]> = {};
-    for (const [id, entry] of Object.entries(regionGraph)) {
-      map[id] = entry.neighbors;
+    for (const entry of regionGraph) {
+      map[entry.id] = entry.neighbor_ids;
     }
     return map;
   }, [regionGraph]);
