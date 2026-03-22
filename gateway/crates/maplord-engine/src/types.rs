@@ -98,6 +98,38 @@ pub struct GameSettings {
     pub proposal_timeout_ticks: i64,
     #[serde(default = "default_true")]
     pub diplomacy_enabled: bool,
+
+    // Action Points (AP) system — limits actions per player to prevent click-speed advantage
+    #[serde(default = "default_max_action_points")]
+    pub max_action_points: i64,
+    #[serde(default = "default_ap_regen_interval")]
+    pub ap_regen_interval: i64,
+    #[serde(default = "default_ap_cost_attack")]
+    pub ap_cost_attack: i64,
+    #[serde(default = "default_ap_cost_move")]
+    pub ap_cost_move: i64,
+    #[serde(default = "default_ap_cost_build")]
+    pub ap_cost_build: i64,
+    #[serde(default = "default_ap_cost_produce")]
+    pub ap_cost_produce: i64,
+    #[serde(default = "default_ap_cost_ability")]
+    pub ap_cost_ability: i64,
+
+    // Region cooldowns — prevent spamming actions from the same region
+    #[serde(default = "default_region_attack_cooldown")]
+    pub region_attack_cooldown: i64,
+    #[serde(default = "default_region_move_cooldown")]
+    pub region_move_cooldown: i64,
+
+    // Combat fatigue — weakens units after battle
+    #[serde(default = "default_fatigue_attack_modifier")]
+    pub fatigue_attack_modifier: f64,
+    #[serde(default = "default_fatigue_defense_modifier")]
+    pub fatigue_defense_modifier: f64,
+    #[serde(default = "default_fatigue_attack_ticks")]
+    pub fatigue_attack_ticks: i64,
+    #[serde(default = "default_fatigue_defense_ticks")]
+    pub fatigue_defense_ticks: i64,
 }
 
 /// Configuration for a single game module.
@@ -175,6 +207,25 @@ fn default_nap_minimum_duration_ticks() -> i64 { 300 }
 fn default_peace_cooldown_ticks() -> i64 { 120 }
 fn default_proposal_timeout_ticks() -> i64 { 60 }
 
+// AP system defaults
+fn default_max_action_points() -> i64 { 10 }
+fn default_ap_regen_interval() -> i64 { 3 }
+fn default_ap_cost_attack() -> i64 { 3 }
+fn default_ap_cost_move() -> i64 { 2 }
+fn default_ap_cost_build() -> i64 { 2 }
+fn default_ap_cost_produce() -> i64 { 1 }
+fn default_ap_cost_ability() -> i64 { 4 }
+
+// Region cooldown defaults
+fn default_region_attack_cooldown() -> i64 { 5 }
+fn default_region_move_cooldown() -> i64 { 2 }
+
+// Combat fatigue defaults
+fn default_fatigue_attack_modifier() -> f64 { 0.30 }
+fn default_fatigue_defense_modifier() -> f64 { 0.20 }
+fn default_fatigue_attack_ticks() -> i64 { 5 }
+fn default_fatigue_defense_ticks() -> i64 { 3 }
+
 impl Default for GameSettings {
     fn default() -> Self {
         Self {
@@ -220,6 +271,19 @@ impl Default for GameSettings {
             peace_cooldown_ticks: default_peace_cooldown_ticks(),
             proposal_timeout_ticks: default_proposal_timeout_ticks(),
             diplomacy_enabled: true,
+            max_action_points: default_max_action_points(),
+            ap_regen_interval: default_ap_regen_interval(),
+            ap_cost_attack: default_ap_cost_attack(),
+            ap_cost_move: default_ap_cost_move(),
+            ap_cost_build: default_ap_cost_build(),
+            ap_cost_produce: default_ap_cost_produce(),
+            ap_cost_ability: default_ap_cost_ability(),
+            region_attack_cooldown: default_region_attack_cooldown(),
+            region_move_cooldown: default_region_move_cooldown(),
+            fatigue_attack_modifier: default_fatigue_attack_modifier(),
+            fatigue_defense_modifier: default_fatigue_defense_modifier(),
+            fatigue_attack_ticks: default_fatigue_attack_ticks(),
+            fatigue_defense_ticks: default_fatigue_defense_ticks(),
         }
     }
 }
@@ -439,6 +503,12 @@ pub struct Player {
     pub energy: i64,
     #[serde(default)]
     pub energy_accum: f64,
+    /// Action Points — limits how many actions a player can take.
+    #[serde(default = "default_max_action_points")]
+    pub action_points: i64,
+    /// Fractional AP accumulator for regeneration (like energy_accum).
+    #[serde(default)]
+    pub ap_regen_accum: f64,
     #[serde(default)]
     pub ability_cooldowns: HashMap<String, i64>,
     #[serde(default)]
@@ -525,6 +595,15 @@ pub struct Region {
     pub units: HashMap<String, i64>,
     #[serde(default)]
     pub unit_accum: f64,
+    /// Per-action cooldowns: action_type (e.g. "attack", "move") → tick when ready.
+    #[serde(default)]
+    pub action_cooldowns: HashMap<String, i64>,
+    /// Tick when combat fatigue expires (units fight at reduced power until then).
+    #[serde(default)]
+    pub fatigue_until: Option<i64>,
+    /// Fatigue power reduction (e.g. 0.30 = 30% weaker).
+    #[serde(default)]
+    pub fatigue_modifier: f64,
 }
 
 /// Action from a player.
@@ -1088,5 +1167,13 @@ pub enum Event {
         target_region_id: String,
         attacker_id: String,
         ticks_remaining: i64,
+    },
+
+    /// Combat fatigue applied to a region after battle.
+    #[serde(rename = "combat_fatigue")]
+    CombatFatigue {
+        region_id: String,
+        modifier: f64,
+        ticks: i64,
     },
 }

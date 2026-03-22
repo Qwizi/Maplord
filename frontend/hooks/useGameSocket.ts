@@ -46,6 +46,9 @@ export interface GameRegion {
   vision_range?: number;
   unit_generation_bonus?: number;
   energy_generation_bonus?: number;
+  action_cooldowns?: Record<string, number>;
+  fatigue_until?: number | null;
+  fatigue_modifier?: number;
 }
 
 export interface GamePlayer {
@@ -58,6 +61,8 @@ export interface GamePlayer {
   left_match_at?: number | null;
   capital_region_id: string | null;
   energy: number;
+  action_points: number;
+  ap_regen_accum?: number;
   eliminated_reason?: string | null;
   eliminated_tick?: number | null;
   ability_cooldowns?: Record<string, number>;

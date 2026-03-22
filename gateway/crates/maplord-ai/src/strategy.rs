@@ -435,6 +435,9 @@ mod tests {
                 m
             },
             unit_accum: 0.0,
+            action_cooldowns: HashMap::new(),
+            fatigue_until: None,
+            fatigue_modifier: 0.0,
         }
     }
 

@@ -1869,6 +1869,8 @@ async fn initialize_game(
             building_levels: p.building_levels.clone(),
             unit_levels: p.unit_levels.clone(),
             cosmetics: p.cosmetics.clone(),
+            action_points: settings.max_action_points,
+            ap_regen_accum: 0.0,
         };
         players.insert(p.user_id.clone(), player);
     }
@@ -1927,6 +1929,9 @@ async fn initialize_game(
                 },
                 units,
                 unit_accum: 0.0,
+                action_cooldowns: HashMap::new(),
+                fatigue_until: None,
+                fatigue_modifier: 0.0,
             },
         );
     }

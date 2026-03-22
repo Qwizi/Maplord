@@ -2,7 +2,7 @@
 
 import { memo, useMemo, useState, useCallback, type ReactNode } from "react";
 import Image from "next/image";
-import { Zap, Swords, Handshake, Shield } from "lucide-react";
+import { Zap, Swords, Handshake, Shield, BoltIcon } from "lucide-react";
 import type { GamePlayer } from "@/hooks/useGameSocket";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -42,6 +42,7 @@ interface GameHUDProps {
   myRegionCount: number;
   myUnitCount: number;
   myEnergy: number;
+  myActionPoints: number;
   fps?: number;
   ping?: number;
   connected?: boolean;
@@ -156,6 +157,7 @@ export default memo(function GameHUD({
   myRegionCount,
   myUnitCount,
   myEnergy,
+  myActionPoints,
   fps,
   ping,
   connected,
@@ -235,9 +237,20 @@ export default memo(function GameHUD({
         </div>
       )}
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-2">
-        <CompactStat icon={<Zap className="h-3.5 w-3.5 text-primary" />} label="Energia" value={myEnergy} />
+      {/* Stats — Energy + AP (large, prominent) */}
+      <div className="grid grid-cols-2 gap-2">
+        <LargeStat
+          icon={<Zap className="h-4 w-4 text-primary" />}
+          label="Energia"
+          value={myEnergy}
+          valueColor="text-primary"
+          lowPulse={myEnergy < 50}
+        />
+        <APStat actionPoints={myActionPoints} />
+      </div>
+
+      {/* Stats — Regions + Units (smaller) */}
+      <div className="grid grid-cols-2 gap-2">
         <CompactStat icon="/assets/icons/storage_icon.webp" label="Regiony" value={myRegionCount} />
         <CompactStat icon="/assets/units/ground_unit.webp" label="Sila" value={myUnitCount} />
       </div>
@@ -427,8 +440,8 @@ export default memo(function GameHUD({
 
 
 const CompactStat = memo(function CompactStat({
-  icon, label, value,
-}: { icon: string | ReactNode; label: string; value: number }) {
+  icon, label, value, suffix, valueColor,
+}: { icon: string | ReactNode; label: string; value: number; suffix?: string; valueColor?: string }) {
   return (
     <div className="min-w-0 rounded-2xl border border-border bg-card sm:bg-card/80 px-2 py-1.5 shadow-lg sm:backdrop-blur-xl">
       <div className="flex items-center gap-1.5 text-[10px] sm:text-xs uppercase tracking-[0.12em] text-muted-foreground">
@@ -437,7 +450,65 @@ const CompactStat = memo(function CompactStat({
         ) : icon}
         <span className="truncate">{label}</span>
       </div>
-      <div className="mt-1 truncate font-display text-base font-bold leading-none text-foreground sm:text-xl">{value}</div>
+      <div className={`mt-1 flex items-baseline gap-0.5 truncate font-display text-base font-bold leading-none sm:text-xl ${valueColor ?? "text-foreground"}`}>
+        <span>{value}</span>
+        {suffix && <span className="text-[10px] font-normal text-muted-foreground sm:text-xs">{suffix}</span>}
+      </div>
+    </div>
+  );
+});
+
+/** Large prominent stat tile — used for Energy and AP */
+const LargeStat = memo(function LargeStat({
+  icon, label, value, valueColor, lowPulse,
+}: { icon: ReactNode; label: string; value: number; valueColor?: string; lowPulse?: boolean }) {
+  return (
+    <div className={`min-w-0 rounded-2xl border bg-card sm:bg-card/80 px-3 py-2 shadow-lg sm:backdrop-blur-xl transition-colors ${
+      lowPulse ? "border-primary/60 animate-pulse" : "border-border"
+    }`}>
+      <div className="flex items-center gap-1.5 text-[10px] sm:text-xs uppercase tracking-[0.12em] text-muted-foreground">
+        {icon}
+        <span className="truncate">{label}</span>
+      </div>
+      <div className={`mt-1 font-display text-2xl font-bold leading-none sm:text-3xl tabular-nums ${valueColor ?? "text-foreground"}`}>
+        {value}
+      </div>
+    </div>
+  );
+});
+
+const AP_MAX_HUD = 10;
+
+/** AP tile with progress bar and regen rate */
+const APStat = memo(function APStat({ actionPoints }: { actionPoints: number }) {
+  const pct = Math.round((Math.min(actionPoints, AP_MAX_HUD) / AP_MAX_HUD) * 100);
+  const isLow = actionPoints < 3;
+  const isMid = actionPoints >= 3 && actionPoints < 6;
+  const valueColor = isLow ? "text-red-400" : isMid ? "text-amber-400" : "text-green-400";
+  const barColor = isLow ? "bg-red-500" : isMid ? "bg-amber-500" : "bg-green-500";
+
+  return (
+    <div className={`min-w-0 rounded-2xl border bg-card sm:bg-card/80 px-3 py-2 shadow-lg sm:backdrop-blur-xl transition-colors ${
+      isLow ? "border-red-500/60 animate-pulse" : "border-border"
+    }`}>
+      <div className="flex items-center justify-between gap-1 text-[10px] sm:text-xs uppercase tracking-[0.12em] text-muted-foreground">
+        <div className="flex items-center gap-1.5">
+          <BoltIcon className="h-4 w-4 text-amber-400" />
+          <span>AP</span>
+        </div>
+        <span className="normal-case text-[9px] sm:text-[10px] text-muted-foreground/70 tracking-normal">+1 co 3s</span>
+      </div>
+      <div className={`mt-1 font-display text-2xl font-bold leading-none sm:text-3xl tabular-nums ${valueColor}`}>
+        {actionPoints}
+        <span className="text-[11px] font-normal text-muted-foreground sm:text-sm">/{AP_MAX_HUD}</span>
+      </div>
+      {/* Progress bar */}
+      <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-muted/40">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
     </div>
   );
 });

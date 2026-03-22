@@ -2,6 +2,23 @@
  * Shared game type definitions used across map renderers and the game page.
  */
 
+/**
+ * Action Point (AP) costs matching Rust engine defaults.
+ * Each action type costs a fixed number of AP.
+ */
+export const AP_COSTS = {
+  attack: 3,
+  move: 2,
+  build: 2,
+  produce: 1,
+  ability: 4,
+} as const;
+
+export type ActionType = keyof typeof AP_COSTS;
+
+/** Maximum AP a player can hold at once. */
+export const AP_MAX = 10;
+
 export interface TroopAnimation {
   id: string;
   sourceId: string;

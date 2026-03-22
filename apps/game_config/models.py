@@ -77,6 +77,25 @@ class GameSettings(models.Model):
         default=True, help_text='Enable diplomacy system (wars, pacts, peace treaties)'
     )
 
+    # Action Points
+    max_action_points = models.IntegerField(default=10, help_text='Max AP pool per player')
+    ap_regen_interval = models.IntegerField(default=3, help_text='Ticks between each +1 AP regeneration')
+    ap_cost_attack = models.IntegerField(default=3, help_text='AP cost for attack/bombard/intercept')
+    ap_cost_move = models.IntegerField(default=2, help_text='AP cost for move')
+    ap_cost_build = models.IntegerField(default=2, help_text='AP cost for build/upgrade')
+    ap_cost_produce = models.IntegerField(default=1, help_text='AP cost for unit production')
+    ap_cost_ability = models.IntegerField(default=4, help_text='AP cost for ability use')
+
+    # Region Cooldowns
+    region_attack_cooldown = models.IntegerField(default=5, help_text='Ticks before a region can attack again')
+    region_move_cooldown = models.IntegerField(default=2, help_text='Ticks before a region can move again')
+
+    # Combat Fatigue
+    fatigue_attack_modifier = models.FloatField(default=0.30, help_text='Power reduction after winning attack (e.g. 0.30 = 30%)')
+    fatigue_defense_modifier = models.FloatField(default=0.20, help_text='Power reduction after winning defense (e.g. 0.20 = 20%)')
+    fatigue_attack_ticks = models.IntegerField(default=5, help_text='Duration of attacker fatigue in ticks')
+    fatigue_defense_ticks = models.IntegerField(default=3, help_text='Duration of defender fatigue in ticks')
+
     class Meta:
         verbose_name = 'Game Settings'
         verbose_name_plural = 'Game Settings'
@@ -282,6 +301,25 @@ class GameMode(models.Model):
     diplomacy_enabled = models.BooleanField(
         default=True, help_text='Enable diplomacy system (wars, pacts, peace treaties)'
     )
+
+    # Action Points
+    max_action_points = models.IntegerField(default=10, help_text='Max AP pool per player')
+    ap_regen_interval = models.IntegerField(default=3, help_text='Ticks between each +1 AP regeneration')
+    ap_cost_attack = models.IntegerField(default=3, help_text='AP cost for attack/bombard/intercept')
+    ap_cost_move = models.IntegerField(default=2, help_text='AP cost for move')
+    ap_cost_build = models.IntegerField(default=2, help_text='AP cost for build/upgrade')
+    ap_cost_produce = models.IntegerField(default=1, help_text='AP cost for unit production')
+    ap_cost_ability = models.IntegerField(default=4, help_text='AP cost for ability use')
+
+    # Region Cooldowns
+    region_attack_cooldown = models.IntegerField(default=5, help_text='Ticks before a region can attack again')
+    region_move_cooldown = models.IntegerField(default=2, help_text='Ticks before a region can move again')
+
+    # Combat Fatigue
+    fatigue_attack_modifier = models.FloatField(default=0.30, help_text='Power reduction after winning attack (e.g. 0.30 = 30%)')
+    fatigue_defense_modifier = models.FloatField(default=0.20, help_text='Power reduction after winning defense (e.g. 0.20 = 20%)')
+    fatigue_attack_ticks = models.IntegerField(default=5, help_text='Duration of attacker fatigue in ticks')
+    fatigue_defense_ticks = models.IntegerField(default=3, help_text='Duration of defender fatigue in ticks')
 
     # Map
     map_config = models.ForeignKey(

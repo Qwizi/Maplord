@@ -421,6 +421,9 @@ impl GameEngine {
     ) -> Vec<Event> {
         let mut events = Vec::new();
 
+        // Regenerate Action Points for all players.
+        self.regenerate_action_points(players, regions);
+
         // Process persistent effects (virus damage, etc.)
         events.extend(self.process_active_effects(regions, active_effects));
 
@@ -448,6 +451,22 @@ impl GameEngine {
         events.extend(air_events);
 
         for action in actions {
+            // Check AP cost for this action type. Free actions (diplomacy, boost) cost 0.
+            let ap_cost = self.get_ap_cost(&action.action_type);
+            if ap_cost > 0 {
+                if let Some(pid) = action.player_id.as_deref() {
+                    let has_ap = players.get(pid).map(|p| p.action_points >= ap_cost).unwrap_or(false);
+                    if !has_ap {
+                        events.push(reject_action(pid, "Brak punktow akcji (AP)", action));
+                        continue;
+                    }
+                    // Deduct AP
+                    if let Some(player) = players.get_mut(pid) {
+                        player.action_points -= ap_cost;
+                    }
+                }
+            }
+
             if action.action_type == "use_ability" {
                 // If the ability slug maps to a deck boost in the player's `active_boosts`,
                 // treat it as a boost activation rather than a targeted ability cast.
@@ -574,6 +593,55 @@ impl GameEngine {
         }
 
         events
+    }
+
+    // --- Action Points ---
+
+    fn get_ap_cost(&self, action_type: &str) -> i64 {
+        match action_type {
+            "attack" | "bombard" | "intercept" => self.settings.ap_cost_attack,
+            "move" => self.settings.ap_cost_move,
+            "build" | "upgrade_building" => self.settings.ap_cost_build,
+            "produce_unit" => self.settings.ap_cost_produce,
+            "use_ability" => self.settings.ap_cost_ability,
+            // Diplomacy, boosts are free
+            _ => 0,
+        }
+    }
+
+    fn regenerate_action_points(
+        &self,
+        players: &mut HashMap<String, Player>,
+        regions: &HashMap<String, Region>,
+    ) {
+        let interval = self.settings.ap_regen_interval.max(1) as f64;
+        let regen_per_tick = 1.0 / interval;
+        let max_ap = self.settings.max_action_points;
+
+        for player in players.values_mut() {
+            if !player.is_alive || player.action_points >= max_ap {
+                player.ap_regen_accum = 0.0;
+                continue;
+            }
+
+            // Check for Command Center building bonus (+50% faster regen)
+            let has_command_center = regions.values().any(|r| {
+                r.owner_id.as_deref() == Some(&player.user_id)
+                    && r.building_instances.iter().any(|b| b.building_type == "command_center")
+            });
+            let effective_regen = if has_command_center {
+                regen_per_tick * 1.5
+            } else {
+                regen_per_tick
+            };
+
+            player.ap_regen_accum += effective_regen;
+            let whole = player.ap_regen_accum as i64;
+            if whole > 0 {
+                player.action_points = (player.action_points + whole).min(max_ap);
+                player.ap_regen_accum -= whole as f64;
+            }
+        }
     }
 
     // --- Currency generation ---
@@ -1552,7 +1620,7 @@ impl GameEngine {
     ) -> Vec<Event> {
         match action.action_type.as_str() {
             "attack" => self.process_attack(action, players, regions, transit_queue, air_transit_queue, diplomacy, current_tick),
-            "move" => self.process_move(action, regions, transit_queue, air_transit_queue),
+            "move" => self.process_move(action, regions, transit_queue, air_transit_queue, current_tick),
             "build" | "upgrade_building" => self.process_build(action, players, regions, buildings_queue),
             "produce_unit" => self.process_unit_production(action, players, regions, unit_queue),
             "bombard" => self.process_bombard(action, players, regions),
@@ -1912,6 +1980,19 @@ impl GameEngine {
             return Vec::new();
         }
 
+        // Region attack cooldown check
+        if self.settings.region_attack_cooldown > 0 {
+            if let Some(&ready_tick) = source.action_cooldowns.get("attack") {
+                if current_tick < ready_tick {
+                    return vec![reject_action(
+                        player_id,
+                        &format!("Region na cooldownie ({} ticki)", ready_tick - current_tick),
+                        action,
+                    )];
+                }
+            }
+        }
+
         let unit_type = action
             .unit_type
             .clone()
@@ -1986,6 +2067,14 @@ impl GameEngine {
 
         let source = regions.get_mut(source_id).unwrap();
         deploy_units_from_region(source, &unit_type, units, self);
+
+        // Set region attack cooldown
+        if self.settings.region_attack_cooldown > 0 {
+            source.action_cooldowns.insert(
+                "attack".to_string(),
+                current_tick + self.settings.region_attack_cooldown,
+            );
+        }
 
         // Air units go into the air transit queue instead of the ground transit queue.
         if unit_config.movement_type == "air" {
@@ -2074,6 +2163,7 @@ impl GameEngine {
         regions: &mut HashMap<String, Region>,
         transit_queue: &mut Vec<TransitQueueItem>,
         air_transit_queue: &mut Vec<AirTransitItem>,
+        current_tick: i64,
     ) -> Vec<Event> {
         let source_id = match &action.source_region_id {
             Some(id) => id,
@@ -2106,6 +2196,19 @@ impl GameEngine {
                 "Mozesz przemieszczac wojska tylko miedzy swoimi regionami",
                 action,
             )];
+        }
+
+        // Region move cooldown check
+        if self.settings.region_move_cooldown > 0 {
+            if let Some(&ready_tick) = source.action_cooldowns.get("move") {
+                if current_tick < ready_tick {
+                    return vec![reject_action(
+                        player_id,
+                        &format!("Region na cooldownie ruchu ({} ticki)", ready_tick - current_tick),
+                        action,
+                    )];
+                }
+            }
         }
 
         let unit_type = action
@@ -2142,6 +2245,14 @@ impl GameEngine {
 
         let source = regions.get_mut(source_id).unwrap();
         deploy_units_from_region(source, &unit_type, units, self);
+
+        // Set region move cooldown
+        if self.settings.region_move_cooldown > 0 {
+            source.action_cooldowns.insert(
+                "move".to_string(),
+                current_tick + self.settings.region_move_cooldown,
+            );
+        }
 
         // Air units go into the air transit queue instead of the ground transit queue.
         if unit_config.movement_type == "air" {
@@ -3755,7 +3866,7 @@ impl GameEngine {
             effective_attacker_units as f64 * unit_scale as f64 * unit_config.attack * (1.0 + attacker_bonus);
         attacker_power *= 1.0 + attack_bonus_sum;
         let defender_power =
-            self.get_region_defender_power(target, defender_bonus + defense_building);
+            self.get_region_defender_power(target, defender_bonus + defense_building, current_tick);
 
         let mut rng = rand::thread_rng();
         let attacker_roll =
@@ -3869,6 +3980,33 @@ impl GameEngine {
                 unit_type: item.unit_type.clone(),
                 defender_surviving: surviving_defenders,
             });
+        }
+
+        // ----------------------------------------------------------------
+        // Combat Fatigue — weaken units in the target region after battle.
+        // ----------------------------------------------------------------
+        if self.settings.fatigue_attack_ticks > 0 || self.settings.fatigue_defense_ticks > 0 {
+            if let Some(target_region) = regions.get_mut(&item.target_region_id) {
+                // Check if attacker won (target now belongs to attacker)
+                let attacker_won = target_region.owner_id.as_deref() == Some(&item.player_id);
+                if attacker_won && self.settings.fatigue_attack_ticks > 0 {
+                    target_region.fatigue_until = Some(current_tick + self.settings.fatigue_attack_ticks);
+                    target_region.fatigue_modifier = self.settings.fatigue_attack_modifier;
+                    events.push(Event::CombatFatigue {
+                        region_id: item.target_region_id.clone(),
+                        modifier: self.settings.fatigue_attack_modifier,
+                        ticks: self.settings.fatigue_attack_ticks,
+                    });
+                } else if !attacker_won && self.settings.fatigue_defense_ticks > 0 {
+                    target_region.fatigue_until = Some(current_tick + self.settings.fatigue_defense_ticks);
+                    target_region.fatigue_modifier = self.settings.fatigue_defense_modifier;
+                    events.push(Event::CombatFatigue {
+                        region_id: item.target_region_id.clone(),
+                        modifier: self.settings.fatigue_defense_modifier,
+                        ticks: self.settings.fatigue_defense_ticks,
+                    });
+                }
+            }
         }
 
         // ----------------------------------------------------------------
@@ -4202,7 +4340,7 @@ impl GameEngine {
             .unwrap_or_else(|| "infantry".into())
     }
 
-    fn get_region_defender_power(&self, region: &Region, defense_bonus: f64) -> f64 {
+    fn get_region_defender_power(&self, region: &Region, defense_bonus: f64, current_tick: i64) -> f64 {
         let base_unit_type = self.default_unit_type_slug();
         let mut total = 0.0;
         for (unit_type, count) in &region.units {
@@ -4214,11 +4352,17 @@ impl GameEngine {
             };
             total += effective_count as f64 * unit_config.defense * (1.0 + defense_bonus);
         }
-        if total > 0.0 {
-            return total;
+        if total == 0.0 {
+            let fallback_config = self.get_unit_config(&get_region_unit_type(region, self));
+            total = region.unit_count as f64 * fallback_config.defense * (1.0 + defense_bonus);
         }
-        let fallback_config = self.get_unit_config(&get_region_unit_type(region, self));
-        region.unit_count as f64 * fallback_config.defense * (1.0 + defense_bonus)
+        // Apply combat fatigue penalty if active
+        if let Some(fatigue_until) = region.fatigue_until {
+            if current_tick < fatigue_until {
+                total *= 1.0 - region.fatigue_modifier;
+            }
+        }
+        total
     }
 
     // --- Pathfinding ---
@@ -4832,6 +4976,8 @@ mod tests {
             energy: 200,
             energy_accum: 0.0,
             capital_region_id: None,
+            action_points: 10,
+            ap_regen_accum: 0.0,
             ..Default::default()
         }
     }
@@ -4859,6 +5005,9 @@ mod tests {
             sea_distances: vec![],
             units,
             unit_accum: 0.0,
+            action_cooldowns: HashMap::new(),
+            fatigue_until: None,
+            fatigue_modifier: 0.0,
         }
     }
 

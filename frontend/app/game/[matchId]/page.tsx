@@ -18,7 +18,7 @@ import { loadAssetOverrides } from "@/lib/assetOverrides";
 import { getSeaTravelRange, getTravelDistance } from "@/lib/gameTravel.js";
 import dynamic from "next/dynamic";
 import type { TroopAnimation, PlannedMove } from "@/lib/gameTypes";
-import { MAX_PLANNED_MOVES, PLAN_EXPIRY_S } from "@/lib/gameTypes";
+import { MAX_PLANNED_MOVES, PLAN_EXPIRY_S, AP_COSTS } from "@/lib/gameTypes";
 import { getEliminationVfx, getVictoryVfx } from "@/lib/animationConfig";
 import { useShapesData } from "@/hooks/useShapesData";
 const ANIMATION_DURATION_MS = 2200;
@@ -723,8 +723,8 @@ export default function GamePage({
   const diplomacyEnabled = gameState?.meta?.diplomacy_enabled === "1";
 
   // My stats
-  const { myRegionCount, myUnitCount, myEnergy } = useMemo(() => {
-    if (!gameState) return { myRegionCount: 0, myUnitCount: 0, myEnergy: 0 };
+  const { myRegionCount, myUnitCount, myEnergy, myActionPoints } = useMemo(() => {
+    if (!gameState) return { myRegionCount: 0, myUnitCount: 0, myEnergy: 0, myActionPoints: 0 };
     let rc = 0;
     let uc = 0;
     for (const r of Object.values(gameState.regions)) {
@@ -737,6 +737,7 @@ export default function GamePage({
       myRegionCount: rc,
       myUnitCount: uc,
       myEnergy: gameState.players[myUserId]?.energy ?? 0,
+      myActionPoints: gameState.players[myUserId]?.action_points ?? 0,
     };
   }, [gameState, myUserId]);
 
@@ -1146,6 +1147,35 @@ export default function GamePage({
       if (!gameState) return;
       const target = gameState.regions[targetId];
       if (!target) return;
+
+      // AP check — must happen before any animation or dispatch
+      // If action_points is undefined (server hasn't sent it yet), allow the action
+      // and let the server validate. This prevents blocking on stale/missing data.
+      const isAttackAction = target.owner_id !== myUserId;
+      const apCost = isAttackAction ? AP_COSTS.attack : AP_COSTS.move;
+      const playerData = gameState.players[myUserId];
+      const currentAP = playerData?.action_points;
+      if (currentAP != null && currentAP < apCost) {
+        toast.warning(`Brak AP! (${currentAP}/${apCost})`, { id: "no-ap", duration: 2000 });
+        return;
+      }
+
+      // Cooldown check — only block if we have cooldown data and a valid tick
+      const sourceRegion = gameState.regions[sourceId];
+      const tick = parseInt(gameState.meta?.current_tick || "0", 10);
+      if (sourceRegion && tick > 0) {
+        const attackCd = sourceRegion.action_cooldowns?.attack ?? 0;
+        const moveCd = sourceRegion.action_cooldowns?.move ?? 0;
+        if (isAttackAction && attackCd > tick) {
+          toast.warning(`Cooldown ataku (${attackCd - tick}t)`, { id: "cooldown-attack", duration: 2000 });
+          return;
+        }
+        if (!isAttackAction && moveCd > tick) {
+          toast.warning(`Cooldown ruchu (${moveCd - tick}t)`, { id: "cooldown-move", duration: 2000 });
+          return;
+        }
+      }
+
       const reachability = reachabilityByUnitType[unitType];
       const isAttackTarget = target.owner_id !== myUserId;
       const distance = isAttackTarget
@@ -1455,9 +1485,14 @@ export default function GamePage({
     let executed = 0;
     let skipped = 0;
     const currentRegions = gameStateRef.current?.regions ?? {};
+    const currentTick = parseInt(gameStateRef.current?.meta?.current_tick || "0", 10);
 
     // Track how many units we've already committed from each source+unitType
     const committed = new Map<string, number>();
+    // Track AP consumed locally so we stop early if exhausted
+    // If action_points is undefined, assume unlimited (let server validate)
+    const rawAP = gameStateRef.current?.players[myUserId]?.action_points;
+    let apRemaining = rawAP ?? 999;
 
     for (const pm of plannedMoves) {
       if (now - pm.createdAt > PLAN_EXPIRY_S * 1000) { skipped++; continue; }
@@ -1473,9 +1508,19 @@ export default function GamePage({
       // Skip if not enough units left
       if (available <= 0) { skipped++; continue; }
 
+      // AP check per planned action
+      const isAttackAction = pm.actionType === "attack" || pm.actionType === "bombard";
+      const apCost = isAttackAction ? AP_COSTS.attack : AP_COSTS.move;
+      if (apRemaining < apCost) { skipped++; continue; }
+
+      // Cooldown check
+      if (isAttackAction && (source.action_cooldowns?.attack ?? 0) > currentTick) { skipped++; continue; }
+      if (!isAttackAction && pm.actionType === "move" && (source.action_cooldowns?.move ?? 0) > currentTick) { skipped++; continue; }
+
       // Clamp to what's actually available
       const units = Math.min(pm.unitCount, available);
       committed.set(key, alreadySent + units);
+      apRemaining -= apCost;
 
       if (pm.actionType === "bombard") {
         bombard(pm.sourceId, [pm.targetId], units);
@@ -2386,6 +2431,7 @@ export default function GamePage({
         myRegionCount={myRegionCount}
         myUnitCount={myUnitCount}
         myEnergy={myEnergy}
+        myActionPoints={myActionPoints}
         fps={fps}
         ping={ping}
         connected={connected}
@@ -2482,6 +2528,8 @@ export default function GamePage({
           players={players}
           myUserId={myUserId}
           myEnergy={myEnergy}
+          myActionPoints={myActionPoints}
+          currentTick={currentTick}
           unitPercent={unitPercent}
           selectedUnitType={selectedUnitTypeForAction ?? sourceRegionData.unit_type ?? "infantry"}
           onPercentChange={setUnitPercent}
