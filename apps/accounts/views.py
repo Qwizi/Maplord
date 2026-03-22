@@ -192,8 +192,11 @@ class AuthController:
             if cursor == 0:
                 break
 
+        # Players in queue/game are also online — total online includes them
+        total_online = max(online_count, in_queue + in_game)
+
         return {
-            'online': online_count,
+            'online': total_online,
             'in_queue': in_queue,
             'in_game': in_game,
         }

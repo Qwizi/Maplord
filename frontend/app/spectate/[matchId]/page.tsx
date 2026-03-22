@@ -1,113 +1,156 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useEffect, useRef, useState, useMemo, use } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
-import { createSocket } from "@/lib/ws";
-import type { WSMessage } from "@/lib/ws";
-import { Eye, ArrowLeft, Loader2, Users } from "lucide-react";
+import { useGameSocket } from "@/hooks/useGameSocket";
+import { useShapesData } from "@/hooks/useShapesData";
+import { getRegionsGraph, getConfig, type RegionGraphEntry, type BuildingType, type UnitType } from "@/lib/api";
+import { loadAssetOverrides } from "@/lib/assetOverrides";
+import dynamic from "next/dynamic";
+import { Eye, ArrowLeft, Loader2, Users, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
-interface SpectatePlayer {
-  user_id: string;
-  username: string;
-  color: string;
-  is_alive: boolean;
-  energy: number;
-  region_count?: number;
-}
+const GameCanvas = dynamic(() => import("@/components/map/GameCanvas"), { ssr: false });
 
-export default function SpectatePage() {
-  const { matchId } = useParams<{ matchId: string }>();
-  const { token } = useAuth();
+export default function SpectatePage({
+  params,
+}: {
+  params: Promise<{ matchId: string }>;
+}) {
+  const { matchId } = use(params);
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
-  const wsRef = useRef<WebSocket | null>(null);
-  const [connected, setConnected] = useState(false);
-  const [players, setPlayers] = useState<SpectatePlayer[]>([]);
-  const [tick, setTick] = useState(0);
-  const [status, setStatus] = useState<string>("connecting");
-  const [error, setError] = useState<string | null>(null);
+
+  const {
+    connected,
+    gameState,
+    bannedReason,
+  } = useGameSocket(matchId, { spectator: true });
+
+  // Map data
+  const { shapesData: shapes } = useShapesData();
+  const [regionGraph, setRegionGraph] = useState<Record<string, RegionGraphEntry>>({});
+  const [buildings, setBuildings] = useState<BuildingType[]>([]);
+  const [units, setUnits] = useState<UnitType[]>([]);
+  const [buildingIcons, setBuildingIcons] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (!token || !matchId) return;
+    Promise.all([getRegionsGraph(), getConfig(), loadAssetOverrides()])
+      .then(([graph, config]) => {
+        setRegionGraph(graph);
+        setBuildings(config.building_types);
+        setUnits(config.unit_types);
+        const icons: Record<string, string> = {};
+        for (const b of config.building_types) {
+          if (b.icon) icons[b.slug] = b.icon;
+        }
+        setBuildingIcons(icons);
+      })
+      .catch(() => {});
+  }, []);
 
-    const ws = createSocket(
-      `/game/${matchId}/spectate/`,
-      token,
-      (msg: WSMessage) => {
-        if (msg.type === "game_tick" || msg.type === "tick") {
-          const state = (msg.state ?? msg) as Record<string, unknown>;
-          if (state.players && typeof state.players === "object") {
-            const playerList = Object.entries(
-              state.players as Record<string, Record<string, unknown>>
-            ).map(([uid, p]) => ({
-              user_id: uid,
-              username: typeof p.username === "string" ? p.username : "?",
-              color: typeof p.color === "string" ? p.color : "#888",
-              is_alive: p.is_alive !== false,
-              energy: typeof p.energy === "number" ? p.energy : 0,
-              region_count: typeof p.region_count === "number" ? p.region_count : undefined,
-            }));
-            setPlayers(playerList);
-          }
-          if (typeof state.tick === "number") setTick(state.tick);
-          if (typeof state.status === "string") setStatus(state.status);
-        }
-        if (msg.type === "error") {
-          setError(typeof msg.message === "string" ? msg.message : "Błąd połączenia");
-        }
-        if (msg.type === "game_over") {
-          setStatus("finished");
-        }
-      },
-      (event: CloseEvent) => {
-        setConnected(false);
-        if (event.code === 4001 || event.code === 4003) {
-          setError("Nie można oglądać tego meczu");
-        }
+  const status = gameState?.meta?.status;
+  const tick = parseInt(gameState?.meta?.current_tick ?? "0", 10);
+
+  // Player list for overlay — includes unit count and territory count from regions
+  const playersList = useMemo(() => {
+    if (!gameState?.players) return [];
+    const regions = gameState.regions ?? {};
+    // Count territories and units per player
+    const territoryCounts: Record<string, number> = {};
+    const unitCounts: Record<string, number> = {};
+    for (const region of Object.values(regions)) {
+      if (region.owner_id) {
+        territoryCounts[region.owner_id] = (territoryCounts[region.owner_id] ?? 0) + 1;
+        // Sum all unit types in the region
+        const totalUnits = region.units
+          ? Object.values(region.units).reduce((s, n) => s + n, 0)
+          : region.unit_count ?? 0;
+        unitCounts[region.owner_id] = (unitCounts[region.owner_id] ?? 0) + totalUnits;
       }
-    );
+    }
+    return Object.entries(gameState.players).map(([uid, p]) => ({
+      user_id: uid,
+      username: p.username ?? "?",
+      color: p.color ?? "#888",
+      is_alive: p.is_alive !== false,
+      energy: p.energy ?? 0,
+      territories: territoryCounts[uid] ?? 0,
+      totalUnits: unitCounts[uid] ?? 0,
+    }));
+  }, [gameState?.players, gameState?.regions]);
 
-    ws.onopen = () => setConnected(true);
-    wsRef.current = ws;
+  // Neighbor map for GameCanvas
+  const neighborMap = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    for (const [id, entry] of Object.entries(regionGraph)) {
+      map[id] = entry.neighbors;
+    }
+    return map;
+  }, [regionGraph]);
 
-    return () => {
-      ws.close();
-      wsRef.current = null;
-    };
-  }, [token, matchId]);
-
-  if (error) {
+  if (authLoading) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
-        <Card className="max-w-md rounded-2xl">
-          <CardContent className="p-8 text-center space-y-4">
-            <Eye className="h-12 w-12 text-destructive mx-auto" />
-            <h2 className="font-display text-2xl text-foreground">{error}</h2>
-            <Button onClick={() => router.back()}>Wróć</Button>
-          </CardContent>
-        </Card>
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (bannedReason) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="text-center space-y-4">
+          <Eye className="h-12 w-12 text-destructive mx-auto" />
+          <h2 className="font-display text-2xl text-foreground">Nie można oglądać tego meczu</h2>
+          <p className="text-muted-foreground">{bannedReason}</p>
+          <Button onClick={() => router.back()}>Wróć</Button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      {/* Top bar */}
-      <header className="fixed inset-x-0 top-0 z-40 h-12 border-b border-border bg-card/80 backdrop-blur-xl">
-        <div className="flex h-full items-center gap-3 px-4">
-          <Button variant="ghost" size="sm" onClick={() => router.back()} className="gap-2">
+    <div className="fixed inset-0 bg-background text-foreground overflow-hidden">
+      {/* Game canvas — full screen */}
+      {gameState && shapes && (
+        <GameCanvas
+          shapesData={shapes}
+          regions={gameState.regions ?? {}}
+          players={gameState.players ?? {}}
+          selectedRegion={null}
+          targetRegions={[]}
+          highlightedNeighbors={[]}
+          dimmedRegions={[]}
+          onRegionClick={() => {}}
+          myUserId="__spectator__"
+          animations={[]}
+          buildingIcons={buildingIcons}
+          weather={gameState.weather}
+          airTransitQueue={gameState.air_transit_queue}
+          plannedMoves={[]}
+        />
+      )}
+
+      {/* Spectator HUD overlay */}
+      <div className="absolute inset-x-0 top-0 z-30 pointer-events-none">
+        {/* Top bar */}
+        <div className="flex items-center gap-3 px-4 h-12 bg-gradient-to-b from-black/60 to-transparent pointer-events-auto">
+          <Button variant="ghost" size="sm" onClick={() => router.back()} className="gap-2 text-white/80 hover:text-white hover:bg-white/10">
             <ArrowLeft size={16} />
             Wróć
           </Button>
           <div className="flex-1" />
-          <Badge className="gap-1.5 bg-accent/15 text-accent border-accent/25">
+          <Badge className="gap-1.5 bg-accent/20 text-accent border-accent/30 backdrop-blur-sm">
             <Eye size={14} />
-            Tryb obserwatora
+            Obserwator
           </Badge>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Badge variant="outline" className="gap-1.5 text-white/60 border-white/20 backdrop-blur-sm">
+            Na żywo
+          </Badge>
+          <div className="flex items-center gap-2 text-sm text-white/60">
             {connected ? (
               <span className="flex items-center gap-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
@@ -121,63 +164,58 @@ export default function SpectatePage() {
             )}
           </div>
         </div>
-      </header>
-
-      {/* Content */}
-      <div className="pt-16 px-4 md:px-8 pb-8 max-w-4xl mx-auto space-y-6">
-        <div className="text-center space-y-2 pt-6">
-          <h1 className="font-display text-3xl md:text-5xl text-foreground">Obserwowanie meczu</h1>
-          <p className="text-muted-foreground">Oglądasz mecz na żywo</p>
-        </div>
-
-        {/* Players */}
-        <Card className="rounded-2xl">
-          <CardContent className="p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <Users size={18} className="text-muted-foreground" />
-              <span className="text-sm uppercase tracking-[0.2em] text-muted-foreground font-medium">Gracze</span>
-              <Badge variant="outline" className="ml-auto">{status}</Badge>
-            </div>
-            {players.length === 0 ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {[...players]
-                  .sort((a, b) => (b.is_alive ? 1 : 0) - (a.is_alive ? 1 : 0))
-                  .map((p) => (
-                    <div
-                      key={p.user_id}
-                      className={`flex items-center gap-3 rounded-xl px-4 py-3 ${
-                        p.is_alive ? "bg-secondary/50" : "bg-secondary/20 opacity-50"
-                      }`}
-                    >
-                      <div
-                        className="h-4 w-4 rounded-md shrink-0"
-                        style={{ backgroundColor: p.color }}
-                      />
-                      <span className="flex-1 text-base font-semibold text-foreground">
-                        {p.username}
-                      </span>
-                      {p.region_count !== undefined && (
-                        <span className="text-xs text-muted-foreground tabular-nums">
-                          {p.region_count} reg.
-                        </span>
-                      )}
-                      {!p.is_alive && (
-                        <Badge variant="outline" className="text-destructive border-destructive/30">
-                          Wyeliminowany
-                        </Badge>
-                      )}
-                      <span className="text-sm tabular-nums text-accent">{p.energy} ⚡</span>
-                    </div>
-                  ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
       </div>
+
+      {/* Player scoreboard — bottom left */}
+      <div className="absolute left-4 bottom-4 z-30 w-72 pointer-events-auto">
+        <div className="rounded-2xl bg-card/90 border border-border backdrop-blur-xl overflow-hidden shadow-xl">
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border">
+            <Users size={14} className="text-muted-foreground" />
+            <span className="text-xs uppercase tracking-[0.15em] text-muted-foreground font-medium">Gracze</span>
+            {status === "finished" && (
+              <Badge className="ml-auto bg-accent/15 text-accent border-0 text-[10px]">Zakończony</Badge>
+            )}
+          </div>
+          {/* Column headers */}
+          <div className="flex items-center gap-2 px-4 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground/50 border-b border-border/50">
+            <span className="w-3" />
+            <span className="flex-1">Gracz</span>
+            <span className="w-8 text-center">Ter.</span>
+            <span className="w-8 text-center">Jed.</span>
+            <span className="w-10 text-right">⚡</span>
+          </div>
+          <div className="divide-y divide-border/50">
+            {[...playersList]
+              .sort((a, b) => (b.is_alive ? 1 : 0) - (a.is_alive ? 1 : 0) || b.territories - a.territories)
+              .map((p) => (
+                <div
+                  key={p.user_id}
+                  className={`flex items-center gap-2 px-4 py-2 text-sm ${
+                    p.is_alive ? "" : "opacity-40"
+                  }`}
+                >
+                  <div className="h-3 w-3 rounded-sm shrink-0" style={{ backgroundColor: p.color }} />
+                  <span className="flex-1 font-medium text-foreground truncate">
+                    {p.username}
+                    {!p.is_alive && <span className="ml-1 text-[10px] text-destructive">✕</span>}
+                  </span>
+                  <span className="w-8 text-center text-xs tabular-nums text-foreground/70">{p.territories}</span>
+                  <span className="w-8 text-center text-xs tabular-nums text-foreground/70">{p.totalUnits}</span>
+                  <span className="w-10 text-right text-xs tabular-nums text-accent">{p.energy}</span>
+                </div>
+              ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Loading overlay */}
+      {!gameState && (
+        <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm gap-4">
+          <Loader2 className="h-10 w-10 animate-spin text-primary" />
+          <p className="text-lg text-muted-foreground">Ładowanie meczu...</p>
+          <p className="text-sm text-muted-foreground/60">Dane opóźnione o ~30 sekund</p>
+        </div>
+      )}
     </div>
   );
 }

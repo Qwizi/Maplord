@@ -182,21 +182,17 @@ async fn handle_spectate_socket(
 
     info!("Spectator {user_id} joined match {match_id}");
 
-    // Create bounded channel for outgoing messages
-    let (tx, mut rx) = mpsc::channel::<Message>(WS_CHANNEL_BUFFER);
+    // Tell the client this is spectator mode
+    let _ = ws_sender
+        .send(Message::Text(
+            json!({"type": "spectate_info", "spectator": true})
+                .to_string()
+                .into(),
+        ))
+        .await;
 
-    // Register as spectator — key is prefixed to avoid collision with player UUIDs
-    let spectator_key = format!("spectator_{user_id}");
-    state
-        .game_connections
-        .entry(match_id.clone())
-        .or_insert_with(DashMap::new)
-        .entry(spectator_key.clone())
-        .or_default()
-        .push(tx.clone());
-
-    // Send the current game state immediately so the spectator does not have
-    // to wait for the next tick broadcast.
+    // Send initial game state immediately (no delay) so spectator sees the map right away.
+    // Only subsequent ticks are delayed.
     let state_mgr = GameStateManager::new(match_id.clone(), state.redis.clone());
     if let Ok(full_state) = state_mgr.get_full_state().await {
         let now_secs = SystemTime::now()
@@ -205,8 +201,23 @@ async fn handle_spectate_socket(
             .as_secs() as i64;
         let current_weather = compute_weather_from_meta(&state_mgr, now_secs).await;
         let msg = json!({"type": "game_state", "state": full_state, "weather": current_weather});
-        let _ = tx.try_send(Message::Text(msg.to_string().into()));
+        let _ = ws_sender
+            .send(Message::Text(msg.to_string().into()))
+            .await;
     }
+
+    // Create channel for outgoing messages (same as players)
+    let (tx, mut rx) = mpsc::channel::<Message>(WS_CHANNEL_BUFFER);
+
+    // Register as spectator — broadcasts go directly (no delay)
+    let spectator_key = format!("spectator_{user_id}");
+    state
+        .game_connections
+        .entry(match_id.clone())
+        .or_insert_with(DashMap::new)
+        .entry(spectator_key.clone())
+        .or_default()
+        .push(tx.clone());
 
     // Outgoing message forwarder
     let send_task = tokio::spawn(async move {
@@ -217,12 +228,11 @@ async fn handle_spectate_socket(
         }
     });
 
-    // Receive loop — spectators are read-only; just watch for close/ping frames
+    // Receive loop — spectators are read-only; just watch for close frames
     let recv_task = tokio::spawn(async move {
         while let Some(Ok(msg)) = ws_receiver.next().await {
             match msg {
                 Message::Close(_) => break,
-                // Ping is handled automatically by axum; nothing else to do
                 _ => {}
             }
         }
@@ -233,7 +243,7 @@ async fn handle_spectate_socket(
         _ = recv_task => {},
     }
 
-    // Cleanup: remove this spectator's sender from the match connections
+    // Cleanup
     if let Some(match_conns) = state.game_connections.get(&match_id) {
         if let Some(mut senders) = match_conns.get_mut(&spectator_key) {
             senders.retain(|s| !s.is_closed());
