@@ -1,27 +1,22 @@
 package ovh.qwizi.maplord;
 
+import android.app.Activity;
 import android.net.Uri;
 import android.os.Bundle;
 import androidx.browser.customtabs.CustomTabsIntent;
-import androidx.browser.trusted.TrustedWebActivityIntentBuilder;
-import androidx.activity.ComponentActivity;
 
-public class LauncherActivity extends ComponentActivity {
-    private static final Uri LAUNCH_URI =
-            Uri.parse("https://maplord.qwizi.ovh/dashboard");
-
+public class LauncherActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        TrustedWebActivityIntentBuilder builder =
-                new TrustedWebActivityIntentBuilder(LAUNCH_URI)
-                        .setNavigationBarColor(0xFF0A0A0A)
-                        .setToolbarColor(0xFF0A0A0A);
+        Uri uri = Uri.parse("https://maplord.qwizi.ovh/dashboard");
 
-        CustomTabsIntent customTabsIntent = builder.buildCustomTabsIntent();
-        customTabsIntent.launchUrl(this, LAUNCH_URI);
+        CustomTabsIntent customTabsIntent = new CustomTabsIntent.Builder()
+                .setColorScheme(CustomTabsIntent.COLOR_SCHEME_DARK)
+                .build();
 
+        customTabsIntent.launchUrl(this, uri);
         finish();
     }
 }
