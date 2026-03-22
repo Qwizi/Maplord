@@ -211,7 +211,8 @@ interface UseGameSocketReturn {
   declareWar: (targetPlayerId: string) => void;
 }
 
-export function useGameSocket(matchId: string): UseGameSocketReturn {
+export function useGameSocket(matchId: string, options?: { spectator?: boolean }): UseGameSocketReturn {
+  const isSpectator = options?.spectator ?? false;
   const [connected, setConnected] = useState(false);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [events, setEvents] = useState<GameEvent[]>([]);
@@ -394,7 +395,7 @@ export function useGameSocket(matchId: string): UseGameSocketReturn {
       // After async work, check if effect was cleaned up (React Strict Mode double-mount)
       if (disposed) return;
       const ws = createSocket(
-        `/game/${matchId}/`,
+        isSpectator ? `/game/${matchId}/spectate/` : `/game/${matchId}/`,
         token,
         handleMessage,
         (event: CloseEvent) => {
