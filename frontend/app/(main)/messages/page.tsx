@@ -220,8 +220,8 @@ function ChatView({
       if (msg.sender.id !== partnerId) return;
       const newMsg: DirectMessageOut = {
         id: msg.id,
-        sender: { id: msg.sender.id, username: msg.sender.username, elo_rating: 0, is_online: true, activity_status: "online" },
-        receiver: { id: currentUserId, username: "", elo_rating: 0, is_online: true, activity_status: "online" },
+        sender: { id: msg.sender.id, username: msg.sender.username, elo_rating: 0, is_online: true, activity_status: "online", activity_details: {} },
+        receiver: { id: currentUserId, username: "", elo_rating: 0, is_online: true, activity_status: "online", activity_details: {} },
         content: msg.content,
         is_read: false,
         created_at: msg.created_at,

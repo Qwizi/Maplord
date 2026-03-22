@@ -64,6 +64,7 @@ function DMChatView({ friendId, friendUsername, currentUserId, token }: DMChatVi
           elo_rating: 0,
           is_online: true,
           activity_status: "online",
+          activity_details: {},
         },
         receiver: {
           id: currentUserId,
@@ -71,6 +72,7 @@ function DMChatView({ friendId, friendUsername, currentUserId, token }: DMChatVi
           elo_rating: 0,
           is_online: true,
           activity_status: "online",
+          activity_details: {},
         },
         content: msg.content,
         is_read: false,
