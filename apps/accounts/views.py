@@ -161,15 +161,22 @@ class AuthController:
     @route.get('/online-stats', auth=None)
     def online_stats(self, request):
         """Get global player activity stats: online, in_queue, in_game."""
-        from datetime import timedelta
-
-        from django.utils import timezone
+        from django.core.cache import cache as django_cache
 
         from apps.accounts.models import _get_game_redis
 
-        threshold = timezone.now() - timedelta(minutes=2)
-        online_count = User.objects.filter(last_active__gte=threshold).count()
+        # Count online users directly from Redis cache keys
+        # (LastActiveMiddleware writes user:last_active:{pk} with 10min TTL)
+        redis_client = django_cache.get_client()
+        online_count = 0
+        cursor = 0
+        while True:
+            cursor, keys = redis_client.scan(cursor, match='*user:last_active:*', count=200)
+            online_count += len(keys)
+            if cursor == 0:
+                break
 
+        # Count in_queue / in_game from game Redis
         r = _get_game_redis()
         in_queue = 0
         in_game = 0
@@ -184,7 +191,7 @@ class AuthController:
                         data = json.loads(val)
                         status = data.get('status', '')
                     except (json.JSONDecodeError, AttributeError):
-                        status = val
+                        status = val if isinstance(val, str) else val.decode() if isinstance(val, bytes) else ''
                     if status == 'in_queue':
                         in_queue += 1
                     elif status == 'in_game':
@@ -192,7 +199,7 @@ class AuthController:
             if cursor == 0:
                 break
 
-        # Players in queue/game are also online — total online includes them
+        # Players in queue/game are also online
         total_online = max(online_count, in_queue + in_game)
 
         return {

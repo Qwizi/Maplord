@@ -258,7 +258,7 @@ class TutorialController:
 @require_module_controller('matchmaking')
 class MatchmakingStatusController:
 
-    @route.get('/status/', auth=ActiveUserJWTAuth(), permissions=[IsAuthenticated])
+    @route.get('/status/', response=dict, auth=ActiveUserJWTAuth(), permissions=[IsAuthenticated])
     def get_matchmaking_status(self, request):
         """
         Return the current matchmaking state for the authenticated player.
