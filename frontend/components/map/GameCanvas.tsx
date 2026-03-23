@@ -107,6 +107,14 @@ export default function GameCanvas({
   const animTargetSetRef = useRef<Set<string>>(new Set());
   const bombedRegionSetRef = useRef<Set<string>>(new Set());
 
+  /** Pre-computed diplomacy relation map — rebuilt before each render loop (O(1) lookup per province) */
+  const diplomacyRelMapRef = useRef<Map<string, "war" | "nap" | "ally">>(new Map());
+
+  /** Persistent capital layer sprite map — keyed by region ID, values are the Container/Sprite added to capitalLayer */
+  const capitalSpriteMapRef = useRef<Map<string, Array<Container | Sprite | Graphics>>>(new Map());
+  /** Per-region capital snapshot strings used for incremental diff */
+  const capitalRegionSnapshotRef = useRef<Map<string, string>>(new Map());
+
   // Unit change pulse tracking
   const prevUnitCountsRef = useRef<Map<string, number>>(new Map());
   const prevUnitOwnersRef = useRef<Map<string, string | null>>(new Map());
@@ -115,8 +123,6 @@ export default function GameCanvas({
   /** Snapshot of the previous regions state — used to diff tick updates. */
   const prevRegionsRef = useRef<Record<string, GameRegion>>({});
 
-  /** Capital layer dirty check — serialized snapshot of capital+building state */
-  const prevCapitalSnapshotRef = useRef("");
 
   /** Temporary visual adjustments from bombardment — subtracted from displayed unit_count
    *  until the next tick confirms the actual state. Keyed by region ID. */
@@ -215,7 +221,8 @@ export default function GameCanvas({
       id: string,
       shape: ProvinceShape,
       state: ProvinceRenderState,
-      isHovered: boolean
+      isHovered: boolean,
+      diplomacyRelMap?: Map<string, "war" | "nap" | "ally">
     ) => {
       const region = regionsRef.current[id];
       // If rockets are still in flight (bombardAdjust active), keep showing the
@@ -264,26 +271,40 @@ export default function GameCanvas({
       let fillAlphaOverride: number | null = null;
 
       if (ownerId && ownerId !== myId) {
-        const diplo = diplomacyRef.current;
-        if (diplo) {
-          const isAtWar = diplo.wars.some(
-            (w) =>
-              (w.player_a === myId && w.player_b === ownerId) ||
-              (w.player_b === myId && w.player_a === ownerId)
-          );
-          const hasNap = diplo.pacts.some(
-            (p) =>
-              ((p.player_a === myId && p.player_b === ownerId) ||
-                (p.player_b === myId && p.player_a === ownerId)) &&
-              p.pact_type === "nap"
-          );
-          if (isAtWar) {
-            relationStroke = 0x8b2020; // dark red — war
-            hatchAlpha = 0.18;        // more visible danger hatch
-          } else if (hasNap) {
-            relationStroke = 0x1a5c2d; // dark green — allied NAP
-            showHatch = false;          // no hostile hatch for allies
-            fillAlphaOverride = 0.45;  // slightly more transparent, friendly
+        // Use pre-computed relation map when available (O(1)); fall back to
+        // linear scan only for hover events that arrive outside the render loop.
+        const relMap = diplomacyRelMap ?? diplomacyRelMapRef.current;
+        const relation = relMap.get(ownerId);
+        if (relation === "war") {
+          relationStroke = 0x8b2020; // dark red — war
+          hatchAlpha = 0.18;        // more visible danger hatch
+        } else if (relation === "nap") {
+          relationStroke = 0x1a5c2d; // dark green — allied NAP
+          showHatch = false;          // no hostile hatch for allies
+          fillAlphaOverride = 0.45;  // slightly more transparent, friendly
+        } else if (!relMap.size) {
+          // Fallback: relMap not populated yet — scan raw diplomacy state
+          const diplo = diplomacyRef.current;
+          if (diplo) {
+            const isAtWar = diplo.wars.some(
+              (w) =>
+                (w.player_a === myId && w.player_b === ownerId) ||
+                (w.player_b === myId && w.player_a === ownerId)
+            );
+            const hasNap = diplo.pacts.some(
+              (p) =>
+                ((p.player_a === myId && p.player_b === ownerId) ||
+                  (p.player_b === myId && p.player_a === ownerId)) &&
+                p.pact_type === "nap"
+            );
+            if (isAtWar) {
+              relationStroke = 0x8b2020;
+              hatchAlpha = 0.18;
+            } else if (hasNap) {
+              relationStroke = 0x1a5c2d;
+              showHatch = false;
+              fillAlphaOverride = 0.45;
+            }
           }
         }
       }
@@ -533,6 +554,10 @@ export default function GameCanvas({
     provinceLayer.removeChildren();
     labelLayer.removeChildren();
     capitalLayer.removeChildren();
+    // Reset incremental capital layer tracking so the next regions effect
+    // rebuilds all sprites from scratch for the new shapesData.
+    capitalSpriteMapRef.current.clear();
+    capitalRegionSnapshotRef.current.clear();
 
     const GAME_FONT = "Rajdhani, sans-serif";
     const TEXT_RESOLUTION = 3; // render text at 3x for crisp zoom
@@ -783,34 +808,47 @@ export default function GameCanvas({
       prevOwners.set(rid, region.owner_id);
     }
 
-    // Re-draw capitals and building sprites — skip if nothing changed
+    // Re-draw capitals and building sprites — incremental per-region diff.
+    // Instead of rebuilding ALL sprites on any change, we compare a per-region
+    // fingerprint and only destroy/recreate sprites for regions that changed.
     const capitalLayer = capitalLayerRef.current;
     if (capitalLayer) {
-      // Build a lightweight fingerprint of capital+building state
-      const capParts: string[] = [];
-      for (const [rid, region] of Object.entries(regions)) {
-        if (region.is_capital) capParts.push(`${rid}:C`);
-        if (region.building_instances?.length) {
-          capParts.push(`${rid}:B${region.building_instances.length}`);
-        } else if (region.buildings) {
-          const bkeys = Object.entries(region.buildings).filter(([, c]) => c > 0).map(([s, c]) => `${s}${c}`).join(",");
-          if (bkeys) capParts.push(`${rid}:${bkeys}`);
-        }
-      }
-      const capSnapshot = capParts.join("|");
-      const capitalDirty = capSnapshot !== prevCapitalSnapshotRef.current;
-      prevCapitalSnapshotRef.current = capSnapshot;
+      const spriteMap = capitalSpriteMapRef.current;
+      const regionSnap = capitalRegionSnapshotRef.current;
 
-      if (capitalDirty) {
-      capitalLayer.removeChildren().forEach((child) => child.destroy());
-      const shapeMap = new Map<string, ProvinceShape>();
-      for (const s of shapesData.regions) {
-        shapeMap.set(s.id, s);
-      }
-      for (const [rid, region] of Object.entries(regions)) {
-        const shape = shapeMap.get(rid);
-        if (!shape) continue;
+      // Helper: compute the fingerprint for a single region
+      const regionCapFingerprint = (rid: string, region: GameRegion): string => {
+        const parts: string[] = [];
+        if (region.is_capital) parts.push("C");
+        if (region.building_instances?.length) {
+          parts.push(`B${region.building_instances.length}`);
+        } else if (region.buildings) {
+          const bkeys = Object.entries(region.buildings)
+            .filter(([, c]) => c > 0)
+            .map(([s, c]) => `${s}${c}`)
+            .join(",");
+          if (bkeys) parts.push(bkeys);
+        }
+        return parts.length ? `${rid}:${parts.join(",")}` : "";
+      };
+
+      // Helper: destroy and remove all sprites for a region
+      const destroyRegionSprites = (rid: string) => {
+        const sprites = spriteMap.get(rid);
+        if (sprites) {
+          for (const s of sprites) {
+            capitalLayer.removeChild(s);
+            s.destroy({ children: true });
+          }
+          spriteMap.delete(rid);
+        }
+        regionSnap.delete(rid);
+      };
+
+      // Helper: build sprites for a single region and add to capitalLayer
+      const buildRegionSprites = (rid: string, region: GameRegion, shape: ProvinceShape) => {
         const [cx, cy] = shape.centroid;
+        const created: Array<Container | Sprite | Graphics> = [];
 
         // Capital star sprite
         if (region.is_capital) {
@@ -823,13 +861,19 @@ export default function GameCanvas({
             sprite.position.set(cx - 28, cy - 30);
             sprite.eventMode = "none";
             capitalLayerRef.current.addChild(sprite);
+            // Track it so we can remove it on next change
+            const existing = capitalSpriteMapRef.current.get(rid) ?? [];
+            existing.push(sprite);
+            capitalSpriteMapRef.current.set(rid, existing);
           }).catch(() => {
-            // Fallback to diamond if sprite fails
             if (!capitalLayerRef.current) return;
             const cap = new Graphics();
             cap.eventMode = "none";
             drawCapitalMarker(cap, cx, cy - 18, 7);
             capitalLayerRef.current.addChild(cap);
+            const existing = capitalSpriteMapRef.current.get(rid) ?? [];
+            existing.push(cap);
+            capitalSpriteMapRef.current.set(rid, existing);
           });
         }
 
@@ -852,20 +896,19 @@ export default function GameCanvas({
           }
         }
 
-        // Place building icons in a circle around the centroid
         if (buildingEntries.length > 0) {
           const bldgContainer = new Container();
           bldgContainer.eventMode = "none";
           bldgContainer.position.set(cx, cy);
+          created.push(bldgContainer);
 
           const ICON_SIZE = 16;
-          const RADIUS = 22; // distance from centroid
-          const startAngle = -Math.PI / 2; // top
+          const RADIUS = 22;
+          const startAngle = -Math.PI / 2;
           const totalItems = buildingEntries.length;
-
           let itemIndex = 0;
+
           for (const entry of buildingEntries) {
-            // Spread evenly around the circle
             const angle = startAngle + (itemIndex / totalItems) * Math.PI * 2;
             const ix = Math.cos(angle) * RADIUS;
             const iy = Math.sin(angle) * RADIUS;
@@ -877,7 +920,6 @@ export default function GameCanvas({
             Assets.load(entry.url).then((texture: Texture) => {
               if (!capitalLayerRef.current) return;
 
-              // Small dark circle behind the icon
               const bg = new Graphics();
               bg.circle(capturedIx, capturedIy, ICON_SIZE / 2 + 3)
                 .fill({ color: 0x0a1628, alpha: 0.85 })
@@ -909,10 +951,52 @@ export default function GameCanvas({
               }
             }).catch(() => {});
           }
+
           capitalLayer.addChild(bldgContainer);
         }
+
+        // Register synchronously-created items (async sprite load handles itself above)
+        if (created.length) {
+          const existing = spriteMap.get(rid) ?? [];
+          for (const c of created) existing.push(c);
+          spriteMap.set(rid, existing);
+        }
+      };
+
+      // Build shape lookup once
+      const shapeMap = new Map<string, ProvinceShape>();
+      for (const s of shapesData.regions) shapeMap.set(s.id, s);
+
+      // Remove stale entries for regions no longer in the game state.
+      // Collect keys first to avoid mutating the map during iteration.
+      const staleRids: string[] = [];
+      for (const rid of spriteMap.keys()) {
+        if (!regions[rid]) staleRids.push(rid);
       }
-    } // end capitalDirty
+      for (const rid of staleRids) destroyRegionSprites(rid);
+
+      // Incremental per-region diff
+      for (const [rid, region] of Object.entries(regions)) {
+        const fingerprint = regionCapFingerprint(rid, region);
+        const prevFingerprint = regionSnap.get(rid) ?? "";
+
+        if (fingerprint === prevFingerprint) continue; // no change — skip
+
+        // Destroy old sprites for this region then rebuild
+        destroyRegionSprites(rid);
+
+        if (fingerprint) {
+          // Only build if region has capital or buildings
+          const shape = shapeMap.get(rid);
+          if (shape) {
+            // Pre-register the rid with an empty array so async loads can append
+            spriteMap.set(rid, []);
+            buildRegionSprites(rid, region, shape);
+          }
+        }
+
+        regionSnap.set(rid, fingerprint);
+      }
     }
 
     // Pre-build lookup Sets for O(1) checks inside drawProvince
@@ -931,6 +1015,22 @@ export default function GameCanvas({
       }
     }
 
+    // Pre-compute diplomacy relation map — O(wars + pacts) once per frame instead
+    // of O(wars × provinces + pacts × provinces) inside drawProvince.
+    const relMap = diplomacyRelMapRef.current;
+    relMap.clear();
+    if (diplomacy && myUserId) {
+      for (const w of diplomacy.wars) {
+        if (w.player_a === myUserId) relMap.set(w.player_b, "war");
+        else if (w.player_b === myUserId) relMap.set(w.player_a, "war");
+      }
+      for (const p of diplomacy.pacts) {
+        if (p.pact_type !== "nap") continue;
+        const other = p.player_a === myUserId ? p.player_b : p.player_b === myUserId ? p.player_a : null;
+        if (other && !relMap.has(other)) relMap.set(other, "nap");
+      }
+    }
+
     // Dirty-region rendering: only redraw provinces that actually changed.
     // Full redraw triggered by structural deps (selectedRegion, neighbors, etc.)
     // tracked via a generation counter. Tick-driven region updates are incremental.
@@ -943,7 +1043,7 @@ export default function GameCanvas({
       // Full redraw — structural change (selection, highlights, etc.)
       for (const shape of shapesData.regions) {
         const state = stateMapRef.current.get(shape.id);
-        if (state) drawProvince(shape.id, shape, state, false);
+        if (state) drawProvince(shape.id, shape, state, false, relMap);
       }
     } else {
       // Incremental — only redraw regions whose data changed this tick.
@@ -960,7 +1060,7 @@ export default function GameCanvas({
           continue; // unchanged — skip redraw
         }
         const state = stateMapRef.current.get(rid);
-        if (state) drawProvince(rid, shape, state, false);
+        if (state) drawProvince(rid, shape, state, false, relMap);
       }
     }
     // Shallow snapshot of unit_count + owner for next diff (avoid ref aliasing)
@@ -978,6 +1078,7 @@ export default function GameCanvas({
     highlightedNeighbors,
     dimmedRegions,
     myUserId,
+    diplomacy,
     drawProvince,
     airTransitQueue,
   ]);
@@ -1169,7 +1270,8 @@ export default function GameCanvas({
         antialias: true,
         autoDensity: true,
         resolution: typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1,
-        preference: "webgl",
+        preference: "webgpu",
+        // Falls back to WebGL automatically if WebGPU unavailable
       });
 
       if (destroyed) {
