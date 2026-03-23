@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { createSocket, type WSMessage } from "@/lib/ws";
 import { getAccessToken } from "@/lib/auth";
 import { getWsTicket } from "@/lib/api";
 import { solveChallenge } from "@/lib/pow";
 import type { DiplomacyState } from "@/lib/gameTypes";
+import { queryKeys } from "@/lib/queryKeys";
 
 /** Fast shallow comparison for active_effects — avoids re-renders when data is identical. */
 function shallowEqualEffects(
@@ -213,6 +215,7 @@ interface UseGameSocketReturn {
 
 export function useGameSocket(matchId: string, options?: { spectator?: boolean }): UseGameSocketReturn {
   const isSpectator = options?.spectator ?? false;
+  const queryClient = useQueryClient();
   const [connected, setConnected] = useState(false);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [events, setEvents] = useState<GameEvent[]>([]);
@@ -261,6 +264,11 @@ export function useGameSocket(matchId: string, options?: { spectator?: boolean }
                 ].join(":"),
         }));
         const isGameOver = tickEvents.some((e) => e.type === "game_over");
+        if (isGameOver) {
+          queryClient.invalidateQueries({ queryKey: queryKeys.matches.all });
+          queryClient.invalidateQueries({ queryKey: queryKeys.auth.me() });
+          queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
+        }
         setGameState((prev) => {
           if (!prev) return prev;
           const regionUpdates = msg.regions as Record<string, Partial<GameRegion>> | undefined;
@@ -329,6 +337,7 @@ export function useGameSocket(matchId: string, options?: { spectator?: boolean }
         }
         break;
       case "match_left":
+        queryClient.invalidateQueries({ queryKey: queryKeys.matches.all });
         if (leaveResolverRef.current) {
           leaveResolverRef.current(true);
           leaveResolverRef.current = null;

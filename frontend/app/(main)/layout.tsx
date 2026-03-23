@@ -43,7 +43,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { MatchmakingProvider, useMatchmaking } from "@/hooks/useMatchmaking";
 import { useSystemModules } from "@/hooks/useSystemModules";
 import { type WalletOut, type FriendshipOut, type FriendUser } from "@/lib/api";
+import { useQueryClient } from "@tanstack/react-query";
 import { useMyWallet, useOnlineStats, useFriends } from "@/hooks/queries";
+import { queryKeys } from "@/lib/queryKeys";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useAudio } from "@/hooks/useAudio";
@@ -1073,6 +1075,7 @@ export default function MainLayout({ children }: { children: ReactNode }) {
 
 function MainLayoutInner({ children }: { children: ReactNode }) {
   const { user, logout, token } = useAuth();
+  const queryClient = useQueryClient();
   const { inQueue: showQueueSubheader, joinQueue } = useMatchmaking();
   const pathname = usePathname();
   const { data: wallet } = useMyWallet();
@@ -1095,6 +1098,17 @@ function MainLayoutInner({ children }: { children: ReactNode }) {
       if (seenNotifIdsRef.current.size > 50) {
         const arr = [...seenNotifIdsRef.current];
         seenNotifIdsRef.current = new Set(arr.slice(-25));
+      }
+      // Invalidate notification cache on any new notification
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
+      // Invalidate friend-related queries on friend events
+      if (notif.type === "friend_request_received" || notif.type === "friend_request_accepted") {
+        queryClient.invalidateQueries({ queryKey: queryKeys.friends.all });
+      }
+      // Invalidate match queries on match outcome notifications
+      if (["match_won", "match_lost", "player_eliminated"].includes(notif.type)) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.matches.all });
+        queryClient.invalidateQueries({ queryKey: queryKeys.auth.me() });
       }
       if (notif.type === "game_invite" && notif.data.lobby_id) {
         toast(notif.title, {
@@ -1128,8 +1142,11 @@ function MainLayoutInner({ children }: { children: ReactNode }) {
   useEffect(() => {
     return social.onDirectMessage((msg) => {
       addDMTabSilent(msg.sender.id, msg.sender.username);
+      queryClient.invalidateQueries({ queryKey: queryKeys.messages.conversations() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.messages.thread(msg.sender.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.messages.unreadCount() });
     });
-  }, [social.onDirectMessage, addDMTabSilent]);
+  }, [social.onDirectMessage, addDMTabSilent, queryClient]);
 
   // ── Menu background music ──────────────────────────────────
   const { startMenuMusic, stopMenuMusic, toggleMute, muted } = useAudio();
