@@ -9,6 +9,37 @@ interface FetchOptions extends RequestInit {
   token?: string | null;
 }
 
+// Prevent concurrent refresh attempts — share a single in-flight promise
+let _refreshPromise: Promise<string | null> | null = null;
+
+async function tryRefreshToken(): Promise<string | null> {
+  if (_refreshPromise) return _refreshPromise;
+  _refreshPromise = (async () => {
+    try {
+      const { getRefreshToken, setTokens, clearTokens } = await import("@/lib/auth");
+      const refresh = getRefreshToken();
+      if (!refresh) return null;
+      const res = await fetch(`${API_BASE}/token/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh }),
+      });
+      if (!res.ok) {
+        clearTokens();
+        return null;
+      }
+      const tokens = (await res.json()) as { access: string; refresh: string };
+      setTokens(tokens.access, tokens.refresh);
+      return tokens.access;
+    } catch {
+      return null;
+    } finally {
+      _refreshPromise = null;
+    }
+  })();
+  return _refreshPromise;
+}
+
 async function fetchAPI<T>(
   path: string,
   options: FetchOptions = {}
@@ -25,6 +56,21 @@ async function fetchAPI<T>(
   }
 
   const res = await fetch(`${API_BASE}${path}`, { headers, ...rest });
+
+  // Auto-refresh on 401 if we have a token (authenticated request)
+  if (res.status === 401 && token && typeof window !== "undefined") {
+    const newToken = await tryRefreshToken();
+    if (newToken) {
+      headers["Authorization"] = `Bearer ${newToken}`;
+      const retryRes = await fetch(`${API_BASE}${path}`, { headers, ...rest });
+      if (!retryRes.ok) {
+        const body = await retryRes.json().catch(() => ({}));
+        throw new APIError(retryRes.status, body.detail || retryRes.statusText, body);
+      }
+      if (retryRes.status === 204) return {} as T;
+      return retryRes.json();
+    }
+  }
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -447,16 +493,8 @@ export interface FullConfig {
   system_modules: SystemModule[];
 }
 
-let _configCache: FullConfig | null = null;
-let _configCacheTime = 0;
-const CONFIG_CACHE_TTL_MS = 30_000; // refresh config every 30s
 export async function getConfig(): Promise<FullConfig> {
-  const now = Date.now();
-  if (_configCache && now - _configCacheTime < CONFIG_CACHE_TTL_MS) return _configCache;
-  const config = await fetchAPI<FullConfig>("/config/");
-  _configCache = config;
-  _configCacheTime = now;
-  return config;
+  return fetchAPI<FullConfig>("/config/");
 }
 
 /** Returns the numeric stat for a given level from level_stats, falling back to a base value. */
@@ -575,6 +613,22 @@ export interface MatchResult {
   duration_seconds: number;
   total_ticks: number;
   player_results: PlayerResult[];
+}
+
+// --- Matchmaking ---
+
+export interface MatchmakingStatus {
+  state: "idle" | "in_queue" | "in_lobby" | "in_match";
+  match_id?: string;
+  lobby_id?: string;
+  game_mode_slug?: string;
+  joined_at?: string;
+  players?: Array<{ user_id: string; username: string; is_ready: boolean; is_bot: boolean }>;
+  max_players?: number;
+}
+
+export async function getMatchmakingStatus(token: string): Promise<MatchmakingStatus> {
+  return fetchAPI<MatchmakingStatus>("/matchmaking/status/", { token });
 }
 
 export async function getMyMatches(token: string, limit?: number, offset?: number): Promise<PaginatedResponse<Match>> {

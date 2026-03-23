@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -19,13 +19,16 @@ import { useModuleConfig } from "@/hooks/useSystemModules";
 import { ModuleDisabledPage } from "@/components/ModuleGate";
 import ItemIcon from "@/components/ui/ItemIcon";
 import {
-  getMyInventory,
-  getEquippedCosmetics,
-  equipCosmetic,
-  unequipCosmetic,
   type InventoryItemOut,
   type EquippedCosmeticOut,
 } from "@/lib/api";
+import {
+  useMyInventory,
+  useEquippedCosmetics,
+  useEquipCosmetic,
+  useUnequipCosmetic,
+} from "@/hooks/queries";
+import { CosmeticsSkeleton } from "@/components/skeletons/CosmeticsSkeleton";
 
 // ─── Rarity config ───────────────────────────────────────────────────────────
 
@@ -420,7 +423,7 @@ function SectionCard({
   const equippedCount = section.slots.filter((s) => equippedBySlot.has(s.key)).length;
 
   return (
-    <div className="rounded-2xl border border-border bg-card overflow-hidden">
+    <div className="hover-lift rounded-2xl border border-border bg-card overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-border/60 bg-muted/20">
         <div className="flex items-center gap-2">
           <span className="text-lg leading-none">{section.icon}</span>
@@ -457,13 +460,8 @@ export default function CosmeticsPage() {
 // ─── Main content ─────────────────────────────────────────────────────────────
 
 function CosmeticsContent() {
-  const { user, loading: authLoading, token } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
-
-  const [cosmetics, setCosmetics] = useState<InventoryItemOut[]>([]);
-  const [equipped, setEquipped] = useState<EquippedCosmeticOut[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState(false);
 
   // Sheet state
   const [activeSlot, setActiveSlot] = useState<SlotDef | null>(null);
@@ -473,64 +471,43 @@ function CosmeticsContent() {
     if (!authLoading && !user) router.replace("/login");
   }, [user, authLoading, router]);
 
-  const loadData = useCallback(async () => {
-    if (!token) return;
-    try {
-      const [invRes, equippedRes] = await Promise.all([
-        getMyInventory(token, 200),
-        getEquippedCosmetics(token),
-      ]);
-      setCosmetics(invRes.items.filter((i) => i.item.item_type === "cosmetic"));
-      setEquipped(equippedRes);
-    } catch {
-      toast.error("Nie udało się załadować kosmetyków");
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
+  const { data: inventoryData, isLoading: inventoryLoading } = useMyInventory(200);
+  const { data: equipped = [], isLoading: equippedLoading } = useEquippedCosmetics();
+  const equipMutation = useEquipCosmetic();
+  const unequipMutation = useUnequipCosmetic();
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  const cosmetics = useMemo(
+    () => (inventoryData?.items ?? []).filter((i) => i.item.item_type === "cosmetic"),
+    [inventoryData]
+  );
+
+  const loading = inventoryLoading || equippedLoading;
+  const actionLoading = equipMutation.isPending || unequipMutation.isPending;
 
   const handleEquip = async (itemSlug: string, instanceId?: string) => {
-    if (!token || actionLoading) return;
-    setActionLoading(true);
+    if (actionLoading) return;
     try {
       const payload = instanceId
         ? { item_slug: itemSlug, instance_id: instanceId }
         : { item_slug: itemSlug };
-      const result = await equipCosmetic(token, payload);
+      const result = await equipMutation.mutateAsync(payload);
       toast.success(`Założono: ${result.item_name}`);
-      await loadData();
     } catch {
       toast.error("Nie udało się założyć kosmetyku");
-    } finally {
-      setActionLoading(false);
     }
   };
 
   const handleUnequip = async (slot: string) => {
-    if (!token || actionLoading) return;
-    setActionLoading(true);
+    if (actionLoading) return;
     try {
-      await unequipCosmetic(token, slot);
+      await unequipMutation.mutateAsync(slot);
       toast.success("Zdjęto kosmetyk");
-      await loadData();
     } catch {
       toast.error("Nie udało się zdjąć kosmetyku");
-    } finally {
-      setActionLoading(false);
     }
   };
 
-  if (authLoading || !user) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  if (authLoading || !user) return <CosmeticsSkeleton />;
 
   // Build lookup maps
   const equippedBySlot = new Map<string, EquippedCosmeticOut>(
@@ -550,7 +527,7 @@ function CosmeticsContent() {
   const totalEquipped = equipped.length;
 
   return (
-    <div className="space-y-4 md:space-y-6 -mx-4 md:mx-0 -mt-2 md:mt-0">
+    <div className="animate-page-in space-y-4 md:space-y-6 -mx-4 md:mx-0 -mt-2 md:mt-0">
       {/* Header */}
       <div className="px-4 md:px-0">
         <p className="hidden md:block text-xs uppercase tracking-[0.24em] text-muted-foreground font-medium">
@@ -566,10 +543,7 @@ function CosmeticsContent() {
 
       {/* Loading state */}
       {loading ? (
-        <div className="px-4 md:px-0 flex h-40 items-center justify-center text-sm text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin mr-2" />
-          Ładowanie...
-        </div>
+        <CosmeticsSkeleton />
       ) : (
         /* Section grid */
         <div className="px-4 md:px-0 grid grid-cols-1 gap-3 md:gap-4 sm:grid-cols-2 xl:grid-cols-3">

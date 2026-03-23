@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { gsap } from "gsap";
@@ -19,19 +19,9 @@ import {
   UserPlus,
   Users,
 } from "lucide-react";
+import { ProfileSkeleton } from "@/components/skeletons/ProfileSkeleton";
 import { useAuth } from "@/hooks/useAuth";
 import {
-  getLeaderboard,
-  getMe,
-  getMyMatches,
-  getMyWallet,
-  getMyInventory,
-  getMyDecks,
-  getPlayerMatches,
-  sendFriendRequest,
-  getFriends,
-  getSentRequests,
-  getReceivedRequests,
   APIError,
   type LeaderboardEntry,
   type Match,
@@ -40,6 +30,19 @@ import {
   type DeckOut,
   type User as UserType,
 } from "@/lib/api";
+import {
+  useMe,
+  useMyMatches,
+  useMyWallet,
+  useMyInventory,
+  useMyDecks,
+  useLeaderboard,
+  usePlayerMatches,
+  useFriends,
+  useSentRequests,
+  useReceivedRequests,
+  useSendFriendRequest,
+} from "@/hooks/queries";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { BannedBadge } from "@/components/ui/banned-badge";
@@ -57,30 +60,96 @@ import {
 } from "@/components/ui/table";
 
 export default function ProfilePage() {
-  const { user, loading: authLoading, token } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const params = useParams();
   const userId = params.userId as string;
 
   const isOwnProfile = user?.id === userId;
 
-  // Own profile data
-  const [profile, setProfile] = useState<UserType | null>(null);
-  const [matches, setMatches] = useState<Match[]>([]);
-  const [wallet, setWallet] = useState<WalletOut | null>(null);
-  const [inventory, setInventory] = useState<InventoryItemOut[]>([]);
-  const [decks, setDecks] = useState<DeckOut[]>([]);
-
-  // Other profile data
-  const [entry, setEntry] = useState<LeaderboardEntry | null>(null);
-  const [placement, setPlacement] = useState<number | null>(null);
-
-  const [dataLoading, setDataLoading] = useState(true);
-  const [notFound, setNotFound] = useState(false);
-  const [friendLoading, setFriendLoading] = useState(false);
   const [friendSent, setFriendSent] = useState(false);
-  const [friendshipStatus, setFriendshipStatus] = useState<"none" | "pending" | "accepted">("none");
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Own profile queries
+  const { data: profileData } = useMe();
+  const { data: myMatchesData, isLoading: myMatchesLoading } = useMyMatches(isOwnProfile ? 50 : undefined);
+  const { data: walletData } = useMyWallet();
+  const { data: inventoryData } = useMyInventory(isOwnProfile ? 8 : undefined);
+  const { data: myDecksData } = useMyDecks();
+
+  // Other profile queries
+  const { data: playerMatchesData, isLoading: playerMatchesLoading } = usePlayerMatches(
+    isOwnProfile ? "" : userId,
+    50
+  );
+
+  // Shared queries
+  const { data: leaderboardData, isLoading: lbLoading } = useLeaderboard(1000);
+
+  // Friend status queries (only meaningful for other profiles, but hooks must be unconditional)
+  const { data: friendsData } = useFriends(isOwnProfile ? undefined : 200);
+  const { data: sentData } = useSentRequests(isOwnProfile ? undefined : 200);
+  const { data: receivedData } = useReceivedRequests(isOwnProfile ? undefined : 200);
+
+  const sendFriendMutation = useSendFriendRequest();
+
+  // Derived values
+  const profile = useMemo<UserType | null>(
+    () => (isOwnProfile ? (profileData ?? null) : null),
+    [isOwnProfile, profileData]
+  );
+
+  const matches = useMemo<Match[]>(
+    () => (isOwnProfile ? (myMatchesData?.items ?? []) : (playerMatchesData?.items ?? [])),
+    [isOwnProfile, myMatchesData, playerMatchesData]
+  );
+
+  const wallet = useMemo<WalletOut | null>(
+    () => (isOwnProfile ? (walletData ?? null) : null),
+    [isOwnProfile, walletData]
+  );
+
+  const inventory = useMemo<InventoryItemOut[]>(
+    () => (isOwnProfile ? (inventoryData?.items ?? []) : []),
+    [isOwnProfile, inventoryData]
+  );
+
+  const decks = useMemo<DeckOut[]>(
+    () => (isOwnProfile ? (myDecksData?.items ?? []) : []),
+    [isOwnProfile, myDecksData]
+  );
+
+  const { entry, placement } = useMemo<{ entry: LeaderboardEntry | null; placement: number | null }>(() => {
+    if (!leaderboardData) return { entry: null, placement: null };
+    const idx = leaderboardData.items.findIndex((e) => e.id === userId);
+    if (idx < 0) return { entry: null, placement: null };
+    return { entry: leaderboardData.items[idx], placement: idx + 1 };
+  }, [leaderboardData, userId]);
+
+  const friendshipStatus = useMemo<"none" | "pending" | "accepted">(() => {
+    if (isOwnProfile) return "none";
+    const isFriend = friendsData?.items.some(
+      (f) => f.from_user.id === userId || f.to_user.id === userId
+    ) ?? false;
+    if (isFriend) return "accepted";
+    const hasSent = sentData?.items.some((f) => f.to_user.id === userId) ?? false;
+    const hasReceived = receivedData?.items.some((f) => f.from_user.id === userId) ?? false;
+    if (hasSent || hasReceived) return "pending";
+    return "none";
+  }, [isOwnProfile, userId, friendsData, sentData, receivedData]);
+
+  const dataLoading = useMemo(() => {
+    if (authLoading) return true;
+    if (lbLoading) return true;
+    if (isOwnProfile) return myMatchesLoading;
+    return playerMatchesLoading;
+  }, [authLoading, lbLoading, isOwnProfile, myMatchesLoading, playerMatchesLoading]);
+
+  const notFound = useMemo(() => {
+    if (isOwnProfile) return false;
+    if (lbLoading) return false;
+    return entry === null;
+  }, [isOwnProfile, lbLoading, entry]);
 
   useGSAP(() => {
     if (!containerRef.current || dataLoading) return;
@@ -94,76 +163,16 @@ export default function ProfilePage() {
         onUpdate: () => { el.textContent = Math.round(obj.val).toString() + suffix; },
       });
     });
-
-    gsap.fromTo("[data-animate='identity']", { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power2.out" });
-    gsap.fromTo("[data-animate='stat']", { y: 16, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, stagger: 0.08, delay: 0.15, ease: "power2.out" });
-    gsap.fromTo("[data-animate='section']", { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, stagger: 0.12, delay: 0.3, ease: "power2.out" });
   }, { scope: containerRef, dependencies: [dataLoading] });
 
-  useEffect(() => {
-    if (authLoading) return;
-    if (!user || !token) { router.replace("/login"); return; }
-
-    if (isOwnProfile) {
-      Promise.allSettled([
-        getMe(token),
-        getMyMatches(token, 50),
-        getMyWallet(token),
-        getMyInventory(token, 8),
-        getMyDecks(token),
-        getLeaderboard(token, 1000),
-      ]).then(([profileRes, matchesRes, walletRes, inventoryRes, decksRes, lbRes]) => {
-        if (profileRes.status === "fulfilled") setProfile(profileRes.value);
-        if (matchesRes.status === "fulfilled") setMatches(matchesRes.value.items);
-        if (walletRes.status === "fulfilled") setWallet(walletRes.value);
-        if (inventoryRes.status === "fulfilled") setInventory(inventoryRes.value.items);
-        if (decksRes.status === "fulfilled") setDecks(decksRes.value.items);
-        if (lbRes.status === "fulfilled") {
-          const idx = lbRes.value.items.findIndex((e) => e.id === userId);
-          if (idx >= 0) { setEntry(lbRes.value.items[idx]); setPlacement(idx + 1); }
-        }
-        setDataLoading(false);
-      });
-    } else {
-      Promise.allSettled([
-        getLeaderboard(token, 1000),
-        getPlayerMatches(token, userId, 50),
-        getFriends(token, 200),
-        getSentRequests(token, 200),
-        getReceivedRequests(token, 200),
-      ]).then(([lbRes, matchesRes, friendsRes, sentRes, receivedRes]) => {
-        if (lbRes.status === "fulfilled") {
-          const idx = lbRes.value.items.findIndex((e) => e.id === userId);
-          if (idx === -1) { setNotFound(true); }
-          else { setEntry(lbRes.value.items[idx]); setPlacement(idx + 1); }
-        } else { setNotFound(true); }
-        if (matchesRes.status === "fulfilled") setMatches(matchesRes.value.items);
-        // Check friendship status
-        const isFriend = friendsRes.status === "fulfilled" && friendsRes.value.items.some(
-          (f) => f.from_user.id === userId || f.to_user.id === userId
-        );
-        if (isFriend) {
-          setFriendshipStatus("accepted");
-        } else {
-          const hasSent = sentRes.status === "fulfilled" && sentRes.value.items.some(
-            (f) => f.to_user.id === userId
-          );
-          const hasReceived = receivedRes.status === "fulfilled" && receivedRes.value.items.some(
-            (f) => f.from_user.id === userId
-          );
-          if (hasSent || hasReceived) setFriendshipStatus("pending");
-        }
-        setDataLoading(false);
-      });
-    }
-  }, [authLoading, user, token, userId, router, isOwnProfile]);
+  // Auth redirect
+  if (!authLoading && !user) {
+    router.replace("/login");
+    return null;
+  }
 
   if (authLoading || dataLoading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <ProfileSkeleton />;
   }
 
   if (notFound && !isOwnProfile) {
@@ -182,10 +191,9 @@ export default function ProfilePage() {
   }
 
   async function handleAddFriend() {
-    if (!token || !entry?.username || friendSent) return;
-    setFriendLoading(true);
+    if (!entry?.username || friendSent) return;
     try {
-      await sendFriendRequest(token, entry.username);
+      await sendFriendMutation.mutateAsync(entry.username);
       setFriendSent(true);
       toast.success("Zaproszenie wysłane");
     } catch (err) {
@@ -199,10 +207,10 @@ export default function ProfilePage() {
       } else {
         toast.error("Nie udało się wysłać zaproszenia");
       }
-    } finally {
-      setFriendLoading(false);
     }
   }
+
+  const friendLoading = sendFriendMutation.isPending;
 
   const currentUser = profile ?? user!;
   const displayName = isOwnProfile ? currentUser.username : (entry?.username ?? "Gracz");
@@ -220,7 +228,7 @@ export default function ProfilePage() {
   const defaultDeck = decks.find((d) => d.is_default);
 
   return (
-    <div ref={containerRef} className="space-y-3 md:space-y-6 -mx-4 md:mx-0 -mt-2 md:mt-0">
+    <div ref={containerRef} className="animate-page-in space-y-3 md:space-y-6 -mx-4 md:mx-0 -mt-2 md:mt-0">
       {/* Header */}
       <div className="flex items-center gap-2 px-4 md:px-0">
         {!isOwnProfile && (
@@ -287,7 +295,7 @@ export default function ProfilePage() {
 
       {/* Identity + stats */}
       <div className="px-4 md:px-0">
-        <div data-animate="identity" className="md:rounded-2xl md:border md:border-border md:bg-card md:p-5">
+        <div className="md:rounded-2xl md:border md:border-border md:bg-card md:p-5">
           <div className="flex items-center gap-3 md:gap-4">
             <div className="flex h-12 w-12 md:h-16 md:w-16 shrink-0 items-center justify-center rounded-2xl border border-border bg-primary/10">
               {placement !== null && placement <= 3 ? (
@@ -317,14 +325,14 @@ export default function ProfilePage() {
           </div>
 
           {/* Stats — horizontal scroll on mobile, grid on desktop */}
-          <div className="flex gap-2 mt-3 md:mt-5 overflow-x-auto pb-0.5 md:grid md:grid-cols-4 md:gap-3 md:overflow-visible scrollbar-none [-ms-overflow-style:none] [scrollbar-width:none]">
+          <div className="animate-stagger flex gap-2 mt-3 md:mt-5 overflow-x-auto pb-0.5 md:grid md:grid-cols-4 md:gap-3 md:overflow-visible scrollbar-none [-ms-overflow-style:none] [scrollbar-width:none]">
             {[
               { value: elo, label: "ELO", color: "text-accent", isNum: true },
               { value: matchesPlayed, label: "Mecze", color: "text-primary", isNum: true },
               { value: wins, label: "Wygrane", color: "text-emerald-300", isNum: true },
               { value: winRate, label: "Win Rate", color: "text-violet-300", isNum: true, suffix: "%" },
             ].map((s) => (
-              <div key={s.label} data-animate="stat" className="flex shrink-0 items-center gap-2.5 rounded-xl bg-secondary/50 border border-border px-3 py-2 md:p-4 md:flex-col md:items-start md:gap-1.5 min-w-[100px] md:min-w-0">
+              <div key={s.label} className="hover-lift flex shrink-0 items-center gap-2.5 rounded-xl bg-secondary/50 border border-border px-3 py-2 md:p-4 md:flex-col md:items-start md:gap-1.5 min-w-[100px] md:min-w-0">
                 <span className="text-[9px] md:text-xs uppercase tracking-[0.15em] md:tracking-[0.2em] text-muted-foreground font-medium">{s.label}</span>
                 <span data-counter={s.isNum ? s.value : undefined} data-suffix={s.suffix ?? ""} className={`font-display text-base md:text-3xl tabular-nums ${s.color} ml-auto md:ml-0`}>{s.isNum ? "0" + (s.suffix ?? "") : s.value}</span>
               </div>
@@ -345,14 +353,14 @@ export default function ProfilePage() {
 
       {/* === CHARTS — for all profiles === */}
       {matches.length > 0 && (
-        <div data-animate="section" className="px-4 md:px-0">
+        <div className="px-4 md:px-0">
           <ProfileCharts matches={matches} userId={userId} currentElo={elo} />
         </div>
       )}
 
       {/* === MATCHES — for all profiles === */}
       {matches.length > 0 && (
-          <div data-animate="section" className="px-4 md:px-0">
+          <div className="px-4 md:px-0">
             <div className="md:rounded-2xl md:border md:border-border md:bg-card md:p-5">
               <div className="flex items-center justify-between mb-2 md:mb-4">
                 <p className="text-[11px] md:text-sm uppercase tracking-[0.18em] md:tracking-[0.2em] text-muted-foreground font-medium">Ostatnie mecze</p>
@@ -378,7 +386,7 @@ export default function ProfilePage() {
                     const isLoss = match.status === "finished" && !isWinner && profilePlayer && !profilePlayer.is_alive;
                     const date = new Date(match.finished_at ?? match.started_at ?? match.created_at);
                     return (
-                      <button key={match.id} className="flex w-full items-center gap-3 rounded-xl py-2.5 px-1 text-left transition-all active:bg-muted/50"
+                      <button key={match.id} className="hover-lift flex w-full items-center gap-3 rounded-xl py-2.5 px-1 text-left transition-all active:bg-muted/50"
                         onClick={() => router.push(isActive ? `/game/${match.id}` : `/match/${match.id}`)}>
                         <div className="flex gap-0.5 shrink-0">
                           {match.players.map((p) => (<div key={p.id} className="h-4 w-4 rounded-md" style={{ backgroundColor: p.color, opacity: !p.is_alive && match.status === "finished" ? 0.3 : 1 }} />))}
@@ -416,7 +424,7 @@ export default function ProfilePage() {
                       const endDate = match.finished_at ? new Date(match.finished_at) : null;
                       const durationMin = startDate && endDate ? Math.round((endDate.getTime() - startDate.getTime()) / 60000) : null;
                       return (
-                        <TableRow key={match.id} className="cursor-pointer hover:bg-muted/30" onClick={() => router.push(isActive ? `/game/${match.id}` : `/match/${match.id}`)}>
+                        <TableRow key={match.id} className="hover-lift cursor-pointer hover:bg-muted/30" onClick={() => router.push(isActive ? `/game/${match.id}` : `/match/${match.id}`)}>
                           <TableCell className="py-2.5">
                             <div className="flex items-center gap-2">
                               <div className="flex gap-0.5 shrink-0">

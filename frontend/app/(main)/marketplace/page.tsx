@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -28,29 +28,23 @@ import { useAuth } from "@/hooks/useAuth";
 import { useModuleConfig } from "@/hooks/useSystemModules";
 import { ModuleDisabledPage } from "@/components/ModuleGate";
 import {
-  cancelListing,
-  getItemCategories,
-  getMarketListings,
-  getMyListings,
-  getMyTradeHistory,
-  getMyWallet,
   type ItemCategoryOut,
   type ItemOut,
   type MarketListingOut,
   type MarketTransactionOut,
-  type WalletOut,
 } from "@/lib/api";
+import {
+  useMarketListings,
+  useMyListings,
+  useMyTradeHistory,
+  useMyWallet,
+  useItemCategories,
+  useCancelListing,
+} from "@/hooks/queries";
 import ItemIcon from "@/components/ui/ItemIcon";
+import { MarketplaceSkeleton } from "@/components/skeletons/MarketplaceSkeleton";
 
 // ─── Rarity styling maps ────────────────────────────────────────────────────
-
-const RARITY_BORDER_LEFT: Record<string, string> = {
-  common: "border-l-slate-500",
-  uncommon: "border-l-green-500",
-  rare: "border-l-blue-500",
-  epic: "border-l-purple-500",
-  legendary: "border-l-amber-500",
-};
 
 const RARITY_BADGE_CLASS: Record<string, string> = {
   common: "bg-slate-500/20 text-slate-300",
@@ -213,7 +207,7 @@ function BrowseList({
                 <HoverCardTrigger render={<div />}>
                 <Link
                   href={`/marketplace/${agg.item.slug}`}
-                  className="group flex items-center gap-3 md:gap-4 rounded-xl md:border md:border-border px-1 md:px-4 py-2.5 md:py-3.5 transition-all hover:bg-muted active:bg-muted/50"
+                  className="hover-lift group flex items-center gap-3 md:gap-4 rounded-xl md:border md:border-border px-1 md:px-4 py-2.5 md:py-3.5 transition-all hover:bg-muted active:bg-muted/50"
                 >
                   {/* Item icon */}
                   <div className={`flex h-10 w-10 md:h-14 md:w-14 shrink-0 items-center justify-center rounded-lg border border-l-2 border-border/60 ${RARITY_LEFT_BORDER_SLOT[rarity]} ${RARITY_SLOT_BG[rarity]}`}>
@@ -302,27 +296,17 @@ function BrowseList({
 interface MyListingsTabProps {
   listings: MarketListingOut[];
   currentUsername: string;
-  token: string;
-  onRefresh: () => void;
 }
 
-function MyListingsTab({
-  listings,
-  token,
-  onRefresh,
-}: MyListingsTabProps) {
-  const [cancelling, setCancelling] = useState<string | null>(null);
+function MyListingsTab({ listings }: MyListingsTabProps) {
+  const cancelMutation = useCancelListing();
 
   const handleCancel = async (listingId: string) => {
-    setCancelling(listingId);
     try {
-      await cancelListing(token, listingId);
+      await cancelMutation.mutateAsync(listingId);
       toast.success("Oferta anulowana");
-      onRefresh();
     } catch {
       toast.error("Nie udało się anulować");
-    } finally {
-      setCancelling(null);
     }
   };
 
@@ -370,10 +354,10 @@ function MyListingsTab({
             {listing.status === "active" && (
               <button
                 onClick={() => handleCancel(listing.id)}
-                disabled={cancelling === listing.id}
+                disabled={cancelMutation.isPending}
                 className="text-xs text-destructive font-medium shrink-0 active:opacity-50"
               >
-                {cancelling === listing.id ? "..." : "Anuluj"}
+                {cancelMutation.isPending ? "..." : "Anuluj"}
               </button>
             )}
           </div>
@@ -424,9 +408,9 @@ function MyListingsTab({
                 </TableCell>
                 <TableCell className="py-5 pr-6 text-right">
                   {listing.status === "active" && (
-                    <Button size="sm" variant="ghost" onClick={() => handleCancel(listing.id)} disabled={cancelling === listing.id}
+                    <Button size="sm" variant="ghost" onClick={() => handleCancel(listing.id)} disabled={cancelMutation.isPending}
                       className="h-11 rounded-md bg-destructive/10 px-4 text-base text-destructive transition-colors hover:bg-destructive/20 disabled:opacity-50">
-                      {cancelling === listing.id ? "..." : "Anuluj"}
+                      {cancelMutation.isPending ? "..." : "Anuluj"}
                     </Button>
                   )}
                 </TableCell>
@@ -544,15 +528,26 @@ export default function MarketplacePage() {
 }
 
 function MarketplaceContent() {
-  const { user, loading: authLoading, token } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  const [listings, setListings] = useState<MarketListingOut[]>([]);
-  const [myListings, setMyListings] = useState<MarketListingOut[]>([]);
-  const [history, setHistory] = useState<MarketTransactionOut[]>([]);
-  const [wallet, setWallet] = useState<WalletOut | null>(null);
-  const [categories, setCategories] = useState<ItemCategoryOut[]>([]);
-  const [loading, setLoading] = useState(true);
+  const listingsQuery = useMarketListings();
+  const myListingsQuery = useMyListings();
+  const historyQuery = useMyTradeHistory();
+  const walletQuery = useMyWallet();
+  const categoriesQuery = useItemCategories();
+
+  const loading =
+    listingsQuery.isLoading ||
+    myListingsQuery.isLoading ||
+    historyQuery.isLoading ||
+    walletQuery.isLoading ||
+    categoriesQuery.isLoading;
+
+  const myListings = myListingsQuery.data?.items ?? [];
+  const history = historyQuery.data?.items ?? [];
+  const wallet = walletQuery.data ?? null;
+  const categories = categoriesQuery.data ?? [];
 
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab") as MainTab | null;
@@ -564,35 +559,10 @@ function MarketplaceContent() {
     if (!authLoading && !user) router.replace("/login");
   }, [user, authLoading, router]);
 
-  const loadData = useCallback(async () => {
-    if (!token) return;
-    try {
-      const [lsRes, mlRes, histRes, wal, cats] = await Promise.all([
-        getMarketListings(),
-        getMyListings(token),
-        getMyTradeHistory(token),
-        getMyWallet(token),
-        getItemCategories(),
-      ]);
-      setListings(lsRes.items);
-      setMyListings(mlRes.items);
-      setHistory(histRes.items);
-      setWallet(wal);
-      setCategories(cats);
-    } catch {
-      toast.error("Nie udało się załadować rynku");
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
   const aggregatedItems = useMemo<AggregatedItem[]>(() => {
+    const items = listingsQuery.data?.items ?? [];
     const map = new Map<string, AggregatedItem>();
-    for (const listing of listings) {
+    for (const listing of items) {
       const slug = listing.item.slug;
       if (!map.has(slug)) {
         map.set(slug, { item: listing.item, cheapestPrice: Infinity, listingCount: 0 });
@@ -607,12 +577,12 @@ function MarketplaceContent() {
       if (agg.cheapestPrice === Infinity) agg.cheapestPrice = 0;
     }
     return Array.from(map.values()).sort((a, b) => a.cheapestPrice - b.cheapestPrice);
-  }, [listings]);
+  }, [listingsQuery.data]);
 
-  if (authLoading || !user) return null;
+  if (authLoading || !user) return <MarketplaceSkeleton />;
 
   return (
-    <div className="space-y-3 md:space-y-8 -mx-4 md:mx-0 -mt-2 md:mt-0">
+    <div className="animate-page-in space-y-3 md:space-y-8 -mx-4 md:mx-0 -mt-2 md:mt-0">
       {/* Header */}
       <div className="px-4 md:px-0">
         <p className="hidden md:block text-xs uppercase tracking-[0.24em] text-muted-foreground">Rynek</p>
@@ -688,8 +658,6 @@ function MarketplaceContent() {
             <MyListingsTab
               listings={myListings}
               currentUsername={user.username}
-              token={token!}
-              onRefresh={loadData}
             />
           )}
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Coins, Store } from "lucide-react";
@@ -19,17 +19,17 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import ItemIcon from "@/components/ui/ItemIcon";
 import {
-  buyFromListing,
-  createListing,
-  getMarketConfig,
-  getMarketListings,
-  getMyInventory,
-  getMyWallet,
-  type InventoryItemOut,
-  type MarketConfigOut,
   type MarketListingOut,
-  type WalletOut,
 } from "@/lib/api";
+import {
+  useMarketListings,
+  useMyInventory,
+  useMyWallet,
+  useMarketConfig,
+  useBuyFromListing,
+  useCreateListing,
+} from "@/hooks/queries";
+import { MarketplaceItemSkeleton } from "@/components/skeletons/MarketplaceItemSkeleton";
 
 // ─── Rarity / type maps ───────────────────────────────────────────────────
 
@@ -63,61 +63,40 @@ const TYPE_LABELS: Record<string, string> = {
 // ─── Main Page ────────────────────────────────────────────────────────────
 
 export default function MarketplaceItemPage() {
-  const { user, loading: authLoading, token } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const params = useParams<{ slug: string }>();
   const slug = params.slug;
 
-  const [listings, setListings] = useState<MarketListingOut[]>([]);
-  const [inventory, setInventory] = useState<InventoryItemOut[]>([]);
-  const [wallet, setWallet] = useState<WalletOut | null>(null);
-  const [config, setConfig] = useState<MarketConfigOut | null>(null);
-  const [loading, setLoading] = useState(true);
+  const listingsQuery = useMarketListings(slug);
+  const inventoryQuery = useMyInventory();
+  const walletQuery = useMyWallet();
+  const configQuery = useMarketConfig();
+
+  const buyMutation = useBuyFromListing();
+  const sellMutation = useCreateListing();
+
+  const loading =
+    listingsQuery.isLoading ||
+    inventoryQuery.isLoading ||
+    walletQuery.isLoading ||
+    configQuery.isLoading;
+
+  const listings = listingsQuery.data?.items ?? [];
+  const inventory = inventoryQuery.data?.items ?? [];
+  const wallet = walletQuery.data ?? null;
+  const config = configQuery.data ?? null;
 
   // Buy form state
   const [buyQty, setBuyQty] = useState(1);
-  const [buying, setBuying] = useState(false);
 
   // Sell form state
   const [sellQty, setSellQty] = useState(1);
   const [sellPrice, setSellPrice] = useState(1);
-  const [selling, setSelling] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) router.replace("/login");
   }, [user, authLoading, router]);
-
-  const loadData = useCallback(async () => {
-    if (!token || !slug) return;
-    try {
-      const [lsRes, invRes, wal, cfg] = await Promise.all([
-        getMarketListings(slug),
-        getMyInventory(token),
-        getMyWallet(token),
-        getMarketConfig(),
-      ]);
-      setListings(lsRes.items);
-      setInventory(invRes.items);
-      setWallet(wal);
-      setConfig(cfg);
-
-      // Pre-fill sell price from cheapest listing
-      const cheapest = lsRes.items
-        .filter((l) => l.listing_type === "sell" || !l.listing_type)
-        .sort((a, b) => a.price_per_unit - b.price_per_unit)[0];
-      if (cheapest) setSellPrice(cheapest.price_per_unit);
-    } catch {
-      toast.error("Nie udało się załadować ofert");
-    } finally {
-      setLoading(false);
-    }
-  }, [token, slug]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  if (authLoading || !user) return null;
 
   // Derived data
   const sellListings = [...listings]
@@ -133,9 +112,9 @@ export default function MarketplaceItemPage() {
     sellListings[0]?.item ?? buyListings[0]?.item ?? null;
 
   // Cheapest sell listing available to current user
-  const cheapestAvailable = sellListings.find(
-    (l) => l.seller_username !== user.username
-  );
+  const cheapestAvailable = user
+    ? sellListings.find((l) => l.seller_username !== user.username)
+    : undefined;
 
   const ownedEntry = representativeItem
     ? inventory.find(
@@ -151,18 +130,20 @@ export default function MarketplaceItemPage() {
     ? buyQty * cheapestAvailable.price_per_unit
     : 0;
 
+  // Pre-fill sell price from cheapest listing when listings load
+  useEffect(() => {
+    const cheapest = sellListings[0];
+    if (cheapest) setSellPrice(cheapest.price_per_unit);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listingsQuery.data]);
+
   const handleBuyDirect = async (listing: MarketListingOut, qty = 1) => {
-    if (!token) return;
-    setBuying(true);
     try {
-      const result = await buyFromListing(token, listing.id, qty);
+      const result = await buyMutation.mutateAsync({ listingId: listing.id, quantity: qty });
       toast.success(result.message);
-      await loadData();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Błąd zakupu";
       toast.error(msg);
-    } finally {
-      setBuying(false);
     }
   };
 
@@ -172,40 +153,28 @@ export default function MarketplaceItemPage() {
   };
 
   const handleSell = async () => {
-    if (!token || !representativeItem?.is_tradeable) return;
-    setSelling(true);
+    if (!representativeItem?.is_tradeable) return;
     try {
-      await createListing(token, {
+      await sellMutation.mutateAsync({
         item_slug: slug,
         listing_type: "sell",
         quantity: sellQty,
         price_per_unit: sellPrice,
       });
       toast.success("Oferta wystawiona!");
-      await loadData();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Błąd wystawiania";
       toast.error(msg);
-    } finally {
-      setSelling(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <div className="h-8 w-24 animate-pulse rounded-lg bg-muted/20" />
-        <div className="h-32 animate-pulse rounded-2xl border border-border/30 bg-muted/10" />
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="h-56 animate-pulse rounded-xl border border-border/30 bg-muted/10" />
-          <div className="h-56 animate-pulse rounded-xl border border-border/30 bg-muted/10" />
-        </div>
-      </div>
-    );
-  }
+  if (authLoading || !user || loading) return <MarketplaceItemSkeleton />;
+
+  const buying = buyMutation.isPending;
+  const selling = sellMutation.isPending;
 
   return (
-    <div className="space-y-6">
+    <div className="animate-page-in space-y-6">
       {/* Back link */}
       <Link
         href="/marketplace"
@@ -313,7 +282,7 @@ export default function MarketplaceItemPage() {
                   {sellListings.map((listing) => (
                     <TableRow
                       key={listing.id}
-                      className="transition-colors hover:bg-muted/30"
+                      className="hover-lift transition-colors hover:bg-muted/30"
                     >
                       <TableCell className="pl-4 py-4 text-base text-foreground">
                         <span className="flex items-center gap-2">
@@ -380,7 +349,7 @@ export default function MarketplaceItemPage() {
                   {buyListings.map((listing) => (
                     <TableRow
                       key={listing.id}
-                      className="transition-colors hover:bg-muted/30"
+                      className="hover-lift transition-colors hover:bg-muted/30"
                     >
                       <TableCell className="pl-4 py-4 text-base text-foreground">
                         <span className="flex items-center gap-2">

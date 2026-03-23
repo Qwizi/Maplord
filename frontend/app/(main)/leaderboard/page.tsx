@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { gsap } from "gsap";
-import { useGSAP } from "@gsap/react";
-import { Trophy, Medal, ChevronLeft, ChevronRight, Loader2, Target, Swords, Crown, Users } from "lucide-react";
+import { Trophy, Medal, ChevronLeft, ChevronRight, Target, Swords, Crown, Users } from "lucide-react";
+import { LeaderboardSkeleton } from "@/components/skeletons/LeaderboardSkeleton";
 import { useAuth } from "@/hooks/useAuth";
 import { useModuleConfig } from "@/hooks/useSystemModules";
 import { ModuleDisabledPage } from "@/components/ModuleGate";
-import { getLeaderboard, getFriends, type LeaderboardEntry } from "@/lib/api";
+import { type LeaderboardEntry } from "@/lib/api";
+import { useLeaderboard, useFriends } from "@/hooks/queries";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { BannedBadge } from "@/components/ui/banned-badge";
@@ -32,49 +32,37 @@ export default function LeaderboardPage() {
 }
 
 function LeaderboardContent() {
-  const { user, loading, token } = useAuth();
+  const { user, loading } = useAuth();
   const router = useRouter();
-  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
-  const [friendIds, setFriendIds] = useState<Set<string>>(new Set());
-  const [pageLoading, setPageLoading] = useState(true);
   const [pageOverride, setPageOverride] = useState<number | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
 
-  useGSAP(() => {
-    if (!containerRef.current || pageLoading) return;
-    gsap.fromTo("[data-animate='row']", { x: -12, opacity: 0 }, { x: 0, opacity: 1, duration: 0.3, stagger: 0.04, ease: "power2.out" });
-    gsap.fromTo("[data-animate='section']", { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power2.out" });
-  }, { scope: containerRef, dependencies: [pageLoading, pageOverride] });
+  const { data: leaderboardData, isLoading: leaderboardLoading } = useLeaderboard();
+  const { data: friendsData, isLoading: friendsLoading } = useFriends(200);
 
-  useEffect(() => {
-    if (loading) return;
-    if (!user || !token) {
-      router.replace("/login");
-      return;
-    }
+  const entries = useMemo<LeaderboardEntry[]>(
+    () => leaderboardData?.items ?? [],
+    [leaderboardData]
+  );
 
-    Promise.all([
-      getLeaderboard(token),
-      getFriends(token, 200, 0),
-    ]).then(([leaderboardRes, friendsRes]) => {
-      setEntries(leaderboardRes.items);
-      const ids = new Set<string>(
-        friendsRes.items.map((f) =>
-          f.from_user.id === user.id ? f.to_user.id : f.from_user.id
-        )
-      );
-      setFriendIds(ids);
-    }).finally(() => setPageLoading(false));
-  }, [loading, router, token, user]);
+  const friendIds = useMemo<Set<string>>(() => {
+    if (!friendsData || !user) return new Set();
+    return new Set<string>(
+      friendsData.items.map((f) =>
+        f.from_user.id === user.id ? f.to_user.id : f.from_user.id
+      )
+    );
+  }, [friendsData, user]);
+
+  const pageLoading = leaderboardLoading || friendsLoading;
+
+  if (!loading && !user) {
+    router.replace("/login");
+  }
 
   const myPlacement = entries.findIndex((entry) => entry.id === user?.id) + 1;
 
   if (loading || pageLoading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <LeaderboardSkeleton />;
   }
 
   const totalPages = Math.max(1, Math.ceil(entries.length / PAGE_SIZE));
@@ -83,7 +71,7 @@ function LeaderboardContent() {
   const paginatedEntries = entries.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   return (
-    <div ref={containerRef} className="space-y-3 md:space-y-6 -mx-4 md:mx-0 -mt-2 md:mt-0">
+    <div className="animate-page-in space-y-3 md:space-y-6 -mx-4 md:mx-0 -mt-2 md:mt-0">
       {/* ── Header ── */}
       <div className="flex items-center justify-between gap-4 px-4 md:px-0">
         <div>
@@ -101,7 +89,7 @@ function LeaderboardContent() {
       {/* ── Twoja pozycja ── */}
       {myPlacement > 0 && user && (
         <div className="px-4 md:px-0">
-          <div data-animate="section" className="flex items-center justify-between gap-3 rounded-2xl border border-primary/20 md:border-primary/25 bg-primary/5 p-3.5 md:p-5">
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-primary/20 md:border-primary/25 bg-primary/5 p-3.5 md:p-5">
             <div className="flex items-baseline gap-2 md:gap-3">
               <span className="font-display text-3xl md:text-5xl text-primary">#{myPlacement}</span>
               <span className="text-sm md:text-lg text-foreground">{user.username}</span>
@@ -119,7 +107,7 @@ function LeaderboardContent() {
       {/* ── Lista/Tabela ── */}
       <div className="px-4 md:px-0">
         {/* Mobile: clean list */}
-        <div className="md:hidden space-y-0.5">
+        <div className="animate-list-in md:hidden space-y-0.5">
           {paginatedEntries.map((entry, index) => {
             const isMe = entry.id === user?.id;
             const isFriend = !isMe && friendIds.has(entry.id);
@@ -129,9 +117,8 @@ function LeaderboardContent() {
             return (
               <button
                 key={entry.id}
-                data-animate="row"
                 onClick={() => router.push(`/profile/${entry.id}`)}
-                className={`flex w-full items-center gap-3 rounded-xl py-3 px-1 text-left transition-all active:bg-muted/50 ${isMe ? "bg-primary/5" : isFriend ? "bg-accent/5" : ""}`}
+                className={`flex w-full items-center gap-3 rounded-xl py-3 px-1 text-left transition-all active:bg-muted/50 hover-lift ${isMe ? "bg-primary/5" : isFriend ? "bg-accent/5" : ""}`}
               >
                 <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
                   isTop3 ? "bg-accent/15 text-accent" : "bg-secondary text-muted-foreground"
@@ -176,7 +163,7 @@ function LeaderboardContent() {
                 </TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>
+            <TableBody className="animate-list-in">
               {paginatedEntries.map((entry, index) => {
                 const isMe = entry.id === user?.id;
                 const isFriend = !isMe && friendIds.has(entry.id);
@@ -186,9 +173,8 @@ function LeaderboardContent() {
                 return (
                   <TableRow
                     key={entry.id}
-                    data-animate="row"
                     onClick={() => router.push(`/profile/${entry.id}`)}
-                    className={`cursor-pointer ${isMe ? "bg-primary/5 hover:bg-primary/10" : isFriend ? "bg-accent/5 hover:bg-accent/10" : "hover:bg-muted/50"}`}
+                    className={`cursor-pointer hover-lift ${isMe ? "bg-primary/5 hover:bg-primary/10" : isFriend ? "bg-accent/5 hover:bg-accent/10" : "hover:bg-muted/50"}`}
                   >
                     <TableCell className="pl-6 py-3.5">
                       <div className={`flex h-9 w-9 items-center justify-center rounded-lg font-display text-sm font-bold ${

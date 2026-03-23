@@ -1,9 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { gsap } from "gsap";
-import { useGSAP } from "@gsap/react";
 import {
   Backpack,
   Calendar,
@@ -30,17 +28,14 @@ import { ModuleDisabledPage } from "@/components/ModuleGate";
 import { CrateOpenModal } from "@/components/inventory/CrateOpenModal";
 import ItemIcon from "@/components/ui/ItemIcon";
 import {
-  getMyInventory,
-  getMyWallet,
-  getMyDrops,
-  getItemCategories,
-  openCrate,
   type InventoryItemOut,
   type ItemInstanceOut,
   type ItemOut,
   type WalletOut,
   type ItemDropOut,
 } from "@/lib/api";
+import { useMyInventory, useMyWallet, useMyDrops, useItemCategories, useOpenCrate } from "@/hooks/queries";
+import { InventorySkeleton } from "@/components/skeletons/InventorySkeleton";
 
 // ─── Wear condition config ────────────────────────────────────────────────────
 
@@ -187,10 +182,9 @@ function FilledSlot({ entry, isSelected, onClick }: SlotProps) {
 
   return (
     <div
-      data-animate="slot"
       onClick={onClick}
       className={[
-        "group relative aspect-square rounded-lg border border-l-2 flex flex-col items-center justify-center transition-all duration-150 cursor-pointer",
+        "hover-lift group relative aspect-square rounded-lg border border-l-2 flex flex-col items-center justify-center transition-all duration-150 cursor-pointer",
         RARITY_LEFT_BORDER[rarity] ?? "border-l-slate-500/50",
         RARITY_SLOT_BG[rarity] ?? "bg-slate-500/[0.07]",
         "border-border",
@@ -497,15 +491,10 @@ export default function InventoryPage() {
 }
 
 function InventoryContent() {
-  const { user, loading: authLoading, token } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  const [inventory, setInventory] = useState<InventoryItemOut[]>([]);
-  const [wallet, setWallet] = useState<WalletOut | null>(null);
-  const [drops, setDrops] = useState<ItemDropOut[]>([]);
-  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("all");
-  const containerRef = useRef<HTMLDivElement>(null);
 
   // Crate opening modal state
   const [crateModalOpen, setCrateModalOpen] = useState(false);
@@ -513,40 +502,21 @@ function InventoryContent() {
   const [crateDrops, setCrateDrops] = useState<
     Array<{ item_name: string; item_slug: string; rarity: string; quantity: number }> | null
   >(null);
-  const [allItemCatalog, setAllItemCatalog] = useState<ItemOut[]>([]);
 
-  useGSAP(() => {
-    if (!containerRef.current || loading) return;
-    gsap.fromTo("[data-animate='slot']", { scale: 0.85, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.3, stagger: 0.02, ease: "back.out(1.5)" });
-  }, { scope: containerRef, dependencies: [loading, filter] });
+  const { data: inventoryData, isLoading: inventoryLoading } = useMyInventory(200);
+  const { data: wallet, isLoading: walletLoading } = useMyWallet();
+  const { data: dropsData, isLoading: dropsLoading } = useMyDrops(10);
+  const { data: categories, isLoading: categoriesLoading } = useItemCategories();
+  const openCrateMutation = useOpenCrate();
+
+  const inventory = inventoryData?.items ?? [];
+  const drops = dropsData?.items ?? [];
+  const allItemCatalog = useMemo(() => (categories ?? []).flatMap((c) => c.items), [categories]);
+  const loading = inventoryLoading || walletLoading || dropsLoading || categoriesLoading;
 
   useEffect(() => {
     if (!authLoading && !user) router.replace("/login");
   }, [user, authLoading, router]);
-
-  const loadData = useCallback(async () => {
-    if (!token) return;
-    try {
-      const [invRes, wal, drRes, categories] = await Promise.all([
-        getMyInventory(token, 200),
-        getMyWallet(token),
-        getMyDrops(token, 10),
-        getItemCategories(),
-      ]);
-      setInventory(invRes.items);
-      setWallet(wal);
-      setDrops(drRes.items);
-      setAllItemCatalog(categories.flatMap((c) => c.items));
-    } catch {
-      toast.error("Nie udało się załadować ekwipunku");
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
 
   const keys = inventory.filter((i) => i.item.item_type === "key");
 
@@ -557,7 +527,6 @@ function InventoryContent() {
     );
 
   const handleOpenCrate = async (crateSlug: string) => {
-    if (!token) return;
     const matchingKey = keys.find((k) => {
       const keySuffix = k.item.slug.replace("key-", "");
       const crateSuffix = crateSlug.replace("crate-", "");
@@ -569,7 +538,7 @@ function InventoryContent() {
     }
     const crateEntry = inventory.find((i) => i.item.slug === crateSlug);
     try {
-      const result = await openCrate(token, crateSlug, matchingKey.item.slug);
+      const result = await openCrateMutation.mutateAsync({ crateSlug, keySlug: matchingKey.item.slug });
       setOpeningCrateItem(crateEntry?.item ?? null);
       setCrateDrops(result.drops);
       setCrateModalOpen(true);
@@ -582,7 +551,6 @@ function InventoryContent() {
     setCrateModalOpen(false);
     setOpeningCrateItem(null);
     setCrateDrops(null);
-    loadData();
   };
 
   const filteredInventory =
@@ -594,10 +562,10 @@ function InventoryContent() {
   const totalSlots = Math.max(MIN_SLOTS, filteredInventory.length);
   const emptyCount = totalSlots - filteredInventory.length;
 
-  if (authLoading || !user) return null;
+  if (authLoading || !user) return <InventorySkeleton />;
 
   return (
-    <div ref={containerRef} className="space-y-3 md:space-y-8 -mx-4 md:mx-0 -mt-2 md:mt-0">
+    <div className="animate-page-in space-y-3 md:space-y-8 -mx-4 md:mx-0 -mt-2 md:mt-0">
 
       <CrateOpenModal
         isOpen={crateModalOpen}

@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useRef, useState, useCallback, ty
 import { createElement } from "react";
 import { createSocket, type WSMessage } from "@/lib/ws";
 import { getAccessToken } from "@/lib/auth";
-import { getWsTicket } from "@/lib/api";
+import { getWsTicket, getMatchmakingStatus } from "@/lib/api";
 import { solveChallenge } from "@/lib/pow";
 
 // ─── Session storage keys ────────────────────────────────────────────────────
@@ -22,21 +22,21 @@ interface QueueSession {
 function saveQueueSession(session: QueueSession | null) {
   if (typeof window === "undefined") return;
   if (session) {
-    sessionStorage.setItem(QUEUE_KEY, JSON.stringify(session));
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(session));
   } else {
-    sessionStorage.removeItem(QUEUE_KEY);
+    localStorage.removeItem(QUEUE_KEY);
   }
 }
 
 function loadQueueSession(): QueueSession | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = sessionStorage.getItem(QUEUE_KEY);
+    const raw = localStorage.getItem(QUEUE_KEY);
     if (!raw) return null;
     const session = JSON.parse(raw) as QueueSession;
     // Expire after 5 minutes
     if (Date.now() - session.joinedAt > 5 * 60 * 1000) {
-      sessionStorage.removeItem(QUEUE_KEY);
+      localStorage.removeItem(QUEUE_KEY);
       return null;
     }
     return session;
@@ -104,6 +104,19 @@ export function useMatchmaking(): MatchmakingContextValue {
 
 // ─── Provider ────────────────────────────────────────────────────────────────
 
+const MM_CHANNEL = "maplord:matchmaking-sync";
+
+interface MMBroadcast {
+  type: "joined" | "left" | "match_found" | "lobby_update";
+  gameModeSlug?: string | null;
+  matchId?: string | null;
+  lobbyId?: string | null;
+  lobbyPlayers?: LobbyPlayer[];
+  lobbyMaxPlayers?: number;
+  lobbyFull?: boolean;
+  allReady?: boolean;
+}
+
 export function MatchmakingProvider({ children }: { children: ReactNode }) {
   const [inQueue, setInQueue] = useState(false);
   const [playersInQueue, setPlayersInQueue] = useState(0);
@@ -131,6 +144,18 @@ export function MatchmakingProvider({ children }: { children: ReactNode }) {
   const wsRef = useRef<WebSocket | null>(null);
   const fillBotsRef = useRef(fillBots);
   const instantBotRef = useRef(instantBot);
+  const broadcastRef = useRef<BroadcastChannel | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+      broadcastRef.current = new BroadcastChannel(MM_CHANNEL);
+    }
+    return () => { broadcastRef.current?.close(); };
+  }, []);
+
+  const broadcast = useCallback((msg: MMBroadcast) => {
+    try { broadcastRef.current?.postMessage(msg); } catch {}
+  }, []);
 
   useEffect(() => { fillBotsRef.current = fillBots; }, [fillBots]);
   useEffect(() => { instantBotRef.current = instantBot; }, [instantBot]);
@@ -167,6 +192,16 @@ export function MatchmakingProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(id);
   }, [lobbyFull, allReady, lobbyFullAt]);
 
+  // Broadcast a full state snapshot to other tabs after any WS event
+  const broadcastState = useCallback(() => {
+    // Use setTimeout(0) so state setters have flushed
+    setTimeout(() => {
+      try {
+        broadcastRef.current?.postMessage({ type: "state_sync" });
+      } catch {}
+    }, 50);
+  }, []);
+
   const handleMessage = useCallback((msg: WSMessage) => {
     switch (msg.type) {
       // Legacy
@@ -186,6 +221,7 @@ export function MatchmakingProvider({ children }: { children: ReactNode }) {
         setVoiceToken(null);
         setVoiceUrl(null);
         saveQueueSession(null);
+        broadcast({ type: "match_found", matchId: msg.match_id as string });
         break;
       case "active_match_exists":
         setActiveMatchId(msg.match_id as string);
@@ -318,7 +354,11 @@ export function MatchmakingProvider({ children }: { children: ReactNode }) {
         setVoiceUrl(msg.url as string);
         break;
     }
-  }, []);
+    // Broadcast state change to other tabs (skip chat and pong)
+    if (msg.type !== "lobby_chat_message" && msg.type !== "voice_token") {
+      broadcastState();
+    }
+  }, [broadcastState]);
 
   const connectToQueue = useCallback(async (slug: string | null, fb: boolean, ib: boolean, joinedAt: number) => {
     const token = getAccessToken();
@@ -368,7 +408,8 @@ export function MatchmakingProvider({ children }: { children: ReactNode }) {
       lobbyId: null,
     });
     connectToQueue(modeSlug, fillBotsRef.current, instantBotRef.current, now);
-  }, [connectToQueue]);
+    broadcast({ type: "joined", gameModeSlug: modeSlug });
+  }, [connectToQueue, broadcast]);
 
   const leaveQueue = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -386,7 +427,8 @@ export function MatchmakingProvider({ children }: { children: ReactNode }) {
     setVoiceToken(null);
     setVoiceUrl(null);
     saveQueueSession(null);
-  }, []);
+    broadcast({ type: "left" });
+  }, [broadcast]);
 
   const setReady = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -402,23 +444,156 @@ export function MatchmakingProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Auto-reconnect from session on mount
+  // Auto-reconnect on mount: API is source of truth; localStorage is a fast same-browser cache.
   useEffect(() => {
-    const session = loadQueueSession();
-    if (session) {
-      setFillBots(session.fillBots);
-      setInstantBot(session.instantBot);
-      setGameModeSlug(session.gameModeSlug);
-      if (session.lobbyId) {
-        setLobbyId(session.lobbyId);
+    let cancelled = false;
+
+    const init = async () => {
+      const token = getAccessToken();
+
+      // Fast path: try localStorage first so we can start connecting immediately
+      const localSession = loadQueueSession();
+
+      if (token) {
+        try {
+          const status = await getMatchmakingStatus(token);
+
+          if (cancelled) return;
+
+          if (status.state === "in_match" && status.match_id) {
+            setActiveMatchId(status.match_id);
+            setMatchId(status.match_id);
+            saveQueueSession(null);
+            return;
+          }
+
+          if (status.state === "in_lobby" || status.state === "in_queue") {
+            const slug = status.game_mode_slug ?? null;
+            const joinedAt = status.joined_at
+              ? new Date(status.joined_at).getTime()
+              : (localSession?.joinedAt ?? Date.now());
+            const fb = localSession?.fillBots ?? true;
+            const ib = localSession?.instantBot ?? false;
+
+            setGameModeSlug(slug);
+            setFillBots(fb);
+            setInstantBot(ib);
+
+            if (status.state === "in_lobby") {
+              const lid = status.lobby_id ?? localSession?.lobbyId ?? null;
+              if (lid) setLobbyId(lid);
+              if (status.players) {
+                setLobbyPlayers(status.players.map(p => ({ ...p, is_banned: false })));
+                setPlayersInQueue(status.players.length);
+              }
+              if (status.max_players) setLobbyMaxPlayers(status.max_players);
+            }
+
+            if (!wsRef.current) {
+              connectToQueue(slug, fb, ib, joinedAt);
+            }
+            return;
+          }
+
+          // state === "idle" — nothing to restore
+          saveQueueSession(null);
+          return;
+        } catch {
+          // API unavailable — fall through to localStorage
+        }
       }
-      connectToQueue(session.gameModeSlug, session.fillBots, session.instantBot, session.joinedAt);
-    }
+
+      // Fallback: same-browser localStorage session (no token or API error)
+      if (localSession && !cancelled) {
+        setFillBots(localSession.fillBots);
+        setInstantBot(localSession.instantBot);
+        setGameModeSlug(localSession.gameModeSlug);
+        if (localSession.lobbyId) setLobbyId(localSession.lobbyId);
+        connectToQueue(
+          localSession.gameModeSlug,
+          localSession.fillBots,
+          localSession.instantBot,
+          localSession.joinedAt,
+        );
+      }
+    };
+
+    init();
+
     return () => {
+      cancelled = true;
       wsRef.current?.close();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Cross-tab sync: when another tab broadcasts a state change, re-fetch status from API
+  useEffect(() => {
+    const ch = broadcastRef.current;
+    if (!ch) return;
+    const handler = async (event: MessageEvent) => {
+      const data = event.data as MMBroadcast;
+      if (data.type === "match_found" && data.matchId) {
+        setActiveMatchId(data.matchId);
+        setMatchId(data.matchId);
+        setInQueue(false);
+        setLobbyId(null);
+        setLobbyPlayers([]);
+        saveQueueSession(null);
+        return;
+      }
+      if (data.type === "left") {
+        // Other tab left queue — if we have our own WS, close it too
+        if (wsRef.current) {
+          wsRef.current.close();
+          wsRef.current = null;
+        }
+        setInQueue(false);
+        setLobbyId(null);
+        setLobbyPlayers([]);
+        setLobbyFull(false);
+        setAllReady(false);
+        setLobbyFullAt(null);
+        saveQueueSession(null);
+        return;
+      }
+      // For "joined" or "lobby_update" or "state_sync" — re-fetch from API
+      const token = getAccessToken();
+      if (!token) return;
+      try {
+        const status = await getMatchmakingStatus(token);
+        if (status.state === "in_match" && status.match_id) {
+          setActiveMatchId(status.match_id);
+          setMatchId(status.match_id);
+          setInQueue(false);
+          saveQueueSession(null);
+        } else if (status.state === "in_lobby" || status.state === "in_queue") {
+          setInQueue(true);
+          setGameModeSlug(status.game_mode_slug ?? null);
+          if (status.state === "in_lobby") {
+            if (status.lobby_id) setLobbyId(status.lobby_id);
+            if (status.players) {
+              setLobbyPlayers(status.players.map(p => ({ ...p, is_banned: false })));
+              setPlayersInQueue(status.players.length);
+            }
+            if (status.max_players) setLobbyMaxPlayers(status.max_players);
+          }
+          // Connect WS if not connected
+          if (!wsRef.current) {
+            connectToQueue(status.game_mode_slug ?? null, fillBotsRef.current, instantBotRef.current, Date.now());
+          }
+        } else {
+          setInQueue(false);
+          setLobbyId(null);
+          setLobbyPlayers([]);
+          saveQueueSession(null);
+        }
+      } catch {
+        // API unavailable — ignore
+      }
+    };
+    ch.onmessage = handler;
+  }, [connectToQueue]);
 
   const value: MatchmakingContextValue = {
     inQueue, playersInQueue, matchId, activeMatchId, queueSeconds, gameModeSlug,

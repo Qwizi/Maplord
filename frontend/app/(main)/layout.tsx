@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -42,7 +42,10 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/useAuth";
 import { MatchmakingProvider, useMatchmaking } from "@/hooks/useMatchmaking";
 import { useSystemModules } from "@/hooks/useSystemModules";
-import { getMyWallet, getFriends, type WalletOut, type FriendshipOut, type FriendUser } from "@/lib/api";
+import { type WalletOut, type FriendshipOut, type FriendUser } from "@/lib/api";
+import { useQueryClient } from "@tanstack/react-query";
+import { useMyWallet, useOnlineStats, useFriends } from "@/hooks/queries";
+import { queryKeys } from "@/lib/queryKeys";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useAudio } from "@/hooks/useAudio";
@@ -311,7 +314,7 @@ function SidebarItem({
         className={cn(
           "flex items-center justify-center py-2.5 mx-1 rounded-lg transition-colors",
           active
-            ? "bg-primary/10 text-primary"
+            ? "bg-primary/10 text-primary shadow-[0_0_8px_oklch(0.8_0.15_85/0.15)]"
             : "text-muted-foreground hover:text-foreground hover:bg-muted"
         )}
       >
@@ -328,7 +331,7 @@ function SidebarItem({
       className={cn(
         "flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-colors rounded-lg mx-2",
         active
-          ? "bg-primary/10 text-primary"
+          ? "bg-primary/10 text-primary shadow-[inset_2px_0_0_var(--primary),0_0_8px_oklch(0.8_0.15_85/0.15)]"
           : "text-muted-foreground hover:text-foreground hover:bg-muted"
       )}
     >
@@ -704,41 +707,26 @@ const FRIENDS_REFRESH_INTERVAL = 15_000;
 
 function SidebarFriendsPanel({
   collapsed,
-  token,
   currentUserId,
 }: {
   collapsed: boolean;
-  token: string | null;
   currentUserId: string | undefined;
 }) {
   const { openDMTab: sidebarOpenDM } = useChat();
-  const [friends, setFriends] = useState<FriendUser[]>([]);
+  const { data: friendsData } = useFriends(100, undefined, { refetchInterval: FRIENDS_REFRESH_INTERVAL });
 
-  useEffect(() => {
-    if (!token) return;
-
-    const load = () => {
-      getFriends(token, 100, 0)
-        .then((res) => {
-          const resolved = res.items.map((f: FriendshipOut) =>
-            f.from_user.id === currentUserId ? f.to_user : f.from_user
-          );
-          // Online friends first
-          resolved.sort((a, b) => {
-            const order = { in_game: 0, in_queue: 1, online: 2, offline: 3 };
-            return (order[a.activity_status as keyof typeof order] ?? 3) - (order[b.activity_status as keyof typeof order] ?? 3);
-          });
-          setFriends(resolved);
-        })
-        .catch(() => {
-          // Silently ignore — friends panel is non-critical
-        });
-    };
-
-    load();
-    const id = setInterval(load, FRIENDS_REFRESH_INTERVAL);
-    return () => clearInterval(id);
-  }, [token, currentUserId]);
+  const friends = useMemo<FriendUser[]>(() => {
+    if (!friendsData) return [];
+    const resolved = friendsData.items.map((f: FriendshipOut) =>
+      f.from_user.id === currentUserId ? f.to_user : f.from_user
+    );
+    // Online friends first
+    resolved.sort((a, b) => {
+      const order = { in_game: 0, in_queue: 1, online: 2, offline: 3 };
+      return (order[a.activity_status as keyof typeof order] ?? 3) - (order[b.activity_status as keyof typeof order] ?? 3);
+    });
+    return resolved;
+  }, [friendsData, currentUserId]);
 
   const count = friends.length;
   const visible = friends.slice(0, FRIENDS_MAX_VISIBLE);
@@ -1087,9 +1075,10 @@ export default function MainLayout({ children }: { children: ReactNode }) {
 
 function MainLayoutInner({ children }: { children: ReactNode }) {
   const { user, logout, token } = useAuth();
+  const queryClient = useQueryClient();
   const { inQueue: showQueueSubheader, joinQueue } = useMatchmaking();
   const pathname = usePathname();
-  const [wallet, setWallet] = useState<WalletOut | null>(null);
+  const { data: wallet } = useMyWallet();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -1109,6 +1098,17 @@ function MainLayoutInner({ children }: { children: ReactNode }) {
       if (seenNotifIdsRef.current.size > 50) {
         const arr = [...seenNotifIdsRef.current];
         seenNotifIdsRef.current = new Set(arr.slice(-25));
+      }
+      // Invalidate notification cache on any new notification
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
+      // Invalidate friend-related queries on friend events
+      if (notif.type === "friend_request_received" || notif.type === "friend_request_accepted") {
+        queryClient.invalidateQueries({ queryKey: queryKeys.friends.all });
+      }
+      // Invalidate match queries on match outcome notifications
+      if (["match_won", "match_lost", "player_eliminated"].includes(notif.type)) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.matches.all });
+        queryClient.invalidateQueries({ queryKey: queryKeys.auth.me() });
       }
       if (notif.type === "game_invite" && notif.data.lobby_id) {
         toast(notif.title, {
@@ -1142,8 +1142,11 @@ function MainLayoutInner({ children }: { children: ReactNode }) {
   useEffect(() => {
     return social.onDirectMessage((msg) => {
       addDMTabSilent(msg.sender.id, msg.sender.username);
+      queryClient.invalidateQueries({ queryKey: queryKeys.messages.conversations() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.messages.thread(msg.sender.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.messages.unreadCount() });
     });
-  }, [social.onDirectMessage, addDMTabSilent]);
+  }, [social.onDirectMessage, addDMTabSilent, queryClient]);
 
   // ── Menu background music ──────────────────────────────────
   const { startMenuMusic, stopMenuMusic, toggleMute, muted } = useAudio();
@@ -1168,17 +1171,8 @@ function MainLayoutInner({ children }: { children: ReactNode }) {
   }, [startMenuMusic, stopMenuMusic]);
 
   // ── Online stats ──────────────────────────────────────────
-  const [onlineStats, setOnlineStats] = useState<{ online: number; in_queue: number; in_game: number } | null>(null);
-  useEffect(() => {
-    const load = () => {
-      import("@/lib/api").then(({ getOnlineStats }) =>
-        getOnlineStats().then(setOnlineStats).catch(() => {})
-      );
-    };
-    load();
-    const id = setInterval(load, 15_000);
-    return () => clearInterval(id);
-  }, []);
+  const { data: onlineStats } = useOnlineStats({ refetchInterval: 15_000 });
+  const stats = onlineStats ?? { online: 0, in_queue: 0, in_game: 0 };
 
   const toggleCollapsed = () => {
     setCollapsed((prev) => {
@@ -1187,15 +1181,6 @@ function MainLayoutInner({ children }: { children: ReactNode }) {
       return next;
     });
   };
-
-  useEffect(() => {
-    if (!token) return;
-    getMyWallet(token)
-      .then(setWallet)
-      .catch(() => {
-        // Wallet not available — silently ignore
-      });
-  }, [token]);
 
   const sidebarWidth = collapsed ? "w-14" : "w-56";
   const contentPadding = collapsed ? "md:pl-14" : "md:pl-56";
@@ -1223,29 +1208,27 @@ function MainLayoutInner({ children }: { children: ReactNode }) {
           </Link>
 
           {/* Online stats */}
-          {onlineStats && (
-            <div className="hidden md:flex items-center gap-3 text-[11px] tabular-nums text-muted-foreground">
+          <div className="hidden md:flex items-center gap-3 text-[11px] tabular-nums text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+              <span className="font-medium">{stats.online}</span>
+              <span className="text-muted-foreground/60">online</span>
+            </span>
+            {stats.in_game > 0 && (
               <span className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                <span className="font-medium">{onlineStats.online}</span>
-                <span className="text-muted-foreground/60">online</span>
+                <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+                <span className="font-medium">{stats.in_game}</span>
+                <span className="text-muted-foreground/60">w grze</span>
               </span>
-              {onlineStats.in_game > 0 && (
-                <span className="flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-                  <span className="font-medium">{onlineStats.in_game}</span>
-                  <span className="text-muted-foreground/60">w grze</span>
-                </span>
-              )}
-              {onlineStats.in_queue > 0 && (
-                <span className="flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-yellow-500" />
-                  <span className="font-medium">{onlineStats.in_queue}</span>
-                  <span className="text-muted-foreground/60">szuka</span>
-                </span>
-              )}
-            </div>
-          )}
+            )}
+            {stats.in_queue > 0 && (
+              <span className="flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-yellow-500" />
+                <span className="font-medium">{stats.in_queue}</span>
+                <span className="text-muted-foreground/60">szuka</span>
+              </span>
+            )}
+          </div>
 
           <div className="flex-1" />
 
@@ -1289,7 +1272,7 @@ function MainLayoutInner({ children }: { children: ReactNode }) {
             <div className="border-b border-border">
               {/* Avatar + name */}
               <div className={cn(collapsed ? "px-1 pt-2.5 pb-1.5" : "px-2 pt-3 pb-1.5")}>
-                <ProfilePopover user={user} wallet={wallet} collapsed={collapsed} onLogout={logout} />
+                <ProfilePopover user={user} wallet={wallet ?? null} collapsed={collapsed} onLogout={logout} />
               </div>
               {/* Stats */}
               {!collapsed && (
@@ -1329,7 +1312,6 @@ function MainLayoutInner({ children }: { children: ReactNode }) {
           {/* Friends panel */}
           <SidebarFriendsPanel
             collapsed={collapsed}
-            token={token}
             currentUserId={user?.id}
           />
 

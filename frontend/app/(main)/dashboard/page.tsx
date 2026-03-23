@@ -3,7 +3,7 @@
 import { useAuth } from "@/hooks/useAuth";
 import { useMatchmaking } from "@/hooks/useMatchmaking";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { gsap } from "gsap";
 import { useGSAP } from "@gsap/react";
 import Link from "next/link";
@@ -13,12 +13,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import {
-  getMyMatches,
-  getConfig,
-  getMyDecks,
   startTutorial,
-  getFriends,
-  getReceivedRequests,
   inviteFriendToGame,
   type Match,
   type GameModeListItem,
@@ -26,6 +21,7 @@ import {
   type FriendshipOut,
   type FriendUser,
 } from "@/lib/api";
+import { useConfig, useMyMatches, useMyDecks, useFriends, useReceivedRequests } from "@/hooks/queries";
 import { useChat } from "@/hooks/useChat";
 
 function activityDot(status: string): string {
@@ -78,6 +74,8 @@ import {
 } from "lucide-react";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { toast } from "sonner";
+import { DashboardSkeleton } from "@/components/skeletons/DashboardSkeleton";
+import { countUp } from "@/lib/animations";
 
 const MODE_ICONS: Record<string, typeof Users> = {
   "standard-1v1": Swords,
@@ -88,7 +86,7 @@ const MODE_ICONS: Record<string, typeof Users> = {
 };
 
 export default function DashboardPage() {
-  const { user, loading: authLoading, refreshUser, token } = useAuth();
+  const { user, loading: authLoading, token } = useAuth();
   const {
     inQueue, playersInQueue, matchId, activeMatchId, queueSeconds,
     fillBots, setFillBots, instantBot, setInstantBot, joinQueue, leaveQueue,
@@ -98,14 +96,29 @@ export default function DashboardPage() {
   const { showPrompt, subscribe, dismiss } = usePushNotifications(true);
   const { openDMTab } = useChat();
 
-  const [recentMatches, setRecentMatches] = useState<Match[]>([]);
-  const [gameModes, setGameModes] = useState<GameModeListItem[]>([]);
   const [selectedMode, setSelectedMode] = useState<string | null>(null);
-  const [decks, setDecks] = useState<DeckOut[]>([]);
   const [selectedDeckId, setSelectedDeckId] = useState<string | null>(null);
   const [tutorialLoading, setTutorialLoading] = useState(false);
-  const [friends, setFriends] = useState<FriendshipOut[]>([]);
-  const [pendingCount, setPendingCount] = useState(0);
+
+  const { data: configData } = useConfig();
+  const { data: matchesData } = useMyMatches(5, undefined, { refetchInterval: 10_000 });
+  const { data: decksData } = useMyDecks();
+  const { data: friendsData } = useFriends(100, undefined, { refetchInterval: 15_000 });
+  const { data: receivedData } = useReceivedRequests(1, undefined, { refetchInterval: 15_000 });
+
+  const gameModes = useMemo<GameModeListItem[]>(() => configData?.game_modes ?? [], [configData]);
+  const recentMatches = useMemo<Match[]>(() => matchesData?.items ?? [], [matchesData]);
+  const decks = useMemo<DeckOut[]>(() => decksData?.items ?? [], [decksData]);
+  const friends = useMemo<FriendshipOut[]>(() => {
+    const items = friendsData?.items ?? [];
+    return [...items].sort((a, b) => {
+      const order: Record<string, number> = { in_game: 0, in_queue: 1, online: 2, offline: 3 };
+      const friendA = a.from_user.id === user?.id ? a.to_user : a.from_user;
+      const friendB = b.from_user.id === user?.id ? b.to_user : b.from_user;
+      return (order[friendA.activity_status] ?? 3) - (order[friendB.activity_status] ?? 3);
+    });
+  }, [friendsData, user?.id]);
+  const pendingCount = receivedData?.count ?? 0;
 
   const activeMatch = recentMatches.find(
     (m) =>
@@ -118,53 +131,20 @@ export default function DashboardPage() {
   }, [user, authLoading, router]);
 
   useEffect(() => {
-    if (!token) return;
-    const load = () => {
-      refreshUser().catch(() => {});
-      getMyMatches(token, 5).then((r) => setRecentMatches(r.items)).catch(() => {});
-    };
-    load();
-    const id = setInterval(load, 10_000);
-    return () => clearInterval(id);
-  }, [token, refreshUser]);
-
-  useEffect(() => {
-    Promise.all([getConfig(), loadAssetOverrides()])
-      .then(([cfg]) => {
-        setGameModes(cfg.game_modes);
-        const def = cfg.game_modes.find((m) => m.is_default);
-        if (def) setSelectedMode((p) => p ?? def.slug);
-      })
-      .catch(() => {});
+    loadAssetOverrides().catch(() => {});
   }, []);
 
   useEffect(() => {
-    if (!token) return;
-    getMyDecks(token).then((r) => {
-      setDecks(r.items);
-      const def = r.items.find((d) => d.is_default);
-      if (def) setSelectedDeckId((p) => p ?? def.id);
-    }).catch(() => {});
-  }, [token]);
+    if (gameModes.length > 0) {
+      setSelectedMode((prev) => prev ?? gameModes.find((m) => m.is_default)?.slug ?? null);
+    }
+  }, [gameModes]);
 
   useEffect(() => {
-    if (!token) return;
-    const load = () => {
-      getFriends(token, 100).then((r) => {
-        const sorted = [...r.items].sort((a, b) => {
-          const order = { in_game: 0, in_queue: 1, online: 2, offline: 3 };
-          const friendA = a.from_user.id === user?.id ? a.to_user : a.from_user;
-          const friendB = b.from_user.id === user?.id ? b.to_user : b.from_user;
-          return (order[friendA.activity_status as keyof typeof order] ?? 3) - (order[friendB.activity_status as keyof typeof order] ?? 3);
-        });
-        setFriends(sorted);
-      }).catch(() => {});
-      getReceivedRequests(token, 1).then((r) => setPendingCount(r.count)).catch(() => {});
-    };
-    load();
-    const id = setInterval(load, 15_000);
-    return () => clearInterval(id);
-  }, [token, user?.id]);
+    if (decks.length > 0) {
+      setSelectedDeckId((prev) => prev ?? decks.find((d) => d.is_default)?.id ?? null);
+    }
+  }, [decks]);
 
   useEffect(() => { if (matchId) router.push(`/game/${matchId}`); }, [matchId, router]);
   useEffect(() => { if (activeMatchId) router.push(`/game/${activeMatchId}`); }, [activeMatchId, router]);
@@ -190,54 +170,21 @@ export default function DashboardPage() {
   useGSAP(() => {
     if (!containerRef.current || !user) return;
 
-    gsap.fromTo("[data-animate='stat']",
-      { y: 24, opacity: 0 },
-      { y: 0, opacity: 1, duration: 0.5, stagger: 0.1, ease: "power2.out" }
-    );
-
     containerRef.current.querySelectorAll("[data-counter]").forEach((el) => {
       const target = parseInt(el.getAttribute("data-counter") || "0", 10);
-      const obj = { val: 0 };
-      gsap.to(obj, {
-        val: target,
-        duration: 1.2,
-        ease: "power2.out",
-        onUpdate: () => {
-          el.textContent = Math.round(obj.val).toString() + (el.getAttribute("data-suffix") || "");
-        },
-      });
+      const suffix = el.getAttribute("data-suffix") || "";
+      countUp(el as HTMLElement, target, { suffix });
     });
-
-    gsap.fromTo("[data-animate='shortcut']",
-      { y: 16, opacity: 0 },
-      { y: 0, opacity: 1, duration: 0.4, stagger: 0.08, delay: 0.3, ease: "power2.out" }
-    );
-
-    gsap.fromTo("[data-animate='main-card']",
-      { y: 30, opacity: 0 },
-      { y: 0, opacity: 1, duration: 0.6, delay: 0.2, ease: "power2.out" }
-    );
-
-    if (containerRef.current.querySelector("[data-animate='table-row']")) {
-      gsap.fromTo("[data-animate='table-row']",
-        { x: -16, opacity: 0 },
-        { x: 0, opacity: 1, duration: 0.3, stagger: 0.06, delay: 0.5, ease: "power2.out" }
-      );
-    }
   }, { scope: containerRef, dependencies: [mountId, !!user, recentMatches.length] });
 
   if (authLoading || !user) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   const botMode = instantBot ? 2 : fillBots ? 1 : 0;
 
   return (
-    <div ref={containerRef} className="space-y-3 md:space-y-6 -mx-4 md:mx-0 -mt-2 md:mt-0">
+    <div ref={containerRef} className="animate-page-in space-y-3 md:space-y-6 -mx-4 md:mx-0 -mt-2 md:mt-0">
 
       {/* ═══ PUSH NOTIFICATION PROMPT ═══ */}
       {showPrompt && (
@@ -273,7 +220,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ═══ STATS — horizontal scroll on mobile, grid on desktop ═══ */}
-      <div className="flex gap-3 overflow-x-auto px-4 pb-1 md:px-0 md:grid md:grid-cols-4 md:gap-3 md:overflow-visible scrollbar-none [-ms-overflow-style:none] [scrollbar-width:none]">
+      <div className="animate-stagger flex gap-3 overflow-x-auto px-4 pb-1 md:px-0 md:grid md:grid-cols-4 md:gap-3 md:overflow-visible scrollbar-none [-ms-overflow-style:none] [scrollbar-width:none]">
         {[
           { icon: Trophy, label: "ELO", value: user.elo_rating, color: "text-accent", desktopIcon: "md:text-accent", key: "elo" },
           { icon: Crown, label: "Win Rate", value: winRate, suffix: "%", color: "text-foreground", desktopIcon: "md:text-primary", key: "wr" },
@@ -282,8 +229,7 @@ export default function DashboardPage() {
         ].map((s) => (
           <div
             key={s.key}
-            data-animate="stat"
-            className="flex shrink-0 items-center gap-3 rounded-2xl bg-card/60 md:bg-card border border-transparent md:border-border px-4 py-3 md:px-4 md:py-3.5 md:flex-col md:items-start md:gap-1.5 min-w-[140px] md:min-w-0"
+            className="flex shrink-0 items-center gap-3 rounded-2xl bg-card/60 md:bg-card border border-transparent md:border-border px-4 py-3 md:px-4 md:py-3.5 md:flex-col md:items-start md:gap-1.5 min-w-[140px] md:min-w-0 hover-lift"
           >
             <div className="flex items-center gap-2 md:gap-2">
               <s.icon className={`h-4 w-4 text-muted-foreground ${s.desktopIcon}`} />
@@ -323,7 +269,7 @@ export default function DashboardPage() {
           <div className="md:col-span-2 md:space-y-6">
 
           {/* Mode selector — Card on desktop */}
-          <div className={`px-4 md:px-0 ${inQueue ? "opacity-50 pointer-events-none" : ""}`} data-animate="main-card">
+          <div className={`px-4 md:px-0 ${inQueue ? "opacity-50 pointer-events-none" : ""}`}>
             <Card className="hidden md:block rounded-2xl">
               <CardContent className="p-5">
                 <p className="mb-3 text-sm uppercase tracking-[0.2em] text-muted-foreground font-medium">Tryb gry</p>
@@ -379,7 +325,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Deck + Preview + Bots + CTA — Card on desktop, flat on mobile */}
-          <div className="px-4 md:px-0" data-animate="main-card">
+          <div className="px-4 md:px-0">
             <Card className="hidden md:block rounded-2xl">
               <CardContent className="p-5 space-y-5">
                 {/* Deck selector */}
@@ -610,7 +556,7 @@ export default function DashboardPage() {
           </div>{/* end col-span-2 */}
 
           {/* Friends side panel — desktop only (col-span-1, full height) */}
-          <div className="hidden md:flex md:col-span-1 md:flex-col" data-animate="main-card">
+          <div className="hidden md:flex md:col-span-1 md:flex-col">
             <Card className="rounded-2xl flex-1 flex flex-col overflow-hidden">
               <CardContent className="p-5 flex-1 flex flex-col min-h-0">
                 {/* Header — always visible */}
@@ -785,7 +731,6 @@ export default function DashboardPage() {
           <Link
             key={item.href}
             href={item.href}
-            data-animate="shortcut"
             className="group flex flex-col items-center gap-1.5 rounded-2xl bg-card/60 md:bg-card border border-transparent md:border-border p-3 md:flex-row md:items-center md:gap-3 md:px-4 md:py-3.5 transition-all hover:bg-muted hover:border-border/60 active:scale-[0.97]"
           >
             <div className="md:flex md:h-9 md:w-9 md:shrink-0 md:items-center md:justify-center md:rounded-lg md:bg-secondary">
@@ -874,7 +819,7 @@ export default function DashboardPage() {
           <p className="text-[11px] md:text-sm uppercase tracking-[0.18em] md:tracking-[0.2em] text-muted-foreground font-medium mb-2.5 md:mb-0">Ostatnie mecze</p>
 
           {/* Mobile list */}
-          <div className="md:hidden space-y-1">
+          <div className="animate-list-in md:hidden space-y-1">
             {recentMatches.slice(0, 5).map((match) => {
               const isActive = match.status === "in_progress" || match.status === "selecting";
               const isWinner = match.winner_id === user.id;
@@ -888,8 +833,7 @@ export default function DashboardPage() {
               return (
                 <button
                   key={match.id}
-                  data-animate="table-row"
-                  className="flex w-full items-center gap-3 rounded-xl py-3 px-1 text-left transition-all active:bg-muted/50"
+                  className="flex w-full items-center gap-3 rounded-xl py-3 px-1 text-left transition-all active:bg-muted/50 hover-lift"
                   onClick={() => router.push(isActive ? `/game/${match.id}` : `/match/${match.id}`)}
                 >
                   {/* Color dots */}
@@ -961,8 +905,7 @@ export default function DashboardPage() {
                   return (
                     <TableRow
                       key={match.id}
-                      data-animate="table-row"
-                      className="cursor-pointer hover:bg-muted/50"
+                          className="cursor-pointer hover:bg-muted/50 hover-lift"
                       onClick={() => router.push(isActive ? `/game/${match.id}` : `/match/${match.id}`)}
                     >
                       <TableCell className="pl-6 py-5">

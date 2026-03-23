@@ -23,6 +23,7 @@ import {
   setTokens,
   clearTokens,
 } from "@/lib/auth";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface AuthContextType {
   user: User | null;
@@ -43,6 +44,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -111,6 +113,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [loadUser]);
 
+  // Cross-tab auth sync: detect login/logout in other tabs via localStorage changes
+  useEffect(() => {
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key !== "maplord_access") return;
+      if (e.newValue) {
+        // Another tab logged in — load user with the new token
+        loadUser(e.newValue);
+      } else {
+        // Another tab logged out — clear local state
+        setUser(null);
+        setToken(null);
+        setIsBanned(false);
+        queryClient.clear();
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, [loadUser, queryClient]);
+
   const login = async (email: string, password: string) => {
     const tokens = await apiLogin(email, password);
     setTokens(tokens.access, tokens.refresh);
@@ -150,6 +171,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setToken(null);
     setIsBanned(false);
+    queryClient.clear();
   };
 
   const refreshUser = useCallback(async () => {

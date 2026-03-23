@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -24,13 +24,14 @@ import { useAuth } from "@/hooks/useAuth";
 import { useModuleConfig } from "@/hooks/useSystemModules";
 import { ModuleDisabledPage } from "@/components/ModuleGate";
 import ItemIcon from "@/components/ui/ItemIcon";
+import { type DeckOut } from "@/lib/api";
 import {
-  createDeck,
-  deleteDeck,
-  getMyDecks,
-  setDefaultDeck,
-  type DeckOut,
-} from "@/lib/api";
+  useMyDecks,
+  useCreateDeck,
+  useDeleteDeck,
+  useSetDefaultDeck,
+} from "@/hooks/queries";
+import { DecksSkeleton } from "@/components/skeletons/DecksSkeleton";
 
 export default function DecksPage() {
   const { enabled } = useModuleConfig("cosmetics");
@@ -39,77 +40,60 @@ export default function DecksPage() {
 }
 
 function DecksContent() {
-  const { user, loading: authLoading, token } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  const [decks, setDecks] = useState<DeckOut[]>([]);
-  const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [newDeckName, setNewDeckName] = useState("");
-  const [saving, setSaving] = useState(false);
+
+  const { data: decksData, isLoading: loading } = useMyDecks();
+  const createMutation = useCreateDeck();
+  const deleteMutation = useDeleteDeck();
+  const setDefaultMutation = useSetDefaultDeck();
+
+  const decks: DeckOut[] = decksData?.items ?? [];
 
   useEffect(() => {
     if (!authLoading && !user) router.replace("/login");
   }, [user, authLoading, router]);
 
-  const loadData = useCallback(async () => {
-    if (!token) return;
-    try {
-      const decksRes = await getMyDecks(token);
-      setDecks(decksRes.items);
-    } catch {
-      toast.error("Nie udało się załadować talii");
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
   const handleCreate = async () => {
-    if (!token || !newDeckName.trim()) return;
-    setSaving(true);
+    if (!newDeckName.trim()) return;
     try {
-      const deck = await createDeck(token, { name: newDeckName.trim() });
+      const deck = await createMutation.mutateAsync({ name: newDeckName.trim() });
       toast.success("Talia utworzona");
       setNewDeckName("");
       setCreating(false);
       router.push(`/decks/${deck.id}`);
     } catch {
       toast.error("Nie udało się utworzyć talii");
-    } finally {
-      setSaving(false);
     }
   };
 
   const handleDelete = async (deckId: string) => {
-    if (!token) return;
     try {
-      await deleteDeck(token, deckId);
+      await deleteMutation.mutateAsync(deckId);
       toast.success("Talia usunięta");
-      await loadData();
     } catch {
       toast.error("Nie udało się usunąć talii");
     }
   };
 
   const handleSetDefault = async (deckId: string) => {
-    if (!token) return;
     try {
-      await setDefaultDeck(token, deckId);
+      await setDefaultMutation.mutateAsync(deckId);
       toast.success("Domyślna talia ustawiona");
-      await loadData();
     } catch {
       toast.error("Nie udało się ustawić domyślnej talii");
     }
   };
 
-  if (authLoading || !user) return null;
+  const saving = createMutation.isPending;
+
+  if (authLoading || !user) return <DecksSkeleton />;
 
   return (
-    <div className="space-y-3 md:space-y-8 -mx-4 md:mx-0 -mt-2 md:mt-0">
+    <div className="animate-page-in space-y-3 md:space-y-8 -mx-4 md:mx-0 -mt-2 md:mt-0">
       {/* Header */}
       <div className="flex items-center justify-between px-4 md:px-0">
         <div>
@@ -166,9 +150,7 @@ function DecksContent() {
 
       {/* Deck list */}
       {loading ? (
-        <div className="px-4 md:px-0 py-10 text-center text-sm md:text-lg text-muted-foreground">
-          Ładowanie...
-        </div>
+        <DecksSkeleton />
       ) : decks.length === 0 ? (
         <div className="flex flex-col items-center gap-3 md:gap-5 px-4 md:px-0 py-12 md:py-16 text-center">
           <Layers className="h-12 w-12 md:h-16 md:w-16 text-muted-foreground/30" />
@@ -185,7 +167,7 @@ function DecksContent() {
                 <div
                   role="button"
                   tabIndex={0}
-                  className={`flex w-full items-center gap-3 rounded-xl py-3 px-1 text-left transition-all active:bg-muted/50 md:hidden cursor-pointer ${
+                  className={`hover-lift flex w-full items-center gap-3 rounded-xl py-3 px-1 text-left transition-all active:bg-muted/50 md:hidden cursor-pointer ${
                     deck.is_default ? "bg-accent/5" : ""
                   }`}
                   onClick={() => router.push(`/decks/${deck.id}`)}
@@ -235,7 +217,7 @@ function DecksContent() {
 
                 {/* Desktop: full card */}
                 <Card
-                  className={`hidden md:block rounded-2xl transition-all hover:border-border/60 ${
+                  className={`hover-lift hidden md:block rounded-2xl transition-all hover:border-border/60 ${
                     deck.is_default ? "border-accent/25" : ""
                   }`}
                 >

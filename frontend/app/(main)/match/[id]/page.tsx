@@ -1,16 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { gsap } from "gsap";
-import { useGSAP } from "@gsap/react";
 import { useAuth } from "@/hooks/useAuth";
-import { getMatch, getMatchResult, createShareLink, type Match, type MatchResult } from "@/lib/api";
+import { useMatch, useMatchResult } from "@/hooks/queries";
+import { createShareLink, type Match, type MatchResult } from "@/lib/api";
+import { requireToken } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { BannedBadge } from "@/components/ui/banned-badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   ArrowLeft,
@@ -22,7 +22,6 @@ import {
   MapPin,
   Shield,
   Skull,
-  Star,
   Swords,
   Users,
   Hammer,
@@ -33,6 +32,7 @@ import {
   Check,
   Zap,
 } from "lucide-react";
+import { MatchDetailSkeleton } from "@/components/skeletons/MatchDetailSkeleton";
 import { toast } from "sonner";
 import dynamic from "next/dynamic";
 
@@ -65,50 +65,32 @@ function formatDate(dateStr: string): string {
 
 export default function MatchDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const { user, loading: authLoading, token } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
-  const [match, setMatch] = useState<Match | null>(null);
-  const [result, setResult] = useState<MatchResult | null>(null);
-  const [loading, setLoading] = useState(true);
   const [shareLoading, setShareLoading] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
 
-  useGSAP(() => {
-    if (!containerRef.current || loading) return;
+  const { data: match, isLoading: matchLoading } = useMatch(id);
+  const { data: result } = useMatchResult(id);
 
-    gsap.fromTo("[data-animate='stat']", { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, stagger: 0.08, ease: "power2.out" });
-    gsap.fromTo("[data-animate='section']", { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, stagger: 0.1, delay: 0.2, ease: "power2.out" });
-  }, { scope: containerRef, dependencies: [loading] });
+  const loading = matchLoading || authLoading;
 
-  useEffect(() => {
-    if (authLoading) return;
-    if (!user || !token) { router.replace("/login"); return; }
-    Promise.all([
-      getMatch(token, id),
-      getMatchResult(token, id).catch(() => null),
-    ]).then(([matchData, resultData]) => {
-      setMatch(matchData);
-      setResult(resultData);
-      setLoading(false);
-    });
-  }, [authLoading, user, token, id, router]);
+  if (!authLoading && !user) {
+    router.replace("/login");
+    return null;
+  }
 
   if (loading || !match) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <MatchDetailSkeleton />;
   }
 
   const handleShare = async () => {
-    if (!token || !match) return;
+    if (!match) return;
     if (shareUrl) { setShareUrl(null); return; } // toggle
     setShareLoading(true);
     try {
-      const link = await createShareLink(token, "match_result", match.id);
+      const link = await createShareLink(requireToken(), "match_result", match.id);
       setShareUrl(`${window.location.origin}/share/${link.token}`);
     } catch {
       toast.error("Nie udało się utworzyć linku.");
@@ -133,7 +115,7 @@ export default function MatchDetailPage() {
   const durationMin = startDate && endDate ? Math.round((endDate.getTime() - startDate.getTime()) / 60000) : null;
 
   return (
-    <div ref={containerRef} className="space-y-3 md:space-y-8 -mx-4 md:mx-0 -mt-2 md:mt-0">
+    <div className="animate-page-in space-y-3 md:space-y-8 -mx-4 md:mx-0 -mt-2 md:mt-0">
       {/* Header */}
       <div className="px-4 md:px-0">
         <div className="flex items-center gap-2 mb-1 md:mb-2">
@@ -248,18 +230,18 @@ export default function MatchDetailPage() {
       </div>
 
       {/* Stats — horizontal scroll on mobile, grid on desktop */}
-      <div className="flex gap-2.5 overflow-x-auto px-4 pb-1 md:px-0 md:grid md:grid-cols-2 lg:grid-cols-4 md:gap-4 md:overflow-visible scrollbar-none [-ms-overflow-style:none] [scrollbar-width:none]">
-        <div data-animate="stat" className="flex shrink-0 items-center gap-2.5 rounded-2xl bg-card/60 md:bg-card border border-transparent md:border-border px-3.5 py-3 md:p-5 md:flex-col md:items-start md:gap-2 min-w-[120px] md:min-w-0">
+      <div className="animate-stagger flex gap-2.5 overflow-x-auto px-4 pb-1 md:px-0 md:grid md:grid-cols-2 lg:grid-cols-4 md:gap-4 md:overflow-visible scrollbar-none [-ms-overflow-style:none] [scrollbar-width:none]">
+        <div className="hover-lift flex shrink-0 items-center gap-2.5 rounded-2xl bg-card/60 md:bg-card border border-transparent md:border-border px-3.5 py-3 md:p-5 md:flex-col md:items-start md:gap-2 min-w-[120px] md:min-w-0">
           <Swords className="h-4 w-4 md:h-5 md:w-5 text-primary" />
           <span className="text-[10px] md:text-xs uppercase tracking-[0.15em] text-muted-foreground font-medium">Status</span>
           <span className={`font-display text-lg md:text-3xl ml-auto md:ml-0 ${status.color}`}>{status.label}</span>
         </div>
-        <div data-animate="stat" className="flex shrink-0 items-center gap-2.5 rounded-2xl bg-card/60 md:bg-card border border-transparent md:border-border px-3.5 py-3 md:p-5 md:flex-col md:items-start md:gap-2 min-w-[100px] md:min-w-0">
+        <div className="hover-lift flex shrink-0 items-center gap-2.5 rounded-2xl bg-card/60 md:bg-card border border-transparent md:border-border px-3.5 py-3 md:p-5 md:flex-col md:items-start md:gap-2 min-w-[100px] md:min-w-0">
           <Users className="h-4 w-4 md:h-5 md:w-5 text-primary" />
           <span className="text-[10px] md:text-xs uppercase tracking-[0.15em] text-muted-foreground font-medium">Gracze</span>
           <span className="font-display text-lg md:text-3xl text-foreground ml-auto md:ml-0">{match.players.length}/{match.max_players}</span>
         </div>
-        <div className="flex shrink-0 items-center gap-2.5 rounded-2xl bg-card/60 md:bg-card border border-transparent md:border-border px-3.5 py-3 md:p-5 md:flex-col md:items-start md:gap-2 min-w-[100px] md:min-w-0">
+        <div className="hover-lift flex shrink-0 items-center gap-2.5 rounded-2xl bg-card/60 md:bg-card border border-transparent md:border-border px-3.5 py-3 md:p-5 md:flex-col md:items-start md:gap-2 min-w-[100px] md:min-w-0">
           <Clock className="h-4 w-4 md:h-5 md:w-5 text-primary" />
           <span className="text-[10px] md:text-xs uppercase tracking-[0.15em] text-muted-foreground font-medium">Czas</span>
           <span className="font-display text-lg md:text-3xl text-foreground ml-auto md:ml-0">
@@ -267,7 +249,7 @@ export default function MatchDetailPage() {
           </span>
         </div>
         {winner && (
-          <div className="flex shrink-0 items-center gap-2.5 rounded-2xl bg-accent/5 md:bg-card border border-accent/20 md:border-accent/25 px-3.5 py-3 md:p-5 md:flex-col md:items-start md:gap-2 min-w-[120px] md:min-w-0">
+          <div className="hover-lift flex shrink-0 items-center gap-2.5 rounded-2xl bg-accent/5 md:bg-card border border-accent/20 md:border-accent/25 px-3.5 py-3 md:p-5 md:flex-col md:items-start md:gap-2 min-w-[120px] md:min-w-0">
             <Crown className="h-4 w-4 md:h-5 md:w-5 text-accent" />
             <span className="text-[10px] md:text-xs uppercase tracking-[0.15em] text-accent/70 font-medium">Zwycięzca</span>
             <span className="font-display text-lg md:text-3xl text-accent ml-auto md:ml-0">{winner.username}</span>
@@ -296,7 +278,7 @@ export default function MatchDetailPage() {
         const mvpPlayer = match.players.find((p) => p.user_id === mvp.user_id);
 
         return (
-          <div data-animate="section" className="px-4 md:px-0 space-y-3 md:space-y-4">
+          <div className="px-4 md:px-0 space-y-3 md:space-y-4">
             {/* MVP banner */}
             <div className="flex items-center gap-3 md:gap-4 rounded-2xl border border-accent/20 bg-accent/5 p-3 md:p-4">
               <div className="flex h-10 w-10 md:h-12 md:w-12 shrink-0 items-center justify-center rounded-xl bg-accent/15">
@@ -401,7 +383,7 @@ export default function MatchDetailPage() {
             return (
               <button
                 key={player.id}
-                className={`flex w-full items-center gap-3 rounded-xl p-3 text-left transition-all active:scale-[0.98] ${
+                className={`hover-lift flex w-full items-center gap-3 rounded-xl p-3 text-left transition-all active:scale-[0.98] ${
                   isWinner ? "bg-accent/5 border border-accent/15" : "bg-card/60 border border-transparent"
                 }`}
                 onClick={() => router.push(`/profile/${player.user_id}`)}
@@ -464,7 +446,7 @@ export default function MatchDetailPage() {
                 return (
                   <TableRow
                     key={player.id}
-                    className={`cursor-pointer ${
+                    className={`hover-lift cursor-pointer ${
                       isWinner ? "bg-accent/5 hover:bg-accent/10" : isMe ? "bg-primary/5 hover:bg-primary/10" : "hover:bg-muted/50"
                     }`}
                     onClick={() => router.push(`/profile/${player.user_id}`)}

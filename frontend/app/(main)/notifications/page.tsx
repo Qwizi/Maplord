@@ -1,18 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { gsap } from "gsap";
-import { useGSAP } from "@gsap/react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useSocialSocketContext } from "@/hooks/SocialSocketContext";
-import {
-  getNotifications,
-  markNotificationRead,
-  markAllNotificationsRead,
-  type NotificationOut,
-} from "@/lib/api";
+import { useNotifications, useMarkNotificationRead, useMarkAllNotificationsRead } from "@/hooks/queries";
+import { type NotificationOut } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -28,6 +22,7 @@ import {
   UserPlus,
   X,
 } from "lucide-react";
+import { NotificationsSkeleton } from "@/components/skeletons/NotificationsSkeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -111,65 +106,39 @@ function formatDate(dateStr: string): string {
 const PAGE_SIZE = 20;
 
 export default function NotificationsPage() {
-  const { user, loading: authLoading, token } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const { onNotification } = useSocialSocketContext();
-  const containerRef = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
 
-  const [notifications, setNotifications] = useState<NotificationOut[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
 
-  useGSAP(() => {
-    if (!containerRef.current || loading) return;
-    gsap.fromTo("[data-animate='row']", { x: -12, opacity: 0 }, { x: 0, opacity: 1, duration: 0.3, stagger: 0.04, ease: "power2.out" });
-    gsap.fromTo("[data-animate='section']", { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power2.out" });
-  }, { scope: containerRef, dependencies: [loading, page] });
+  const offset = (page - 1) * PAGE_SIZE;
+  const { data: notificationsData, isLoading: loading } = useNotifications(PAGE_SIZE, offset);
+  const markReadMutation = useMarkNotificationRead();
+  const markAllReadMutation = useMarkAllNotificationsRead();
+
+  const notifications = notificationsData?.items ?? [];
+  const total = notificationsData?.count ?? 0;
 
   useEffect(() => {
     if (!authLoading && !user) router.replace("/login");
   }, [user, authLoading, router]);
 
-  const loadPage = useCallback(async (p: number) => {
-    if (!token) return;
-    setLoading(true);
-    try {
-      const offset = (p - 1) * PAGE_SIZE;
-      const res = await getNotifications(token, PAGE_SIZE, offset);
-      setNotifications(res.items);
-      setTotal(res.count);
-    } catch {
-      toast.error("Nie udało się załadować powiadomień");
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
-
+  // Real-time: invalidate query when a new notification arrives
   useEffect(() => {
-    loadPage(page);
-  }, [loadPage, page]);
-
-  // Real-time: prepend new notifications
-  useEffect(() => {
-    return onNotification((notif) => {
-      if (page === 1) {
-        setNotifications((prev) => [notif, ...prev].slice(0, PAGE_SIZE));
-        setTotal((t) => t + 1);
-      }
+    return onNotification(() => {
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
     });
-  }, [onNotification, page]);
+  }, [onNotification, queryClient]);
 
   async function handleMarkRead(id: string) {
-    if (!token) return;
-    await markNotificationRead(token, id);
-    setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, is_read: true } : n));
+    await markReadMutation.mutateAsync(id);
+    toast.success("Oznaczono jako przeczytane");
   }
 
   async function handleMarkAllRead() {
-    if (!token) return;
-    await markAllNotificationsRead(token);
-    setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+    await markAllReadMutation.mutateAsync();
     toast.success("Wszystkie oznaczone jako przeczytane");
   }
 
@@ -184,10 +153,10 @@ export default function NotificationsPage() {
     );
   }
 
-  if (!user || !token) return null;
+  if (!user) return null;
 
   return (
-    <div ref={containerRef} className="space-y-3 md:space-y-6 -mx-4 md:mx-0 -mt-2 md:mt-0">
+    <div className="animate-page-in space-y-3 md:space-y-6 -mx-4 md:mx-0 -mt-2 md:mt-0">
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between gap-4 px-4 md:px-0">
@@ -230,11 +199,9 @@ export default function NotificationsPage() {
       )}
 
       {/* ── List ── */}
-      <div className="px-4 md:px-0" data-animate="section">
+      <div className="px-4 md:px-0">
         {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
+          <NotificationsSkeleton />
         ) : notifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border py-14 text-center">
             <Bell size={36} className="text-muted-foreground/30" />
@@ -243,19 +210,18 @@ export default function NotificationsPage() {
         ) : (
           <>
             {/* Mobile: flat list */}
-            <div className="md:hidden space-y-0.5">
+            <div className="animate-list-in md:hidden space-y-0.5">
               {notifications.map((n) => {
                 const href = notifHref(n);
                 return (
                   <button
                     key={n.id}
-                    data-animate="row"
                     onClick={() => {
                       if (!n.is_read) handleMarkRead(n.id);
                       if (href) router.push(href);
                     }}
                     className={cn(
-                      "w-full flex items-center gap-3 rounded-xl py-3 px-2 text-left transition-all active:bg-muted/50",
+                      "hover-lift w-full flex items-center gap-3 rounded-xl py-3 px-2 text-left transition-all active:bg-muted/50",
                       !n.is_read && "bg-primary/5"
                     )}
                   >
@@ -286,19 +252,18 @@ export default function NotificationsPage() {
                     <TableHead className="h-14 text-base font-semibold text-right pr-6">Czas</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
+                <TableBody className="animate-list-in">
                   {notifications.map((n) => {
                     const href = notifHref(n);
                     return (
                       <TableRow
                         key={n.id}
-                        data-animate="row"
                         onClick={() => {
                           if (!n.is_read) handleMarkRead(n.id);
                           if (href) router.push(href);
                         }}
                         className={cn(
-                          "cursor-pointer",
+                          "hover-lift cursor-pointer",
                           !n.is_read ? "bg-primary/5 hover:bg-primary/10" : "hover:bg-muted/50"
                         )}
                       >

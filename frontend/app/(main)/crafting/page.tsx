@@ -11,7 +11,6 @@ import {
   Sparkles,
 } from "lucide-react";
 import { gsap } from "gsap";
-import { useGSAP } from "@gsap/react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,15 +23,13 @@ import { useModuleConfig } from "@/hooks/useSystemModules";
 import { ModuleDisabledPage } from "@/components/ModuleGate";
 import ItemIcon from "@/components/ui/ItemIcon";
 import {
-  craftItem,
-  getMyInventory,
-  getMyWallet,
-  getRecipes,
   type CraftResult,
   type InventoryItemOut,
   type RecipeOut,
   type WalletOut,
 } from "@/lib/api";
+import { useRecipes, useMyInventory, useMyWallet, useCraftItem } from "@/hooks/queries";
+import { CraftingSkeleton } from "@/components/skeletons/CraftingSkeleton";
 
 // ─── Wear / Rarity constants ────────────────────────────────────────────────
 
@@ -117,9 +114,8 @@ function RecipeRow({ recipe, craftable, active, rarity, owned, onSelect }: {
 }) {
   return (
     <button
-      data-animate="recipe"
       onClick={onSelect}
-      className={`group w-full rounded-xl border p-3 md:p-4 text-left transition-colors active:scale-[0.98] ${
+      className={`hover-lift group w-full rounded-xl border p-3 md:p-4 text-left transition-colors active:scale-[0.98] ${
         active ? "bg-secondary/50 border-primary/30" : "border-border/30 hover:bg-muted/30"
       } ${!craftable ? "opacity-50" : ""}`}
     >
@@ -179,12 +175,15 @@ export default function CraftingPage() {
 }
 
 function CraftingContent() {
-  const { user, loading: authLoading, token } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
-  const [recipes, setRecipes] = useState<RecipeOut[]>([]);
-  const [inventory, setInventory] = useState<InventoryItemOut[]>([]);
-  const [wallet, setWallet] = useState<WalletOut | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: recipes = [], isLoading: recipesLoading } = useRecipes();
+  const { data: inventoryData, isLoading: inventoryLoading } = useMyInventory();
+  const { data: walletData, isLoading: walletLoading } = useMyWallet();
+  const wallet = walletData ?? null;
+  const craftMutation = useCraftItem();
+  const inventory = inventoryData?.items ?? [];
+  const loading = recipesLoading || inventoryLoading || walletLoading;
   const [category, setCategory] = useState("all");
   const [search, setSearch] = useState("");
   const [crafting, setCrafting] = useState<string | null>(null);
@@ -193,36 +192,9 @@ function CraftingContent() {
   const [showOnlyCraftable, setShowOnlyCraftable] = useState(false);
   const pageRef = useRef<HTMLDivElement>(null);
 
-  useGSAP(() => {
-    if (!pageRef.current || loading) return;
-    gsap.fromTo("[data-animate='recipe']", { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.3, stagger: 0.04, ease: "power2.out" });
-  }, { scope: pageRef, dependencies: [loading, category, showOnlyCraftable] });
-
   useEffect(() => {
     if (!authLoading && !user) router.replace("/login");
   }, [user, authLoading, router]);
-
-  const loadData = useCallback(async () => {
-    if (!token) return;
-    try {
-      const [rec, invRes, wal] = await Promise.all([
-        getRecipes(),
-        getMyInventory(token),
-        getMyWallet(token),
-      ]);
-      setRecipes(rec);
-      setInventory(invRes.items);
-      setWallet(wal);
-    } catch {
-      toast.error("Nie udało się załadować receptur");
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
 
   // ─── Helpers ──────────────────────────────────────────────
 
@@ -254,20 +226,18 @@ function CraftingContent() {
   const modalSparkRef = useRef<HTMLDivElement>(null);
 
   const handleCraft = async (recipe: RecipeOut) => {
-    if (!token) return;
     setCrafting(recipe.slug);
     setCraftingModal({ phase: "forging", recipe });
 
     try {
       // Wait minimum 1.5s for animation even if API is faster
       const [result] = await Promise.all([
-        craftItem(token, recipe.slug),
+        craftMutation.mutateAsync(recipe.slug),
         new Promise((r) => setTimeout(r, 1500)),
       ]);
       setCraftingModal({ phase: "result", recipe, result });
       setLastResult(result);
       setSelected(recipe.slug);
-      loadData();
       // Auto-close after 3s
       setTimeout(() => setCraftingModal(null), 3000);
     } catch (e: unknown) {
@@ -343,7 +313,7 @@ function CraftingContent() {
   if (authLoading || !user) return null;
 
   return (
-    <div ref={pageRef} className="space-y-3 md:space-y-8 -mx-4 md:mx-0 -mt-2 md:mt-0">
+    <div ref={pageRef} className="animate-page-in space-y-3 md:space-y-8 -mx-4 md:mx-0 -mt-2 md:mt-0">
       {/* ── Header ── */}
       <div className="px-4 md:px-0">
         <p className="hidden md:block text-xs uppercase tracking-[0.24em] text-muted-foreground">Warsztat</p>
@@ -472,11 +442,7 @@ function CraftingContent() {
 
           {/* Recipe grid */}
           {loading ? (
-            <div className="space-y-3">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-20 animate-pulse rounded-xl border border-border bg-muted/20" />
-              ))}
-            </div>
+            <CraftingSkeleton />
           ) : filtered.length === 0 ? (
             <div className="py-12 text-center">
               <Hammer className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
@@ -485,7 +451,7 @@ function CraftingContent() {
               </p>
             </div>
           ) : (
-            <div className="space-y-1.5 md:space-y-2">
+            <div className="animate-list-in space-y-1.5 md:space-y-2">
               {/* Available recipes */}
               {filtered.filter((r) => canCraft(r)).length > 0 && (
                 <div className="flex items-center gap-1.5 md:gap-2 px-1 pt-1 pb-1.5 md:pb-2">
