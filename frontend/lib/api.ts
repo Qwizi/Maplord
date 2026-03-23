@@ -210,6 +210,17 @@ export async function changePassword(
   });
 }
 
+export async function changeUsername(
+  token: string,
+  username: string
+): Promise<{ ok: boolean; username: string }> {
+  return fetchAPI("/auth/change-username/", {
+    method: "POST",
+    token,
+    body: JSON.stringify({ username }),
+  });
+}
+
 // --- Social Auth ---
 
 export interface SocialAuthURL {

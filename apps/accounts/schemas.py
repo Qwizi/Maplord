@@ -25,6 +25,10 @@ class ChangePasswordSchema(Schema):
     new_password: str = Field(min_length=8)
 
 
+class ChangeUsernameSchema(Schema):
+    username: str
+
+
 class UserOutSchema(Schema):
     id: uuid.UUID
     email: str

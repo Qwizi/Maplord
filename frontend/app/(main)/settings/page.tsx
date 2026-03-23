@@ -15,6 +15,7 @@ import {
   unlinkSocialAccount,
   setPassword,
   changePassword,
+  changeUsername,
   type SocialAccountOut,
 } from "@/lib/api";
 import { requireToken } from "@/lib/queryClient";
@@ -32,10 +33,23 @@ import {
   Loader2,
   Eye,
   EyeOff,
+  Pencil,
+  Check,
+  X,
 } from "lucide-react";
 import { SettingsSkeleton } from "@/components/skeletons/SettingsSkeleton";
 
 // --- Zod schemas ---
+
+const usernameSchema = z.object({
+  username: z
+    .string()
+    .min(3, "Nazwa użytkownika musi mieć co najmniej 3 znaki")
+    .max(30, "Nazwa użytkownika może mieć maksymalnie 30 znaków")
+    .regex(/^[a-zA-Z0-9_-]+$/, "Dozwolone: litery, cyfry, _ i -"),
+});
+
+type UsernameValues = z.infer<typeof usernameSchema>;
 
 const setPasswordSchema = z
   .object({
@@ -220,8 +234,35 @@ export default function SettingsPage() {
   const { permission, subscribed, subscribe, unsubscribe } = usePushNotifications();
   const [unlinkingId, setUnlinkingId] = useState<string | null>(null);
   const [linkingProvider, setLinkingProvider] = useState<"google" | "discord" | null>(null);
+  const [usernameEditing, setUsernameEditing] = useState(false);
 
   const { data: socialAccounts = [], isLoading: socialLoading } = useLinkedSocialAccounts();
+
+  const {
+    register: registerUsername,
+    handleSubmit: handleUsernameSubmit,
+    reset: resetUsername,
+    formState: { errors: usernameErrors, isSubmitting: usernameSaving },
+  } = useForm<UsernameValues>({
+    resolver: zodResolver(usernameSchema),
+    defaultValues: { username: user?.username ?? "" },
+  });
+
+  async function onUsernameSubmit(values: UsernameValues) {
+    try {
+      await changeUsername(requireToken(), values.username);
+      toast.success("Nazwa użytkownika została zmieniona.");
+      await refreshUser();
+      setUsernameEditing(false);
+    } catch {
+      toast.error("Nie udało się zmienić nazwy użytkownika. Spróbuj ponownie.");
+    }
+  }
+
+  function cancelUsernameEdit() {
+    resetUsername({ username: user?.username ?? "" });
+    setUsernameEditing(false);
+  }
 
   if (loading) return <SettingsSkeleton />;
 
@@ -259,8 +300,8 @@ export default function SettingsPage() {
     <div className="animate-page-in space-y-3 md:space-y-6 -mx-4 md:mx-0 -mt-2 md:mt-0">
       {/* Page header */}
       <div className="px-4 md:px-0">
-        <p className="hidden md:block text-xs uppercase tracking-[0.24em] text-muted-foreground">USTAWIENIA</p>
-        <h1 className="font-display text-2xl md:text-3xl text-foreground">Ustawienia</h1>
+        <p className="hidden md:block text-xs uppercase tracking-[0.24em] text-muted-foreground font-medium">USTAWIENIA</p>
+        <h1 className="font-display text-2xl md:text-5xl text-foreground">Ustawienia</h1>
       </div>
 
       {/* Account section */}
@@ -276,22 +317,66 @@ export default function SettingsPage() {
 
         <div className="space-y-4">
           {/* Username row */}
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <label className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">
-                Nazwa użytkownika
-              </label>
-              <p className="mt-1 text-sm font-medium text-foreground">
-                {user.username}
-              </p>
-            </div>
-            <button
-              disabled
-              className="flex w-fit items-center gap-2 rounded-xl border border-border bg-secondary px-4 py-2 text-sm text-muted-foreground cursor-not-allowed"
-              title="Wkrótce dostępne"
-            >
-              Zmień
-            </button>
+          <div>
+            <label className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">
+              Nazwa użytkownika
+            </label>
+            {usernameEditing ? (
+              <form
+                onSubmit={handleUsernameSubmit(onUsernameSubmit)}
+                className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-start"
+              >
+                <div className="flex-1 min-w-0">
+                  <input
+                    {...registerUsername("username")}
+                    disabled={usernameSaving}
+                    autoFocus
+                    className="w-full rounded-xl border border-border bg-secondary px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary/60 focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-50"
+                    placeholder="np. gracz123"
+                  />
+                  {usernameErrors.username && (
+                    <p className="mt-1 text-xs text-red-400">{usernameErrors.username.message}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="submit"
+                    disabled={usernameSaving}
+                    className="flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/15 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/25 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {usernameSaving ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Check className="h-3.5 w-3.5" />
+                    )}
+                    Zapisz
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelUsernameEdit}
+                    disabled={usernameSaving}
+                    className="flex items-center gap-2 rounded-xl border border-border bg-secondary px-4 py-2 text-sm text-muted-foreground hover:bg-secondary/80 transition-colors disabled:opacity-50"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Anuluj
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="mt-1 flex items-center justify-between gap-3">
+                <p className="text-sm font-medium text-foreground">{user.username}</p>
+                <button
+                  onClick={() => {
+                    resetUsername({ username: user.username });
+                    setUsernameEditing(true);
+                  }}
+                  className="flex w-fit items-center gap-2 rounded-xl border border-border bg-secondary px-4 py-2 text-sm text-muted-foreground hover:bg-secondary/80 transition-colors"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  Zmień
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Email row */}
@@ -309,9 +394,11 @@ export default function SettingsPage() {
             <label className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">
               Rola
             </label>
-            <p className="mt-1 text-sm font-medium text-foreground capitalize">
-              {user.role}
-            </p>
+            <div className="mt-2">
+              <span className="inline-flex items-center rounded-lg border border-border bg-secondary px-3 py-1 text-xs font-medium text-foreground capitalize">
+                {user.role}
+              </span>
+            </div>
           </div>
         </div>
       </section>

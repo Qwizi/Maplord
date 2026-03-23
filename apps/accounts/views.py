@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import uuid
 
 import redis as redis_lib
@@ -16,6 +17,7 @@ from apps.game_config.modules import get_module_config
 from apps.accounts.models import PushSubscription
 from apps.accounts.schemas import (
     ChangePasswordSchema,
+    ChangeUsernameSchema,
     LeaderboardEntrySchema,
     PushSubscriptionSchema,
     RegisterSchema,
@@ -132,6 +134,19 @@ class AuthController:
         user.set_password(payload.new_password)
         user.save(update_fields=['password'])
         return {'ok': True}
+
+    @route.post('/change-username/', auth=ActiveUserJWTAuth(), permissions=[IsAuthenticated])
+    def change_username(self, request, payload: ChangeUsernameSchema):
+        new_username = payload.username.strip()
+        if len(new_username) < 3 or len(new_username) > 30:
+            return 400, {'detail': 'Nazwa użytkownika musi mieć 3-30 znaków.'}
+        if not re.match(r'^[a-zA-Z0-9_-]+$', new_username):
+            return 400, {'detail': 'Dozwolone znaki: litery, cyfry, _ i -.'}
+        if User.objects.filter(username__iexact=new_username).exclude(pk=request.auth.pk).exists():
+            return 400, {'detail': 'Ta nazwa użytkownika jest już zajęta.'}
+        request.auth.username = new_username
+        request.auth.save(update_fields=['username'])
+        return {'ok': True, 'username': new_username}
 
     @route.post('/tutorial/complete/', auth=ActiveUserJWTAuth(), permissions=[IsAuthenticated])
     def complete_tutorial(self, request):

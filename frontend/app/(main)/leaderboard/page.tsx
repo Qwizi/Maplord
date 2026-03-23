@@ -34,7 +34,7 @@ export default function LeaderboardPage() {
 function LeaderboardContent() {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const [pageOverride, setPageOverride] = useState<number | null>(null);
+  const [pageOverride, setPageOverride] = useState<number>(1);
 
   const { data: leaderboardData, isLoading: leaderboardLoading } = useLeaderboard();
   const { data: friendsData, isLoading: friendsLoading } = useFriends(200);
@@ -66,8 +66,7 @@ function LeaderboardContent() {
   }
 
   const totalPages = Math.max(1, Math.ceil(entries.length / PAGE_SIZE));
-  const defaultPage = myPlacement > 0 ? Math.ceil(myPlacement / PAGE_SIZE) : 1;
-  const safePage = Math.min(pageOverride ?? defaultPage, totalPages);
+  const safePage = Math.min(Math.max(1, pageOverride), totalPages);
   const paginatedEntries = entries.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   return (
@@ -105,43 +104,44 @@ function LeaderboardContent() {
       )}
 
       {/* ── Podium top 3 ── */}
-      {entries.length >= 3 && safePage === 1 && (
+      {entries.length >= 1 && safePage === 1 && (
         <div className="px-4 md:px-0">
-          <div className="flex items-end justify-center gap-3 md:gap-4">
+          {/* Mobile: equal-height horizontal row; Desktop: stepped podium (items-end) */}
+          <div className="flex items-stretch md:items-end justify-center gap-2 md:gap-4">
             {/* 2nd place */}
-            {(() => {
+            {entries[1] && (() => {
               const entry = entries[1];
               return (
                 <button
                   key={entry.id}
                   onClick={() => router.push(`/profile/${entry.id}`)}
-                  className="flex flex-col items-center gap-2 rounded-2xl border border-border bg-card px-4 py-4 md:px-6 md:py-5 w-[30%] md:w-48 transition-all hover-lift"
-                  style={{ height: "clamp(140px, 18vw, 176px)" }}
+                  className="flex flex-col items-center justify-end gap-2 rounded-2xl border border-border bg-card px-3 py-4 md:px-6 md:py-5 flex-1 md:flex-none md:w-48 min-h-[148px] md:min-h-0 transition-all hover-lift"
                 >
-                  <div className="flex h-12 w-12 md:h-14 md:w-14 shrink-0 items-center justify-center rounded-full border-2 border-[#C0C0C0] bg-[#C0C0C0]/10 overflow-hidden">
+                  <span className="text-[10px] font-bold text-[#C0C0C0] uppercase tracking-widest mb-0.5">#2</span>
+                  <div className="flex h-11 w-11 md:h-14 md:w-14 shrink-0 items-center justify-center rounded-full border-2 border-[#C0C0C0] bg-[#C0C0C0]/10 overflow-hidden">
                     {entry.avatar_url ? (
                       <img src={entry.avatar_url} alt={entry.username} className="h-full w-full object-cover rounded-full" />
                     ) : (
-                      <span className="font-display text-lg md:text-xl font-bold text-[#C0C0C0]">{entry.username[0].toUpperCase()}</span>
+                      <span className="font-display text-base md:text-xl font-bold text-[#C0C0C0]">{entry.username[0].toUpperCase()}</span>
                     )}
                   </div>
                   <div className="text-center min-w-0 w-full">
                     <p className="text-xs md:text-sm font-bold text-foreground truncate">{entry.username}</p>
-                    <p className="font-display text-base md:text-lg text-[#C0C0C0] tabular-nums">{entry.elo_rating}</p>
-                    <p className="text-[10px] md:text-xs text-muted-foreground">{Math.round(entry.win_rate * 100)}% WR</p>
+                    <p className="font-display text-sm md:text-lg text-[#C0C0C0] tabular-nums">{entry.elo_rating}</p>
+                    <p className="text-[10px] text-muted-foreground">{Math.round(entry.win_rate * 100)}% WR</p>
                   </div>
                 </button>
               );
             })()}
             {/* 1st place */}
-            {(() => {
+            {entries[0] && (() => {
               const entry = entries[0];
               return (
                 <button
                   key={entry.id}
                   onClick={() => router.push(`/profile/${entry.id}`)}
-                  className="flex flex-col items-center gap-2 rounded-2xl border border-[#FFD700]/40 bg-[#FFD700]/5 px-4 py-4 md:px-6 md:py-5 w-[36%] md:w-56 transition-all hover-lift"
-                  style={{ height: "clamp(180px, 22vw, 224px)" }}
+                  className="flex flex-col items-center justify-end gap-2 rounded-2xl border border-[#FFD700]/40 bg-[#FFD700]/5 px-3 py-4 md:px-6 md:py-5 flex-1 md:flex-none md:w-56 min-h-[196px] md:min-h-0 transition-all hover-lift"
+                  style={{ height: undefined }}
                 >
                   <Crown className="h-5 w-5 text-[#FFD700] shrink-0" />
                   <div className="flex h-14 w-14 md:h-16 md:w-16 shrink-0 items-center justify-center rounded-full border-2 border-[#FFD700] bg-[#FFD700]/10 overflow-hidden">
@@ -153,33 +153,34 @@ function LeaderboardContent() {
                   </div>
                   <div className="text-center min-w-0 w-full">
                     <p className="text-xs md:text-sm font-bold text-foreground truncate">{entry.username}</p>
-                    <p className="font-display text-lg md:text-xl text-[#FFD700] tabular-nums">{entry.elo_rating}</p>
-                    <p className="text-[10px] md:text-xs text-muted-foreground">{Math.round(entry.win_rate * 100)}% WR</p>
+                    <p className="font-display text-base md:text-xl text-[#FFD700] tabular-nums">{entry.elo_rating}</p>
+                    <p className="text-[10px] text-muted-foreground">{Math.round(entry.win_rate * 100)}% WR</p>
                   </div>
                 </button>
               );
             })()}
             {/* 3rd place */}
-            {(() => {
+            {entries[2] && (() => {
               const entry = entries[2];
               return (
                 <button
                   key={entry.id}
                   onClick={() => router.push(`/profile/${entry.id}`)}
-                  className="flex flex-col items-center gap-2 rounded-2xl border border-border bg-card px-4 py-4 md:px-6 md:py-5 w-[30%] md:w-48 transition-all hover-lift"
-                  style={{ height: "clamp(120px, 15vw, 156px)" }}
+                  className="flex flex-col items-center justify-end gap-2 rounded-2xl border border-border bg-card px-3 py-4 md:px-6 md:py-5 flex-1 md:flex-none md:w-48 min-h-[124px] md:min-h-0 transition-all hover-lift"
+                  style={{ height: undefined }}
                 >
+                  <span className="text-[10px] font-bold text-[#CD7F32] uppercase tracking-widest mb-0.5">#3</span>
                   <div className="flex h-10 w-10 md:h-12 md:w-12 shrink-0 items-center justify-center rounded-full border-2 border-[#CD7F32] bg-[#CD7F32]/10 overflow-hidden">
                     {entry.avatar_url ? (
                       <img src={entry.avatar_url} alt={entry.username} className="h-full w-full object-cover rounded-full" />
                     ) : (
-                      <span className="font-display text-base md:text-lg font-bold text-[#CD7F32]">{entry.username[0].toUpperCase()}</span>
+                      <span className="font-display text-sm md:text-lg font-bold text-[#CD7F32]">{entry.username[0].toUpperCase()}</span>
                     )}
                   </div>
                   <div className="text-center min-w-0 w-full">
                     <p className="text-xs md:text-sm font-bold text-foreground truncate">{entry.username}</p>
-                    <p className="font-display text-sm md:text-base text-[#CD7F32] tabular-nums">{entry.elo_rating}</p>
-                    <p className="text-[10px] md:text-xs text-muted-foreground">{Math.round(entry.win_rate * 100)}% WR</p>
+                    <p className="font-display text-xs md:text-base text-[#CD7F32] tabular-nums">{entry.elo_rating}</p>
+                    <p className="text-[10px] text-muted-foreground">{Math.round(entry.win_rate * 100)}% WR</p>
                   </div>
                 </button>
               );
