@@ -9,6 +9,37 @@ interface FetchOptions extends RequestInit {
   token?: string | null;
 }
 
+// Prevent concurrent refresh attempts — share a single in-flight promise
+let _refreshPromise: Promise<string | null> | null = null;
+
+async function tryRefreshToken(): Promise<string | null> {
+  if (_refreshPromise) return _refreshPromise;
+  _refreshPromise = (async () => {
+    try {
+      const { getRefreshToken, setTokens, clearTokens } = await import("@/lib/auth");
+      const refresh = getRefreshToken();
+      if (!refresh) return null;
+      const res = await fetch(`${API_BASE}/token/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh }),
+      });
+      if (!res.ok) {
+        clearTokens();
+        return null;
+      }
+      const tokens = (await res.json()) as { access: string; refresh: string };
+      setTokens(tokens.access, tokens.refresh);
+      return tokens.access;
+    } catch {
+      return null;
+    } finally {
+      _refreshPromise = null;
+    }
+  })();
+  return _refreshPromise;
+}
+
 async function fetchAPI<T>(
   path: string,
   options: FetchOptions = {}
@@ -25,6 +56,21 @@ async function fetchAPI<T>(
   }
 
   const res = await fetch(`${API_BASE}${path}`, { headers, ...rest });
+
+  // Auto-refresh on 401 if we have a token (authenticated request)
+  if (res.status === 401 && token && typeof window !== "undefined") {
+    const newToken = await tryRefreshToken();
+    if (newToken) {
+      headers["Authorization"] = `Bearer ${newToken}`;
+      const retryRes = await fetch(`${API_BASE}${path}`, { headers, ...rest });
+      if (!retryRes.ok) {
+        const body = await retryRes.json().catch(() => ({}));
+        throw new APIError(retryRes.status, body.detail || retryRes.statusText, body);
+      }
+      if (retryRes.status === 204) return {} as T;
+      return retryRes.json();
+    }
+  }
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
