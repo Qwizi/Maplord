@@ -8,201 +8,38 @@ import type { TroopAnimation, PlannedMove, DiplomacyState } from "@/lib/gameType
 import { PixiAnimationManager, computeCurvePath } from "@/lib/pixiAnimations";
 import type { CosmeticValue } from "@/lib/animationConfig";
 import { getBuildingAsset, getUnitAsset } from "@/lib/gameAssets";
-
-// ── Shape data types ──────────────────────────────────────────
-
-export interface ProvinceShape {
-  id: string;
-  name: string;
-  /** Sub-polygons for MultiPolygon regions (e.g. islands).
-   *  Each sub-polygon: [exterior_ring, hole1?, hole2?, ...]
-   *  Each ring: [[x, y], [x, y], ...] in pixel space */
-  polygons: number[][][][];
-  /** [x, y] in pixel space (pre-projected) */
-  centroid: [number, number];
-  neighbors: string[];
-  is_coastal: boolean;
-  population_weight: number;
-  /** Texture chunk coords this province covers: ["cx,cy", ...] */
-  tile_chunks?: string[];
-}
-
-export interface ShapesBounds {
-  min_x: number;
-  min_y: number;
-  max_x: number;
-  max_y: number;
-}
-
-export interface WorldTextureMapping {
-  x: number; // pixel X of game coord origin in canvas space
-  y: number; // pixel Y of game coord origin in canvas space
-  w: number; // pixel width of full game world in canvas space
-  h: number; // pixel height of full game world in canvas space
-}
-
-export interface ShapesData {
-  regions: ProvinceShape[];
-  bounds: ShapesBounds;
-  world_texture?: WorldTextureMapping;
-}
-
-// ── Component props ───────────────────────────────────────────
-
-export interface GameCanvasProps {
-  shapesData: ShapesData | null;
-  regions: Record<string, GameRegion>;
-  players: Record<string, { color: string; username: string; cosmetics?: Record<string, unknown> }>;
-  selectedRegion: string | null;
-  targetRegions: string[];
-  highlightedNeighbors: string[];
-  dimmedRegions: string[];
-  onRegionClick: (regionId: string) => void;
-  onDoubleTap?: (regionId: string) => void;
-  myUserId: string;
-  animations: TroopAnimation[];
-  buildingIcons: Record<string, string>;
-  activeEffects?: ActiveEffect[];
-  nukeBlackout?: Array<{ rid: string; startTime: number }>;
-  onMapReady?: () => void;
-  initialZoom?: number;
-  airTransitQueue?: AirTransitItem[];
-  onFlightClick?: (flightId: string) => void;
-  /** slug → manpower_cost for air unit display. */
-  unitManpowerMap?: Record<string, number>;
-  plannedMoves?: PlannedMove[];
-  diplomacy?: DiplomacyState;
-}
-
-// ── Internal render state ─────────────────────────────────────
-
-interface ProvinceRenderState {
-  graphics: Graphics;
-  label: Text;
-  labelBg: Graphics;
-  buildingLabel: Text;
-  /** Hex color number of the current fill — used to detect owner change */
-  fillColor: number;
-  ownerId: string | null;
-  /** Pre-computed flat point arrays per sub-polygon — avoids per-redraw allocation */
-  flatPolys: number[][];
-}
-
-// ── Effect config ─────────────────────────────────────────────
-
-const EFFECT_CONFIG: Record<string, { color: string; borderColor: string; icon: string; symbol: string }> = {
-  ab_virus:              { color: "#22c55e", borderColor: "#16a34a", icon: "/assets/abilities/ab_virus.webp",              symbol: "☣" },
-  ab_shield:             { color: "#3b82f6", borderColor: "#60a5fa", icon: "/assets/abilities/ab_shield.webp",             symbol: "🛡" },
-  ab_pr_submarine:       { color: "#a855f7", borderColor: "#c084fc", icon: "/assets/abilities/ab_pr_submarine.webp",       symbol: "⚓" },
-  ab_province_nuke:      { color: "#ef4444", borderColor: "#f87171", icon: "/assets/abilities/ab_province_nuke.webp",      symbol: "☢" },
-  ab_conscription_point: { color: "#f59e0b", borderColor: "#fbbf24", icon: "/assets/abilities/ab_conscription_point.webp", symbol: "⚔" },
-  ab_flash:              { color: "#fbbf24", borderColor: "#f59e0b", icon: "⚡", symbol: "💡" },
-};
-
-// ── Color constants ───────────────────────────────────────────
-
-const BG_COLOR = 0x08111d;
-const DEFAULT_FILL = 0x1a2332;
-const DEFAULT_STROKE = 0x1a3a2d;
-const SELECTED_STROKE = 0xffffff;
-const TARGET_STROKE = 0xef4444;
-const NEIGHBOR_TINT = 0x2a4060;
-const CAPITAL_FILL = 0xfbbf24;
-const DIMMED_ALPHA = 0.25;
-const NORMAL_ALPHA = 0.60; // semi-transparent so terrain texture shows through
-const UNCLAIMED_FILL_ALPHA = 0.0; // unclaimed provinces: no fill, terrain shows through
-const STROKE_WIDTH_DEFAULT = 2;
-const STROKE_WIDTH_SELECTED = 3;
-const STROKE_WIDTH_TARGET = 2;
-
-// ── Cached TextStyles for planned move labels ─────────────────
-
-const PM_STYLE_ATTACK = new TextStyle({
-  fontFamily: "Rajdhani, sans-serif",
-  fontSize: 10,
-  fontWeight: "bold",
-  fill: 0xff4444,
-  dropShadow: { color: 0x000000, blur: 3, distance: 1, alpha: 0.9, angle: Math.PI / 4 },
-});
-const PM_STYLE_MOVE = new TextStyle({
-  fontFamily: "Rajdhani, sans-serif",
-  fontSize: 10,
-  fontWeight: "bold",
-  fill: 0x22d3ee,
-  dropShadow: { color: 0x000000, blur: 3, distance: 1, alpha: 0.9, angle: Math.PI / 4 },
-});
-
-// ── Unit pulse config ─────────────────────────────────────────
-
-const UNIT_PULSE_DURATION_MS = 1200;
-
-// ── Helpers ───────────────────────────────────────────────────
-
-/**
- * Parse a CSS hex color string like "#a1b2c3" or "#abc" into a Pixi color
- * number (0xRRGGBB). Falls back to DEFAULT_FILL on invalid input.
- */
-function hexStringToNumber(hex: string): number {
-  if (!hex) return DEFAULT_FILL;
-  const clean = hex.replace("#", "");
-  if (clean.length === 3) {
-    const r = parseInt(clean[0] + clean[0], 16);
-    const g = parseInt(clean[1] + clean[1], 16);
-    const b = parseInt(clean[2] + clean[2], 16);
-    return (r << 16) | (g << 8) | b;
-  }
-  if (clean.length === 6) {
-    return parseInt(clean, 16);
-  }
-  return DEFAULT_FILL;
-}
-
-/** Lighten a packed hex color number by a given factor (0–1). */
-function lighten(color: number, factor: number): number {
-  const r = Math.min(255, ((color >> 16) & 0xff) + Math.round(factor * 255));
-  const g = Math.min(255, ((color >> 8) & 0xff) + Math.round(factor * 80));
-  const b = Math.min(255, (color & 0xff) + Math.round(factor * 80));
-  return (r << 16) | (g << 8) | b;
-}
-
-/**
- * Draw the outer ring of a polygon onto a Graphics object, then fill and
- * stroke it. Holes (additional rings) are excluded — full hole support
- * would require a custom mask or earcut, which adds complexity for minimal
- * visual gain at game-map zoom levels.
- */
-function drawPolygon(
-  gfx: Graphics,
-  outerRing: number[][],
-  fillColor: number,
-  strokeColor: number,
-  strokeWidth: number,
-  fillAlpha = 1.0
-): void {
-  if (outerRing.length < 3) return;
-
-  const flatPoints: number[] = [];
-  for (const pt of outerRing) {
-    flatPoints.push(pt[0], pt[1]);
-  }
-
-  gfx.poly(flatPoints, true).fill({ color: fillColor, alpha: fillAlpha }).stroke({
-    color: strokeColor,
-    width: strokeWidth,
-    alpha: 1.0,
-  });
-}
-
-/** Build a star/diamond capital marker centred at (cx, cy) with given half-size. */
-function drawCapitalMarker(gfx: Graphics, cx: number, cy: number, size: number): void {
-  // Outer glow ring
-  gfx.circle(cx, cy, size + 3).stroke({ color: CAPITAL_FILL, width: 1.5, alpha: 0.4 });
-  // Diamond shape
-  gfx
-    .poly([cx, cy - size, cx + size, cy, cx, cy + size, cx - size, cy], true)
-    .fill({ color: CAPITAL_FILL, alpha: 1 })
-    .stroke({ color: 0xffffff, width: 1.5, alpha: 0.9 });
-}
+import { useBombardmentEvents, type SamIntercept } from "@/hooks/useBombardmentEvents";
+import { useEffectOverlays } from "@/hooks/useEffectOverlays";
+import { useUnitPulseLabels } from "@/hooks/useUnitPulseLabels";
+import {
+  type ProvinceShape,
+  type ShapesData,
+  type GameCanvasProps,
+  type ProvinceRenderState,
+  EFFECT_CONFIG,
+  BG_COLOR,
+  DEFAULT_FILL,
+  DEFAULT_STROKE,
+  SELECTED_STROKE,
+  TARGET_STROKE,
+  NEIGHBOR_TINT,
+  CAPITAL_FILL,
+  DIMMED_ALPHA,
+  NORMAL_ALPHA,
+  UNCLAIMED_FILL_ALPHA,
+  STROKE_WIDTH_DEFAULT,
+  STROKE_WIDTH_SELECTED,
+  STROKE_WIDTH_TARGET,
+  PM_STYLE_ATTACK,
+  PM_STYLE_MOVE,
+  UNIT_PULSE_DURATION_MS,
+  hexStringToNumber,
+  lighten,
+  drawPolygon,
+  drawCapitalMarker,
+} from "@/lib/canvasTypes";
+// Re-export shape types for backwards compatibility
+export type { ProvinceShape, ShapesBounds, ShapesData, WorldTextureMapping, GameCanvasProps } from "@/lib/canvasTypes";
 
 // ── Main component ────────────────────────────────────────────
 
@@ -286,14 +123,7 @@ export default function GameCanvas({
   const bombardAdjustRef = useRef<Map<string, number>>(new Map());
 
   /** Active SAM intercept animations drawn in the ticker. */
-  const samInterceptsRef = useRef<Array<{
-    startTime: number;
-    meetMs: number;
-    artFrom: [number, number];
-    samFrom: [number, number];
-    meetPoint: [number, number];
-    exploded: boolean;
-  }>>([]);
+  const samInterceptsRef = useRef<SamIntercept[]>([]);
 
   // Stable ref wrappers for props used inside Pixi event callbacks so we
   // don't have to tear down / rebuild interactivity on every render.
@@ -371,122 +201,12 @@ export default function GameCanvas({
 
   // Track recently bombed provinces — keep showing unit count for 5s after bombing.
   const recentlyBombedRef = useRef<Map<string, number>>(new Map());
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const { regionId } = (e as CustomEvent<{ regionId: string; count: number }>).detail;
-      recentlyBombedRef.current.set(regionId, Date.now());
-    };
-    window.addEventListener("bomb-drop", handler);
-    // Also listen for path_damage via a dedicated event
-    const pathHandler = (e: Event) => {
-      const { regionId } = (e as CustomEvent<{ regionId: string }>).detail;
-      recentlyBombedRef.current.set(regionId, Date.now());
-    };
-    window.addEventListener("province-bombed", pathHandler);
-    // Listen for path_damage events to spawn bomb visuals at damaged provinces
-    const pathDamageBombHandler = (e: Event) => {
-      const { regionId } = (e as CustomEvent<{ regionId: string; killed: number }>).detail;
-      const sd = shapesDataRef.current;
-      const mgr = animManagerRef.current;
-      if (!sd || !mgr) return;
-      const shape = sd.regions.find((s) => s.id === regionId);
-      if (!shape) return;
-      const [cx, cy] = shape.centroid;
-      // spawnBombingSalvoAt spreads 2 bombs around the centroid
-      if (typeof mgr.spawnBombingSalvoAt === "function") {
-        mgr.spawnBombingSalvoAt(cx, cy, false);
-      } else {
-        // Fallback for HMR — use the older single-bomb method
-        mgr.spawnBombAt(cx, cy);
-      }
-    };
-    window.addEventListener("path-damage-bomb", pathDamageBombHandler);
-    // Listen for artillery bombardment damage — show floating "-N" label on target
-    // AND immediately update the Pixi label in-place (no React re-render needed).
-    const bombardDamageHandler = (e: Event) => {
-      const { regionId, killed } = (e as CustomEvent<{ regionId: string; killed: number }>).detail;
-      if (killed > 0) {
-        unitPulsesRef.current.set(regionId, { startTime: Date.now(), delta: -killed });
-        // Accumulate visual adjustment
-        const prev = bombardAdjustRef.current.get(regionId) ?? 0;
-        bombardAdjustRef.current.set(regionId, prev + killed);
-        // Directly update the Pixi Text label — parse current number and subtract
-        const state = stateMapRef.current.get(regionId);
-        if (state) {
-          const match = state.label.text.match(/(\d+)/);
-          if (match) {
-            const current = parseInt(match[1], 10);
-            const newCount = Math.max(0, current - killed);
-            state.label.text = newCount > 0 ? `▸ ${newCount}` : "";
-          }
-        }
-      }
-      recentlyBombedRef.current.set(regionId, Date.now());
-    };
-    window.addEventListener("bombard-damage", bombardDamageHandler);
-    // Clear bombardAdjust when all rockets have landed — province shows real state
-    const bombardCompleteHandler = (e: Event) => {
-      const { regionId } = (e as CustomEvent<{ regionId: string }>).detail;
-      bombardAdjustRef.current.delete(regionId);
-      recentlyBombedRef.current.delete(regionId);
-    };
-    window.addEventListener("bombard-complete", bombardCompleteHandler);
-    // SAM intercept: SAM rocket flies from samRegion to interception point + explosion
-    // Artillery rocket was already killed by page.tsx setTimeout — we just draw the SAM side.
-    const samInterceptHandler = (e: Event) => {
-      const { sourceId, targetId, samRegionId, flightMs, samFlightMs } = (e as CustomEvent<{
-        sourceId: string; targetId: string; samRegionId: string; flightMs: number; samFlightMs?: number;
-      }>).detail;
-      const sd = shapesDataRef.current;
-      if (!sd) return;
-      const artSrc = sd.regions.find((s) => s.id === sourceId)?.centroid;
-      const tgt = sd.regions.find((s) => s.id === targetId)?.centroid;
-      const samSrc = sd.regions.find((s) => s.id === samRegionId)?.centroid;
-      if (!artSrc || !tgt || !samSrc) return;
-      // Interception point = where artillery is when SAM arrives
-      // SAM flies for samFlightMs, artillery progress = samFlightMs / flightMs
-      const samMs = samFlightMs ?? 600;
-      const artProgress = Math.min(samMs / flightMs, 0.9);
-      const curvePath = computeCurvePath(artSrc, tgt, 0.55, 20);
-      const meetIdx = Math.floor(curvePath.length * artProgress);
-      const meetPt = curvePath[Math.min(meetIdx, curvePath.length - 1)] ?? artSrc;
-      const meetX = meetPt[0];
-      const meetY = meetPt[1];
-      // SAM rocket flies to where artillery will be
-      samInterceptsRef.current.push({
-        startTime: Date.now(),
-        meetMs: samMs,
-        artFrom: artSrc,
-        samFrom: samSrc,
-        meetPoint: [meetX, meetY],
-        exploded: false,
-      });
-    };
-    window.addEventListener("sam-intercept-visual", samInterceptHandler);
-    // Kill animation mid-flight (used by SAM intercept)
-    const killAnimHandler = (e: Event) => {
-      const { animId } = (e as CustomEvent<{ animId: string }>).detail;
-      animManagerRef.current?.removeAnimation(animId);
-    };
-    window.addEventListener("kill-animation", killAnimHandler);
-    // Cleanup stale entries every 5s
-    const interval = setInterval(() => {
-      const now = Date.now();
-      for (const [rid, ts] of recentlyBombedRef.current) {
-        if (now - ts > 3000) recentlyBombedRef.current.delete(rid);
-      }
-    }, 5000);
-    return () => {
-      window.removeEventListener("bomb-drop", handler);
-      window.removeEventListener("province-bombed", pathHandler);
-      window.removeEventListener("path-damage-bomb", pathDamageBombHandler);
-      window.removeEventListener("bombard-damage", bombardDamageHandler);
-      window.removeEventListener("bombard-complete", bombardCompleteHandler);
-      window.removeEventListener("sam-intercept-visual", samInterceptHandler);
-      window.removeEventListener("kill-animation", killAnimHandler);
-      clearInterval(interval);
-    };
-  }, []);
+
+  // Bombardment & combat event listeners (extracted to hook)
+  useBombardmentEvents(
+    shapesDataRef, animManagerRef, stateMapRef,
+    unitPulsesRef, bombardAdjustRef, recentlyBombedRef, samInterceptsRef,
+  );
 
   // ── Province drawing helper ──────────────────────────────────
 
@@ -1424,295 +1144,11 @@ export default function GameCanvas({
     }
   }, [airTransitQueue, players, shapesData, unitManpowerMap]);
 
-  // ── Unit change floating labels ────────────────────────────────
+  // Unit change floating labels (extracted to hook)
+  useUnitPulseLabels(appReady, appRef, shapesData, unitChangeLayerRef, unitPulsesRef, centroidCacheRef);
 
-  useEffect(() => {
-    const app = appRef.current;
-    const unitChangeLayer = unitChangeLayerRef.current;
-    const shapesSnapshot = shapesData;
-    if (!app || !unitChangeLayer || !shapesSnapshot) return;
-
-    const centroidMap = centroidCacheRef.current;
-
-    // Track Text objects for active pulses so we can destroy them
-    const activeTexts = new Map<string, Text>();
-
-    // Pre-created TextStyles to avoid per-pulse allocation
-    const pulseStyleGreen = new TextStyle({
-      fontFamily: "Rajdhani, sans-serif",
-      fontSize: 16,
-      fontWeight: "bold",
-      fill: 0x4ade80,
-      align: "center",
-      dropShadow: { color: 0x000000, blur: 4, distance: 1, alpha: 0.9, angle: Math.PI / 4 },
-    });
-    const pulseStyleRed = new TextStyle({
-      fontFamily: "Rajdhani, sans-serif",
-      fontSize: 16,
-      fontWeight: "bold",
-      fill: 0xf87171,
-      align: "center",
-      dropShadow: { color: 0x000000, blur: 4, distance: 1, alpha: 0.9, angle: Math.PI / 4 },
-    });
-
-    const tickerFn = () => {
-      const now = Date.now();
-      const pulses = unitPulsesRef.current;
-
-      for (const [rid, pulse] of pulses.entries()) {
-        const elapsed = now - pulse.startTime;
-
-        if (elapsed >= UNIT_PULSE_DURATION_MS) {
-          // Pulse expired — clean up
-          const existing = activeTexts.get(rid);
-          if (existing) {
-            unitChangeLayer.removeChild(existing);
-            existing.destroy();
-            activeTexts.delete(rid);
-          }
-          pulses.delete(rid);
-          continue;
-        }
-
-        const progress = elapsed / UNIT_PULSE_DURATION_MS;
-        // Ease-out opacity: full for first 60%, then fade
-        const opacity = progress < 0.6 ? 1.0 : 1.0 - (progress - 0.6) / 0.4;
-        // Drift upward: max 20px upward over duration
-        const yOffset = -20 * progress;
-
-        let txt = activeTexts.get(rid);
-        if (!txt) {
-          // Create new Text for this pulse
-          const centroid = centroidMap.get(rid);
-          if (!centroid) continue;
-
-          const isPositive = pulse.delta > 0;
-          const label = isPositive ? `+${pulse.delta}` : String(pulse.delta);
-
-          txt = new Text({ text: label, style: isPositive ? pulseStyleGreen : pulseStyleRed, resolution: 3 });
-          txt.anchor.set(0.5, 0.5);
-          txt.position.set(centroid[0], centroid[1] - 20); // start above centroid
-          txt.eventMode = "none";
-          unitChangeLayer.addChild(txt);
-          activeTexts.set(rid, txt);
-        }
-
-        // Update position and opacity
-        const centroid = centroidMap.get(rid);
-        if (centroid) {
-          txt.position.set(centroid[0], centroid[1] - 20 + yOffset);
-        }
-        txt.alpha = opacity;
-      }
-    };
-
-    app.ticker.add(tickerFn);
-
-    return () => {
-      app.ticker.remove(tickerFn);
-      // Destroy any remaining label texts
-      for (const txt of activeTexts.values()) {
-        if (!txt.destroyed) {
-          unitChangeLayer.removeChild(txt);
-          txt.destroy();
-        }
-      }
-      activeTexts.clear();
-    };
-  // Re-register ticker when app or shapesData changes; pulse data lives in the ref
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appReady, shapesData]);
-
-  // ── Draw ability effect overlays ───────────────────────────────
-
-  useEffect(() => {
-    const effectLayer = effectLayerRef.current;
-    if (!effectLayer || !shapesData) return;
-
-    // Clear all previous effect graphics
-    effectLayer.removeChildren().forEach((child) => child.destroy());
-
-    if (!activeEffects || activeEffects.length === 0) return;
-
-    // Build a lookup from region id → shape for O(1) access
-    const shapeMap = new Map<string, ProvinceShape>();
-    for (const s of shapesData.regions) {
-      shapeMap.set(s.id, s);
-    }
-
-    /**
-     * Draw a dashed polygon border onto `gfx` by breaking each edge into
-     * alternating on/off segments. dashLen and gapLen are in world-pixel units.
-     */
-    function drawDashedBorder(
-      gfx: Graphics,
-      ring: number[][],
-      color: number,
-      width: number,
-      dashLen = 8,
-      gapLen = 5
-    ): void {
-      if (ring.length < 2) return;
-      // Close the ring explicitly so the last edge is drawn
-      const pts = ring[ring.length - 1][0] !== ring[0][0] || ring[ring.length - 1][1] !== ring[0][1]
-        ? [...ring, ring[0]]
-        : ring;
-
-      for (let i = 0; i < pts.length - 1; i++) {
-        const [x0, y0] = pts[i];
-        const [x1, y1] = pts[i + 1];
-        const dx = x1 - x0;
-        const dy = y1 - y0;
-        const edgeLen = Math.sqrt(dx * dx + dy * dy);
-        if (edgeLen === 0) continue;
-        const ux = dx / edgeLen;
-        const uy = dy / edgeLen;
-
-        let t = 0;
-        let drawing = true;
-        while (t < edgeLen) {
-          const segLen = drawing ? dashLen : gapLen;
-          const tEnd = Math.min(t + segLen, edgeLen);
-          if (drawing) {
-            gfx
-              .moveTo(x0 + ux * t, y0 + uy * t)
-              .lineTo(x0 + ux * tEnd, y0 + uy * tEnd)
-              .stroke({ color, width, alpha: 1.0, cap: "round" });
-          }
-          t = tEnd;
-          drawing = !drawing;
-        }
-      }
-    }
-
-    for (const effect of activeEffects) {
-      const cfg = EFFECT_CONFIG[effect.effect_type];
-      if (!cfg) continue;
-
-      // Collect all region ids this effect covers
-      const regionIds = new Set<string>([
-        effect.target_region_id,
-        ...effect.affected_region_ids,
-      ]);
-
-      const fillColor = hexStringToNumber(cfg.color);
-      const borderColor = hexStringToNumber(cfg.borderColor);
-
-      for (const rid of regionIds) {
-        const shape = shapeMap.get(rid);
-        if (!shape) continue;
-
-        // Draw effect overlay on all sub-polygons
-        const gfx = new Graphics();
-        let hasDrawn = false;
-        for (const subPoly of shape.polygons) {
-          const outerRing = subPoly[0];
-          if (!outerRing || outerRing.length < 3) continue;
-          hasDrawn = true;
-          const flatPoints: number[] = [];
-          for (const pt of outerRing) {
-            flatPoints.push(pt[0], pt[1]);
-          }
-          gfx.poly(flatPoints, true).fill({ color: fillColor, alpha: 0.25 });
-          drawDashedBorder(gfx, outerRing, borderColor, 2.5);
-        }
-        if (!hasDrawn) continue;
-        effectLayer.addChild(gfx);
-
-        // Symbol badge at centroid
-        const [cx, cy] = shape.centroid;
-
-        const circle = new Graphics();
-        circle
-          .circle(cx, cy, 9)
-          .fill({ color: borderColor, alpha: 0.9 })
-          .stroke({ color: 0xffffff, width: 1, alpha: 0.7 });
-        effectLayer.addChild(circle);
-
-        const badge = new Text({
-          text: cfg.symbol,
-          style: new TextStyle({
-            fontSize: 10,
-            fill: 0xffffff,
-            align: "center",
-          }),
-        });
-        badge.anchor.set(0.5, 0.5);
-        badge.position.set(cx, cy);
-        badge.eventMode = "none";
-        effectLayer.addChild(badge);
-      }
-    }
-  }, [activeEffects, shapesData]);
-
-  // ── Nuke blackout overlays ─────────────────────────────────────
-
-  useEffect(() => {
-    const nukeLayer = nukeLayerRef.current;
-    const app = appRef.current;
-    if (!nukeLayer || !shapesData || !app) return;
-
-    // Clear previous overlays
-    nukeLayer.removeChildren().forEach((child) => child.destroy());
-
-    if (!nukeBlackout || nukeBlackout.length === 0) return;
-
-    const shapeMap = new Map<string, ProvinceShape>();
-    for (const s of shapesData.regions) {
-      shapeMap.set(s.id, s);
-    }
-
-    const FADE_DURATION_MS = 5000;
-
-    // Build graphics for each blacked-out region
-    const overlays: Array<{ gfx: Graphics; startTime: number }> = [];
-
-    for (const entry of nukeBlackout) {
-      const shape = shapeMap.get(entry.rid);
-      if (!shape) continue;
-      const gfx = new Graphics();
-      let hasDrawn = false;
-      for (const subPoly of shape.polygons) {
-        const outerRing = subPoly[0];
-        if (!outerRing || outerRing.length < 3) continue;
-        hasDrawn = true;
-        const flatPoints: number[] = [];
-        for (const pt of outerRing) {
-          flatPoints.push(pt[0], pt[1]);
-        }
-        gfx.poly(flatPoints, true).fill({ color: 0x000000, alpha: 0.5 });
-      }
-      if (!hasDrawn) continue;
-      nukeLayer.addChild(gfx);
-      overlays.push({ gfx, startTime: entry.startTime });
-    }
-
-    if (overlays.length === 0) return;
-
-    // Animate alpha fade over FADE_DURATION_MS using the Pixi ticker
-    const tickerFn = () => {
-      const now = Date.now();
-      let allDone = true;
-      for (const { gfx, startTime } of overlays) {
-        const elapsed = now - startTime;
-        if (elapsed >= FADE_DURATION_MS) {
-          gfx.alpha = 0;
-        } else {
-          gfx.alpha = 0.5 * (1 - elapsed / FADE_DURATION_MS);
-          allDone = false;
-        }
-      }
-      if (allDone) {
-        app.ticker.remove(tickerFn);
-        nukeLayer.removeChildren().forEach((child) => child.destroy());
-      }
-    };
-    app.ticker.add(tickerFn);
-
-    return () => {
-      app.ticker.remove(tickerFn);
-    };
-  }, [nukeBlackout, shapesData]);
+  // Effect overlays + nuke blackout (extracted to hook)
+  useEffectOverlays(appReady, shapesData, activeEffects, nukeBlackout, effectLayerRef, nukeLayerRef, appRef);
 
   // ── Pixi Application lifecycle ────────────────────────────────
 
