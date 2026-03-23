@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { useAuth } from "@/hooks/useAuth";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useLinkedSocialAccounts } from "@/hooks/queries";
@@ -10,10 +13,12 @@ import { queryKeys } from "@/lib/queryKeys";
 import {
   getSocialAuthURL,
   unlinkSocialAccount,
+  setPassword,
+  changePassword,
+  changeUsername,
   type SocialAccountOut,
 } from "@/lib/api";
 import { requireToken } from "@/lib/queryClient";
-import Image from "next/image";
 import { toast } from "sonner";
 import {
   User,
@@ -26,18 +31,238 @@ import {
   Link2,
   Unlink,
   Loader2,
+  Eye,
+  EyeOff,
+  Pencil,
+  Check,
+  X,
 } from "lucide-react";
 import { SettingsSkeleton } from "@/components/skeletons/SettingsSkeleton";
 
+// --- Zod schemas ---
+
+const usernameSchema = z.object({
+  username: z
+    .string()
+    .min(3, "Nazwa użytkownika musi mieć co najmniej 3 znaki")
+    .max(30, "Nazwa użytkownika może mieć maksymalnie 30 znaków")
+    .regex(/^[a-zA-Z0-9_-]+$/, "Dozwolone: litery, cyfry, _ i -"),
+});
+
+type UsernameValues = z.infer<typeof usernameSchema>;
+
+const setPasswordSchema = z
+  .object({
+    new_password: z.string().min(8, "Hasło musi mieć co najmniej 8 znaków"),
+    confirm_password: z.string(),
+  })
+  .refine((d) => d.new_password === d.confirm_password, {
+    message: "Hasła nie są identyczne",
+    path: ["confirm_password"],
+  });
+
+const changePasswordSchema = z
+  .object({
+    current_password: z.string().min(1, "Podaj aktualne hasło"),
+    new_password: z.string().min(8, "Hasło musi mieć co najmniej 8 znaków"),
+    confirm_password: z.string(),
+  })
+  .refine((d) => d.new_password === d.confirm_password, {
+    message: "Hasła nie są identyczne",
+    path: ["confirm_password"],
+  });
+
+type SetPasswordValues = z.infer<typeof setPasswordSchema>;
+type ChangePasswordValues = z.infer<typeof changePasswordSchema>;
+
+// --- Sub-components ---
+
+function PasswordInput({
+  id,
+  placeholder,
+  disabled,
+  ...props
+}: React.InputHTMLAttributes<HTMLInputElement> & { id: string }) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <div className="relative">
+      <input
+        {...props}
+        id={id}
+        type={visible ? "text" : "password"}
+        placeholder={placeholder}
+        disabled={disabled}
+        className="w-full rounded-xl border border-border bg-secondary px-4 py-2.5 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary/60 focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-50"
+      />
+      <button
+        type="button"
+        tabIndex={-1}
+        onClick={() => setVisible((v) => !v)}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+        aria-label={visible ? "Ukryj hasło" : "Pokaż hasło"}
+      >
+        {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+      </button>
+    </div>
+  );
+}
+
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return <p className="mt-1 text-xs text-red-400">{message}</p>;
+}
+
+function SetPasswordForm({ onSuccess }: { onSuccess: () => void }) {
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<SetPasswordValues>({ resolver: zodResolver(setPasswordSchema) });
+
+  async function onSubmit(values: SetPasswordValues) {
+    try {
+      await setPassword(requireToken(), values.new_password);
+      toast.success("Hasło zostało ustawione.");
+      reset();
+      onSuccess();
+    } catch {
+      toast.error("Nie udało się ustawić hasła. Spróbuj ponownie.");
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 mt-4">
+      <div>
+        <label htmlFor="new_password" className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">
+          Nowe hasło
+        </label>
+        <div className="mt-1.5">
+          <PasswordInput id="new_password" placeholder="co najmniej 8 znaków" disabled={isSubmitting} {...register("new_password")} />
+        </div>
+        <FieldError message={errors.new_password?.message} />
+      </div>
+
+      <div>
+        <label htmlFor="confirm_password" className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">
+          Potwierdź hasło
+        </label>
+        <div className="mt-1.5">
+          <PasswordInput id="confirm_password" placeholder="powtórz hasło" disabled={isSubmitting} {...register("confirm_password")} />
+        </div>
+        <FieldError message={errors.confirm_password?.message} />
+      </div>
+
+      <button
+        type="submit"
+        disabled={isSubmitting}
+        className="flex items-center gap-2 rounded-xl border border-amber-400/30 bg-amber-500/15 px-4 py-2 text-sm font-medium text-amber-300 hover:bg-amber-500/25 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {isSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Lock className="h-3.5 w-3.5" />}
+        Ustaw hasło
+      </button>
+    </form>
+  );
+}
+
+function ChangePasswordForm() {
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<ChangePasswordValues>({ resolver: zodResolver(changePasswordSchema) });
+
+  async function onSubmit(values: ChangePasswordValues) {
+    try {
+      await changePassword(requireToken(), values.current_password, values.new_password);
+      toast.success("Hasło zostało zmienione.");
+      reset();
+    } catch {
+      toast.error("Nie udało się zmienić hasła. Sprawdź aktualne hasło i spróbuj ponownie.");
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 mt-4">
+      <div>
+        <label htmlFor="current_password" className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">
+          Aktualne hasło
+        </label>
+        <div className="mt-1.5">
+          <PasswordInput id="current_password" placeholder="twoje aktualne hasło" disabled={isSubmitting} {...register("current_password")} />
+        </div>
+        <FieldError message={errors.current_password?.message} />
+      </div>
+
+      <div>
+        <label htmlFor="new_password" className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">
+          Nowe hasło
+        </label>
+        <div className="mt-1.5">
+          <PasswordInput id="new_password" placeholder="co najmniej 8 znaków" disabled={isSubmitting} {...register("new_password")} />
+        </div>
+        <FieldError message={errors.new_password?.message} />
+      </div>
+
+      <div>
+        <label htmlFor="confirm_password" className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">
+          Potwierdź nowe hasło
+        </label>
+        <div className="mt-1.5">
+          <PasswordInput id="confirm_password" placeholder="powtórz nowe hasło" disabled={isSubmitting} {...register("confirm_password")} />
+        </div>
+        <FieldError message={errors.confirm_password?.message} />
+      </div>
+
+      <button
+        type="submit"
+        disabled={isSubmitting}
+        className="flex items-center gap-2 rounded-xl border border-amber-400/30 bg-amber-500/15 px-4 py-2 text-sm font-medium text-amber-300 hover:bg-amber-500/25 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {isSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Lock className="h-3.5 w-3.5" />}
+        Zmień hasło
+      </button>
+    </form>
+  );
+}
+
 export default function SettingsPage() {
-  const { user, loading, logout } = useAuth();
+  const { user, loading, logout, refreshUser } = useAuth();
   const router = useRouter();
   const queryClient = useQueryClient();
   const { permission, subscribed, subscribe, unsubscribe } = usePushNotifications();
   const [unlinkingId, setUnlinkingId] = useState<string | null>(null);
   const [linkingProvider, setLinkingProvider] = useState<"google" | "discord" | null>(null);
+  const [usernameEditing, setUsernameEditing] = useState(false);
 
   const { data: socialAccounts = [], isLoading: socialLoading } = useLinkedSocialAccounts();
+
+  const {
+    register: registerUsername,
+    handleSubmit: handleUsernameSubmit,
+    reset: resetUsername,
+    formState: { errors: usernameErrors, isSubmitting: usernameSaving },
+  } = useForm<UsernameValues>({
+    resolver: zodResolver(usernameSchema),
+    defaultValues: { username: user?.username ?? "" },
+  });
+
+  async function onUsernameSubmit(values: UsernameValues) {
+    try {
+      await changeUsername(requireToken(), values.username);
+      toast.success("Nazwa użytkownika została zmieniona.");
+      await refreshUser();
+      setUsernameEditing(false);
+    } catch {
+      toast.error("Nie udało się zmienić nazwy użytkownika. Spróbuj ponownie.");
+    }
+  }
+
+  function cancelUsernameEdit() {
+    resetUsername({ username: user?.username ?? "" });
+    setUsernameEditing(false);
+  }
 
   if (loading) return <SettingsSkeleton />;
 
@@ -75,8 +300,8 @@ export default function SettingsPage() {
     <div className="animate-page-in space-y-3 md:space-y-6 -mx-4 md:mx-0 -mt-2 md:mt-0">
       {/* Page header */}
       <div className="px-4 md:px-0">
-        <p className="hidden md:block text-xs uppercase tracking-[0.24em] text-muted-foreground">USTAWIENIA</p>
-        <h1 className="font-display text-2xl md:text-3xl text-foreground">Ustawienia</h1>
+        <p className="hidden md:block text-xs uppercase tracking-[0.24em] text-muted-foreground font-medium">USTAWIENIA</p>
+        <h1 className="font-display text-2xl md:text-5xl text-foreground">Ustawienia</h1>
       </div>
 
       {/* Account section */}
@@ -92,22 +317,66 @@ export default function SettingsPage() {
 
         <div className="space-y-4">
           {/* Username row */}
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <label className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">
-                Nazwa użytkownika
-              </label>
-              <p className="mt-1 text-sm font-medium text-foreground">
-                {user.username}
-              </p>
-            </div>
-            <button
-              disabled
-              className="flex w-fit items-center gap-2 rounded-xl border border-border bg-secondary px-4 py-2 text-sm text-muted-foreground cursor-not-allowed"
-              title="Wkrótce dostępne"
-            >
-              Zmień
-            </button>
+          <div>
+            <label className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">
+              Nazwa użytkownika
+            </label>
+            {usernameEditing ? (
+              <form
+                onSubmit={handleUsernameSubmit(onUsernameSubmit)}
+                className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-start"
+              >
+                <div className="flex-1 min-w-0">
+                  <input
+                    {...registerUsername("username")}
+                    disabled={usernameSaving}
+                    autoFocus
+                    className="w-full rounded-xl border border-border bg-secondary px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary/60 focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-50"
+                    placeholder="np. gracz123"
+                  />
+                  {usernameErrors.username && (
+                    <p className="mt-1 text-xs text-red-400">{usernameErrors.username.message}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="submit"
+                    disabled={usernameSaving}
+                    className="flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/15 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/25 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {usernameSaving ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Check className="h-3.5 w-3.5" />
+                    )}
+                    Zapisz
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelUsernameEdit}
+                    disabled={usernameSaving}
+                    className="flex items-center gap-2 rounded-xl border border-border bg-secondary px-4 py-2 text-sm text-muted-foreground hover:bg-secondary/80 transition-colors disabled:opacity-50"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Anuluj
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="mt-1 flex items-center justify-between gap-3">
+                <p className="text-sm font-medium text-foreground">{user.username}</p>
+                <button
+                  onClick={() => {
+                    resetUsername({ username: user.username });
+                    setUsernameEditing(true);
+                  }}
+                  className="flex w-fit items-center gap-2 rounded-xl border border-border bg-secondary px-4 py-2 text-sm text-muted-foreground hover:bg-secondary/80 transition-colors"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  Zmień
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Email row */}
@@ -125,9 +394,11 @@ export default function SettingsPage() {
             <label className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-medium">
               Rola
             </label>
-            <p className="mt-1 text-sm font-medium text-foreground capitalize">
-              {user.role}
-            </p>
+            <div className="mt-2">
+              <span className="inline-flex items-center rounded-lg border border-border bg-secondary px-3 py-1 text-xs font-medium text-foreground capitalize">
+                {user.role}
+              </span>
+            </div>
           </div>
         </div>
       </section>
@@ -143,19 +414,22 @@ export default function SettingsPage() {
           </p>
         </div>
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-muted-foreground">
-            Zmień hasło do swojego konta
-          </p>
-          <button
-            disabled
-            className="flex w-fit items-center gap-2 rounded-xl border border-border bg-secondary px-4 py-2 text-sm text-muted-foreground cursor-not-allowed"
-            title="Wkrótce dostępne"
-          >
-            <Lock className="h-3.5 w-3.5" />
-            Zmień hasło
-          </button>
-        </div>
+        {user.has_password ? (
+          <>
+            <p className="text-sm text-muted-foreground">
+              Zmień hasło do swojego konta
+            </p>
+            <ChangePasswordForm />
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-muted-foreground">
+              Twoje konto nie ma jeszcze hasła. Ustaw hasło, aby móc logować się
+              bezpośrednio emailem i hasłem.
+            </p>
+            <SetPasswordForm onSuccess={refreshUser} />
+          </>
+        )}
       </section>
 
       {/* Connected accounts section */}
