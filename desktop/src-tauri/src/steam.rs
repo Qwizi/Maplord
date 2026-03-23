@@ -1,3 +1,5 @@
+//! Steamworks SDK integration — only compiled with `--features steam`.
+
 use serde::Serialize;
 use std::sync::Mutex;
 use steamworks::{AppId, Client, SingleClient};
@@ -27,7 +29,6 @@ impl SteamState {
         })
     }
 
-    /// Run Steam callbacks — should be called periodically.
     pub fn run_callbacks(&self) {
         if let Ok(single) = self.single.lock() {
             single.run_callbacks();
@@ -66,14 +67,11 @@ pub fn get_steam_user(state: State<'_, SteamState>) -> Result<SteamUser, String>
     })
 }
 
-/// Get an encrypted app ticket for server-side authentication.
-/// The backend can verify this ticket with the Steam Web API.
 #[tauri::command]
 pub fn get_steam_auth_ticket(state: State<'_, SteamState>) -> Result<String, String> {
     state.run_callbacks();
     let user = state.client.user();
     let (auth_ticket, _ticket_id) = user.authentication_session_ticket();
-    // Return ticket as hex string for transport to backend
     Ok(auth_ticket
         .iter()
         .map(|b| format!("{b:02x}"))
@@ -110,7 +108,6 @@ pub fn get_steam_achievements(
     state.run_callbacks();
     let user_stats = state.client.user_stats();
 
-    // Known achievement IDs — update this list when adding new achievements in Steamworks
     let achievement_ids = [
         "FIRST_MATCH",
         "FIRST_WIN",

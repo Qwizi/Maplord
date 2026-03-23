@@ -1,9 +1,8 @@
 // Prevents additional console window on Windows in release
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+#[cfg(feature = "steam")]
 mod steam;
-
-use steam::SteamState;
 
 fn main() {
     tracing_subscriber::fmt()
@@ -13,23 +12,27 @@ fn main() {
         )
         .init();
 
-    // Initialize Steam (non-fatal — game works without Steam for dev)
-    let steam_state = match SteamState::init() {
-        Ok(state) => {
-            tracing::info!("Steam initialized successfully");
-            Some(state)
-        }
-        Err(e) => {
-            tracing::warn!("Steam not available: {e} — running in standalone mode");
-            None
-        }
-    };
-
-    let mut builder = tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_process::init())
-        .invoke_handler(tauri::generate_handler![
+        .plugin(tauri_plugin_process::init());
+
+    #[cfg(feature = "steam")]
+    let builder = {
+        use steam::SteamState;
+
+        let steam_state = match SteamState::init() {
+            Ok(state) => {
+                tracing::info!("Steam initialized successfully");
+                Some(state)
+            }
+            Err(e) => {
+                tracing::warn!("Steam not available: {e} — running in standalone mode");
+                None
+            }
+        };
+
+        let b = builder.invoke_handler(tauri::generate_handler![
             steam::get_steam_user,
             steam::get_steam_auth_ticket,
             steam::is_steam_running,
@@ -39,9 +42,17 @@ fn main() {
             steam::set_steam_rich_presence,
         ]);
 
-    if let Some(state) = steam_state {
-        builder = builder.manage(state);
-    }
+        if let Some(state) = steam_state {
+            b.manage(state)
+        } else {
+            b
+        }
+    };
+
+    tracing::info!(
+        "MapLord Desktop starting (steam={})",
+        cfg!(feature = "steam")
+    );
 
     builder
         .run(tauri::generate_context!())
