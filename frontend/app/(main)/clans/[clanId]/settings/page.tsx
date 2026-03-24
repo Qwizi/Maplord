@@ -74,13 +74,13 @@ export default function ClanSettingsPage() {
   const onSubmit = async (data: SettingsFormData) => {
     try {
       await updateMut.mutateAsync({ clanId, data });
-      toast.success("Ustawienia zapisane");
+      toast.success("Ustawienia zapisane", { id: "clan-settings-save" });
       router.push(`/clans/${clanId}`);
     } catch (err) {
       if (err instanceof APIError) {
-        toast.error(err.message);
+        toast.error(err.message, { id: "clan-settings-error" });
       } else {
-        toast.error("Nie udało się zapisać ustawień");
+        toast.error("Nie udało się zapisać ustawień", { id: "clan-settings-error" });
       }
     }
   };

@@ -243,8 +243,8 @@ export default function WarDetailPage() {
   // Back link: go to whichever clan the user is in, or challenger's clan
   const backClanId = myClanId ?? war.challenger.id;
 
-  const handleApiError = (err: unknown, fallback: string) => {
-    toast.error(err instanceof APIError ? err.message : fallback);
+  const handleApiError = (err: unknown, fallback: string, id?: string) => {
+    toast.error(err instanceof APIError ? err.message : fallback, id ? { id } : undefined);
   };
 
   return (
@@ -446,8 +446,8 @@ export default function WarDetailPage() {
                   disabled={joinMut.isPending}
                   onClick={() =>
                     joinMut.mutate(war.id, {
-                      onSuccess: () => toast.success("Dołączono do wojny!"),
-                      onError: (err) => handleApiError(err, "Nie udało się dołączyć"),
+                      onSuccess: () => toast.success("Dołączono do wojny!", { id: "war-join" }),
+                      onError: (err) => handleApiError(err, "Nie udało się dołączyć", "war-join-error"),
                     })
                   }
                 >
@@ -465,8 +465,8 @@ export default function WarDetailPage() {
                   disabled={leaveMut.isPending}
                   onClick={() =>
                     leaveMut.mutate(war.id, {
-                      onSuccess: () => toast.success("Opuszczono wojnę"),
-                      onError: (err) => handleApiError(err, "Nie udało się opuścić"),
+                      onSuccess: () => toast.success("Opuszczono wojnę", { id: "war-leave" }),
+                      onError: (err) => handleApiError(err, "Nie udało się opuścić", "war-leave-error"),
                     })
                   }
                 >
@@ -490,8 +490,8 @@ export default function WarDetailPage() {
                 disabled={acceptMut.isPending}
                 onClick={() =>
                   acceptMut.mutate(war.id, {
-                    onSuccess: () => toast.success("Zaakceptowano wojnę"),
-                    onError: (err) => handleApiError(err, "Nie udało się zaakceptować"),
+                    onSuccess: () => toast.success("Zaakceptowano wojnę", { id: "war-accept" }),
+                    onError: (err) => handleApiError(err, "Nie udało się zaakceptować", "war-accept-error"),
                   })
                 }
               >
@@ -504,8 +504,8 @@ export default function WarDetailPage() {
                 disabled={declineMut.isPending}
                 onClick={() =>
                   declineMut.mutate(war.id, {
-                    onSuccess: () => toast.success("Odrzucono wojnę"),
-                    onError: (err) => handleApiError(err, "Nie udało się odrzucić"),
+                    onSuccess: () => toast.success("Odrzucono wojnę", { id: "war-decline" }),
+                    onError: (err) => handleApiError(err, "Nie udało się odrzucić", "war-decline-error"),
                   })
                 }
               >
@@ -524,10 +524,10 @@ export default function WarDetailPage() {
               onClick={() =>
                 cancelMut.mutate(war.id, {
                   onSuccess: () => {
-                    toast.success("Anulowano wojnę");
+                    toast.success("Anulowano wojnę", { id: "war-cancel" });
                     router.push(`/clans/${backClanId}`);
                   },
-                  onError: (err) => handleApiError(err, "Nie udało się anulować"),
+                  onError: (err) => handleApiError(err, "Nie udało się anulować", "war-cancel-error"),
                 })
               }
             >

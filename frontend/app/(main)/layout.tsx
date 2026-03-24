@@ -1155,6 +1155,7 @@ function MainLayoutInner({ children }: { children: ReactNode }) {
   useEffect(() => {
     return social.onClanWarStarted((data) => {
       toast(`Wojna klanowa: ${data.challenger_tag} vs ${data.defender_tag}`, {
+        id: "clan-war-started",
         description: "Mecz się rozpoczyna! Kliknij aby dołączyć.",
         duration: 30000,
         action: {

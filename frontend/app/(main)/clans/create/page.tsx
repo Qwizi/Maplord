@@ -70,13 +70,13 @@ export default function CreateClanPage() {
         ...data,
         tag: data.tag.toUpperCase(),
       });
-      toast.success("Klan utworzony!");
+      toast.success("Klan utworzony!", { id: "clan-create" });
       router.push(`/clans/${clan.id}`);
     } catch (err) {
       if (err instanceof APIError) {
-        toast.error(err.message);
+        toast.error(err.message, { id: "clan-create-error" });
       } else {
-        toast.error("Nie udało się utworzyć klanu");
+        toast.error("Nie udało się utworzyć klanu", { id: "clan-create-error" });
       }
     }
   };

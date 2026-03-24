@@ -304,8 +304,8 @@ export default function ClanDetailPage() {
     const amount = parseInt(donateAmount);
     if (!amount || amount < 1) return;
     donateMut.mutate({ clanId, amount }, {
-      onSuccess: () => { toast.success(`Wpłacono ${amount} złota`); setDonateAmount(""); },
-      onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się wpłacić"),
+      onSuccess: () => { toast.success(`Wpłacono ${amount} złota`, { id: "clan-donate" }); setDonateAmount(""); },
+      onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się wpłacić", { id: "clan-donate-error" }),
     });
   };
 
@@ -313,8 +313,8 @@ export default function ClanDetailPage() {
     const amount = parseInt(withdrawAmount);
     if (!amount || amount < 1) return;
     withdrawMut.mutate({ clanId, amount }, {
-      onSuccess: () => { toast.success(`Wypłacono ${amount} złota`); setWithdrawAmount(""); },
-      onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się wypłacić"),
+      onSuccess: () => { toast.success(`Wypłacono ${amount} złota`, { id: "clan-withdraw" }); setWithdrawAmount(""); },
+      onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się wypłacić", { id: "clan-withdraw-error" }),
     });
   };
 
@@ -322,7 +322,7 @@ export default function ClanDetailPage() {
     if (!chatMsg.trim()) return;
     chatMut.mutate({ clanId, content: chatMsg.trim() }, {
       onSuccess: () => { setChatMsg(""); refetchChat(); },
-      onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się wysłać"),
+      onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się wysłać", { id: "clan-chat-error" }),
     });
   };
 
@@ -370,10 +370,10 @@ export default function ClanDetailPage() {
                 className="gap-2 h-9 md:h-10 md:px-5 md:text-sm"
                 onClick={() => joinMut.mutate({ clanId }, {
                   onSuccess: (res) => {
-                    if (res.joined) { toast.success("Dołączono!"); router.refresh(); }
-                    else toast.success(res.message || "Wysłano prośbę");
+                    if (res.joined) { toast.success("Dołączono!", { id: "clan-join" }); router.refresh(); }
+                    else toast.success(res.message || "Wysłano prośbę", { id: "clan-join" });
                   },
-                  onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się dołączyć"),
+                  onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się dołączyć", { id: "clan-join-error" }),
                 })}
               >
                 {joinMut.isPending && <Loader2 size={14} className="animate-spin" />}
@@ -421,8 +421,8 @@ export default function ClanDetailPage() {
               disabled={leaveMut.isPending}
               className="gap-2 h-9 md:h-10 md:px-5 md:text-sm text-muted-foreground hover:text-destructive hover:border-destructive/30"
               onClick={() => leaveMut.mutate(clanId, {
-                onSuccess: () => { toast.success("Opuszczono klan"); router.push("/clans"); },
-                onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się opuścić klanu"),
+                onSuccess: () => { toast.success("Opuszczono klan", { id: "clan-leave" }); router.push("/clans"); },
+                onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się opuścić klanu", { id: "clan-leave-error" }),
               })}
             >
               <LogOut size={16} />
@@ -437,8 +437,8 @@ export default function ClanDetailPage() {
               onClick={() => {
                 if (confirm("Na pewno chcesz rozwiązać klan?")) {
                   dissolveMut.mutate(clanId, {
-                    onSuccess: () => { toast.success("Klan rozwiązany"); router.push("/clans"); },
-                    onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się rozwiązać klanu"),
+                    onSuccess: () => { toast.success("Klan rozwiązany", { id: "clan-dissolve" }); router.push("/clans"); },
+                    onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się rozwiązać klanu", { id: "clan-dissolve-error" }),
                   });
                 }
               }}
@@ -526,8 +526,8 @@ export default function ClanDetailPage() {
                       onClick={() => inviteMut.mutate(
                         { clanId, userId: friend.id },
                         {
-                          onSuccess: () => toast.success(`Zaproszono ${friend.username}`),
-                          onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się zaprosić"),
+                          onSuccess: () => toast.success(`Zaproszono ${friend.username}`, { id: "clan-invite" }),
+                          onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się zaprosić", { id: "clan-invite-error" }),
                         }
                       )}
                     >
@@ -727,12 +727,12 @@ export default function ClanDetailPage() {
                 {isMember && canManage(m) && m.user.id !== user?.id && (
                   <div className="flex items-center gap-0.5 shrink-0">
                     {m.role !== "officer" && m.role !== "leader" && (
-                      <button onClick={() => promoteMut.mutate({ clanId, userId: m.user.id }, { onSuccess: () => toast.success("Awansowano"), onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się awansować") })} disabled={promoteMut.isPending} className="flex items-center justify-center h-8 w-8 rounded-lg text-green-400 hover:bg-green-400/10 disabled:opacity-40 transition-colors" title="Awansuj"><ArrowUp size={14} /></button>
+                      <button onClick={() => promoteMut.mutate({ clanId, userId: m.user.id }, { onSuccess: () => toast.success("Awansowano", { id: "clan-promote" }), onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się awansować", { id: "clan-promote-error" }) })} disabled={promoteMut.isPending} className="flex items-center justify-center h-8 w-8 rounded-lg text-green-400 hover:bg-green-400/10 disabled:opacity-40 transition-colors" title="Awansuj"><ArrowUp size={14} /></button>
                     )}
                     {m.role !== "recruit" && m.role !== "leader" && (
-                      <button onClick={() => demoteMut.mutate({ clanId, userId: m.user.id }, { onSuccess: () => toast.success("Zdegradowano"), onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się zdegradować") })} disabled={demoteMut.isPending} className="flex items-center justify-center h-8 w-8 rounded-lg text-muted-foreground hover:bg-muted disabled:opacity-40 transition-colors" title="Degraduj"><ArrowDown size={14} /></button>
+                      <button onClick={() => demoteMut.mutate({ clanId, userId: m.user.id }, { onSuccess: () => toast.success("Zdegradowano", { id: "clan-demote" }), onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się zdegradować", { id: "clan-demote-error" }) })} disabled={demoteMut.isPending} className="flex items-center justify-center h-8 w-8 rounded-lg text-muted-foreground hover:bg-muted disabled:opacity-40 transition-colors" title="Degraduj"><ArrowDown size={14} /></button>
                     )}
-                    <button onClick={() => kickMut.mutate({ clanId, userId: m.user.id }, { onSuccess: () => toast.success("Wyrzucono"), onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się wyrzucić") })} disabled={kickMut.isPending} className="flex items-center justify-center h-8 w-8 rounded-lg text-destructive hover:bg-destructive/10 disabled:opacity-40 transition-colors" title="Wyrzuć"><UserMinus size={14} /></button>
+                    <button onClick={() => kickMut.mutate({ clanId, userId: m.user.id }, { onSuccess: () => toast.success("Wyrzucono", { id: "clan-kick" }), onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się wyrzucić", { id: "clan-kick-error" }) })} disabled={kickMut.isPending} className="flex items-center justify-center h-8 w-8 rounded-lg text-destructive hover:bg-destructive/10 disabled:opacity-40 transition-colors" title="Wyrzuć"><UserMinus size={14} /></button>
                   </div>
                 )}
               </div>
@@ -779,14 +779,14 @@ export default function ClanDetailPage() {
                         {canManage(m) && m.user.id !== user?.id && (
                           <div className="flex items-center justify-end gap-1">
                             {m.role !== "officer" && m.role !== "leader" && (
-                              <Button variant="ghost" size="sm" onClick={() => promoteMut.mutate({ clanId, userId: m.user.id }, { onSuccess: () => toast.success("Awansowano"), onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się awansować") })} disabled={promoteMut.isPending} className="text-green-400 hover:text-green-400 hover:bg-green-400/10"><ArrowUp size={16} /></Button>
+                              <Button variant="ghost" size="sm" onClick={() => promoteMut.mutate({ clanId, userId: m.user.id }, { onSuccess: () => toast.success("Awansowano", { id: "clan-promote" }), onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się awansować", { id: "clan-promote-error" }) })} disabled={promoteMut.isPending} className="text-green-400 hover:text-green-400 hover:bg-green-400/10"><ArrowUp size={16} /></Button>
                             )}
                             {m.role !== "recruit" && m.role !== "leader" && (
-                              <Button variant="ghost" size="sm" onClick={() => demoteMut.mutate({ clanId, userId: m.user.id }, { onSuccess: () => toast.success("Zdegradowano"), onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się zdegradować") })} disabled={demoteMut.isPending}><ArrowDown size={16} /></Button>
+                              <Button variant="ghost" size="sm" onClick={() => demoteMut.mutate({ clanId, userId: m.user.id }, { onSuccess: () => toast.success("Zdegradowano", { id: "clan-demote" }), onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się zdegradować", { id: "clan-demote-error" }) })} disabled={demoteMut.isPending}><ArrowDown size={16} /></Button>
                             )}
-                            <Button variant="ghost" size="sm" onClick={() => kickMut.mutate({ clanId, userId: m.user.id }, { onSuccess: () => toast.success("Wyrzucono"), onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się wyrzucić") })} disabled={kickMut.isPending} className="text-destructive hover:text-destructive hover:bg-destructive/10"><UserMinus size={16} /></Button>
+                            <Button variant="ghost" size="sm" onClick={() => kickMut.mutate({ clanId, userId: m.user.id }, { onSuccess: () => toast.success("Wyrzucono", { id: "clan-kick" }), onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się wyrzucić", { id: "clan-kick-error" }) })} disabled={kickMut.isPending} className="text-destructive hover:text-destructive hover:bg-destructive/10"><UserMinus size={16} /></Button>
                             {isLeader && (
-                              <Button variant="ghost" size="sm" onClick={() => { if (confirm(`Przekazać lidera do ${m.user.username}?`)) transferMut.mutate({ clanId, userId: m.user.id }, { onSuccess: () => toast.success("Lider przekazany"), onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się przekazać lidera") }); }} className="text-[#FFD700] hover:text-[#FFD700] hover:bg-[#FFD700]/10"><Crown size={16} /></Button>
+                              <Button variant="ghost" size="sm" onClick={() => { if (confirm(`Przekazać lidera do ${m.user.username}?`)) transferMut.mutate({ clanId, userId: m.user.id }, { onSuccess: () => toast.success("Lider przekazany", { id: "clan-transfer" }), onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się przekazać lidera", { id: "clan-transfer-error" }) }); }} className="text-[#FFD700] hover:text-[#FFD700] hover:bg-[#FFD700]/10"><Crown size={16} /></Button>
                             )}
                           </div>
                         )}
@@ -971,11 +971,11 @@ export default function ClanDetailPage() {
                           { clanId: attackerClanId, targetId: warTargetId, data: { wager_gold: wager, players_per_side: players, ...(warScheduledAt ? { scheduled_at: new Date(warScheduledAt).toISOString() } : {}) } },
                           {
                             onSuccess: () => {
-                              toast.success("Wypowiedziano wojnę!");
+                              toast.success("Wypowiedziano wojnę!", { id: "war-declare" });
                               setShowDeclareWar(false);
                               setWarTargetId(""); setWarTargetName(""); setWarTargetSearch(""); setWarWager("100"); setWarPlayers("3"); setWarScheduledAt("");
                             },
-                            onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się wypowiedzieć wojny"),
+                            onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się wypowiedzieć wojny", { id: "war-declare-error" }),
                           }
                         );
                       }}
@@ -1106,8 +1106,8 @@ export default function ClanDetailPage() {
                         <p className="text-xs text-muted-foreground">ELO: <span className="text-accent tabular-nums">{jr.user.elo_rating}</span>{jr.message && ` — "${jr.message}"`}</p>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
-                        <button disabled={busy} onClick={() => acceptJrMut.mutate(jr.id, { onSuccess: () => toast.success("Przyjęto"), onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się przyjąć") })} className="flex items-center justify-center h-8 w-8 rounded-lg text-green-400 hover:bg-green-400/10 disabled:opacity-40 transition-colors"><Check size={14} /></button>
-                        <button disabled={busy} onClick={() => declineJrMut.mutate(jr.id, { onSuccess: () => toast.success("Odrzucono"), onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się odrzucić") })} className="flex items-center justify-center h-8 w-8 rounded-lg text-destructive hover:bg-destructive/10 disabled:opacity-40 transition-colors"><X size={14} /></button>
+                        <button disabled={busy} onClick={() => acceptJrMut.mutate(jr.id, { onSuccess: () => toast.success("Przyjęto", { id: "clan-accept-jr" }), onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się przyjąć", { id: "clan-accept-jr-error" }) })} className="flex items-center justify-center h-8 w-8 rounded-lg text-green-400 hover:bg-green-400/10 disabled:opacity-40 transition-colors"><Check size={14} /></button>
+                        <button disabled={busy} onClick={() => declineJrMut.mutate(jr.id, { onSuccess: () => toast.success("Odrzucono", { id: "clan-decline-jr" }), onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się odrzucić", { id: "clan-decline-jr-error" }) })} className="flex items-center justify-center h-8 w-8 rounded-lg text-destructive hover:bg-destructive/10 disabled:opacity-40 transition-colors"><X size={14} /></button>
                       </div>
                     </div>
                   );
@@ -1126,11 +1126,11 @@ export default function ClanDetailPage() {
                           <p className="text-sm text-muted-foreground">ELO: <span className="text-accent tabular-nums">{jr.user.elo_rating}</span>{jr.message && ` — "${jr.message}"`}</p>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          <Button variant="ghost" disabled={busy} onClick={() => acceptJrMut.mutate(jr.id, { onSuccess: () => toast.success("Przyjęto"), onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się przyjąć") })} className="gap-2 text-base text-green-400 hover:text-green-400 hover:bg-green-400/10">
+                          <Button variant="ghost" disabled={busy} onClick={() => acceptJrMut.mutate(jr.id, { onSuccess: () => toast.success("Przyjęto", { id: "clan-accept-jr" }), onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się przyjąć", { id: "clan-accept-jr-error" }) })} className="gap-2 text-base text-green-400 hover:text-green-400 hover:bg-green-400/10">
                             {busy && acceptJrMut.variables === jr.id ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
                             Przyjmij
                           </Button>
-                          <Button variant="ghost" disabled={busy} onClick={() => declineJrMut.mutate(jr.id, { onSuccess: () => toast.success("Odrzucono"), onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się odrzucić") })} className="gap-2 text-base text-destructive hover:text-destructive hover:bg-destructive/10">
+                          <Button variant="ghost" disabled={busy} onClick={() => declineJrMut.mutate(jr.id, { onSuccess: () => toast.success("Odrzucono", { id: "clan-decline-jr" }), onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się odrzucić", { id: "clan-decline-jr-error" }) })} className="gap-2 text-base text-destructive hover:text-destructive hover:bg-destructive/10">
                             {busy && declineJrMut.variables === jr.id ? <Loader2 size={18} className="animate-spin" /> : <X size={18} />}
                             Odrzuć
                           </Button>

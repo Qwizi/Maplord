@@ -364,8 +364,8 @@ export default function ClansPage() {
                         <button
                           disabled={actionPending}
                           onClick={() => acceptMut.mutate(inv.id, {
-                            onSuccess: () => toast.success("Dołączono do klanu!"),
-                            onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się dołączyć"),
+                            onSuccess: () => toast.success("Dołączono do klanu!", { id: "clan-accept-invite" }),
+                            onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się dołączyć", { id: "clan-accept-invite-error" }),
                           })}
                           className="flex items-center justify-center h-8 w-8 rounded-lg text-green-400 hover:bg-green-400/10 disabled:opacity-40 transition-colors"
                         >
@@ -374,8 +374,8 @@ export default function ClansPage() {
                         <button
                           disabled={actionPending}
                           onClick={() => declineMut.mutate(inv.id, {
-                            onSuccess: () => toast.success("Odrzucono zaproszenie"),
-                            onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się odrzucić"),
+                            onSuccess: () => toast.success("Odrzucono zaproszenie", { id: "clan-decline-invite" }),
+                            onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się odrzucić", { id: "clan-decline-invite-error" }),
                           })}
                           className="flex items-center justify-center h-8 w-8 rounded-lg text-destructive hover:bg-destructive/10 disabled:opacity-40 transition-colors"
                         >
@@ -410,8 +410,8 @@ export default function ClansPage() {
                             variant="ghost"
                             disabled={actionPending}
                             onClick={() => acceptMut.mutate(inv.id, {
-                              onSuccess: () => toast.success("Dołączono do klanu!"),
-                              onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się dołączyć"),
+                              onSuccess: () => toast.success("Dołączono do klanu!", { id: "clan-accept-invite" }),
+                              onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się dołączyć", { id: "clan-accept-invite-error" }),
                             })}
                             className="gap-2 text-base text-green-400 hover:text-green-400 hover:bg-green-400/10"
                           >
@@ -422,8 +422,8 @@ export default function ClansPage() {
                             variant="ghost"
                             disabled={actionPending}
                             onClick={() => declineMut.mutate(inv.id, {
-                              onSuccess: () => toast.success("Odrzucono"),
-                              onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się odrzucić"),
+                              onSuccess: () => toast.success("Odrzucono", { id: "clan-decline-invite" }),
+                              onError: (err) => toast.error(err instanceof APIError ? err.message : "Nie udało się odrzucić", { id: "clan-decline-invite-error" }),
                             })}
                             className="gap-2 text-base text-destructive hover:text-destructive hover:bg-destructive/10"
                           >
