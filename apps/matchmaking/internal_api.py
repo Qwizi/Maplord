@@ -1183,10 +1183,9 @@ class LobbyInternalController(ControllerBase):
             # Lock the specific row (no GROUP BY here)
             lobby = Lobby.objects.select_for_update(skip_locked=True).filter(id__in=Subquery(candidate_ids)).first()
 
-            if lobby:
-                # Verify it still has space (another concurrent request might have filled it)
-                if lobby.players.count() >= lobby.max_players:
-                    lobby = None
+            # Verify it still has space (another concurrent request might have filled it)
+            if lobby and lobby.players.count() >= lobby.max_players:
+                lobby = None
 
             if lobby:
                 LobbyPlayer.objects.get_or_create(

@@ -194,14 +194,16 @@ class FinalizeMatchResultsSyncTests(TestCase):
         }
 
     def _finalize(self):
-        with patch("apps.inventory.tasks.generate_match_drops", side_effect=Exception("skip")):
-            with patch("apps.developers.tasks.dispatch_webhook_event", side_effect=Exception("skip")):
-                finalize_match_results_sync(
-                    str(self.match.id),
-                    str(self.user1.id),
-                    200,
-                    self._final_state(),
-                )
+        with (
+            patch("apps.inventory.tasks.generate_match_drops", side_effect=Exception("skip")),
+            patch("apps.developers.tasks.dispatch_webhook_event", side_effect=Exception("skip")),
+        ):
+            finalize_match_results_sync(
+                str(self.match.id),
+                str(self.user1.id),
+                200,
+                self._final_state(),
+            )
 
     def test_creates_match_result(self):
         self._finalize()
@@ -278,36 +280,38 @@ class FinalizeMatchResultsSyncTests(TestCase):
         )
         MatchPlayer.objects.filter(match=self.match, user=self.user2).delete()
         MatchPlayer.objects.create(match=self.match, user=bot, color="#00FF00")
-        with patch("apps.inventory.tasks.generate_match_drops", side_effect=Exception("skip")):
-            with patch("apps.developers.tasks.dispatch_webhook_event", side_effect=Exception("skip")):
-                finalize_match_results_sync(
-                    str(self.match.id),
-                    str(self.user1.id),
-                    200,
-                    {
-                        "players": {
-                            str(self.user1.id): {
-                                "is_alive": True,
-                                "total_regions_conquered": 10,
-                                "total_units_produced": 50,
-                                "total_units_lost": 5,
-                                "total_buildings_built": 3,
-                                "eliminated_reason": "",
-                                "eliminated_tick": 0,
-                            },
-                            str(bot.id): {
-                                "is_alive": False,
-                                "total_regions_conquered": 3,
-                                "total_units_produced": 20,
-                                "total_units_lost": 15,
-                                "total_buildings_built": 1,
-                                "eliminated_reason": "",
-                                "eliminated_tick": 50,
-                            },
+        with (
+            patch("apps.inventory.tasks.generate_match_drops", side_effect=Exception("skip")),
+            patch("apps.developers.tasks.dispatch_webhook_event", side_effect=Exception("skip")),
+        ):
+            finalize_match_results_sync(
+                str(self.match.id),
+                str(self.user1.id),
+                200,
+                {
+                    "players": {
+                        str(self.user1.id): {
+                            "is_alive": True,
+                            "total_regions_conquered": 10,
+                            "total_units_produced": 50,
+                            "total_units_lost": 5,
+                            "total_buildings_built": 3,
+                            "eliminated_reason": "",
+                            "eliminated_tick": 0,
                         },
-                        "regions": {},
+                        str(bot.id): {
+                            "is_alive": False,
+                            "total_regions_conquered": 3,
+                            "total_units_produced": 20,
+                            "total_units_lost": 15,
+                            "total_buildings_built": 1,
+                            "eliminated_reason": "",
+                            "eliminated_tick": 50,
+                        },
                     },
-                )
+                    "regions": {},
+                },
+            )
         bot.refresh_from_db()
         self.assertEqual(bot.elo_rating, 1000)
 
@@ -767,62 +771,68 @@ class GameInternalAPITests(TestCase):
     def test_finalize_match_success(self):
         import json
 
-        with patch("apps.inventory.tasks.generate_match_drops", side_effect=Exception("skip")):
-            with patch("apps.developers.tasks.dispatch_webhook_event", side_effect=Exception("skip")):
-                resp = self.client.post(
-                    "/api/v1/internal/game/finalize/",
-                    headers=_auth(),
-                    data=json.dumps(
-                        {
-                            "match_id": str(self.match.id),
-                            "winner_id": str(self.user1.id),
-                            "total_ticks": 100,
-                            "final_state": self._final_state(),
-                        }
-                    ),
-                    content_type="application/json",
-                )
+        with (
+            patch("apps.inventory.tasks.generate_match_drops", side_effect=Exception("skip")),
+            patch("apps.developers.tasks.dispatch_webhook_event", side_effect=Exception("skip")),
+        ):
+            resp = self.client.post(
+                "/api/v1/internal/game/finalize/",
+                headers=_auth(),
+                data=json.dumps(
+                    {
+                        "match_id": str(self.match.id),
+                        "winner_id": str(self.user1.id),
+                        "total_ticks": 100,
+                        "final_state": self._final_state(),
+                    }
+                ),
+                content_type="application/json",
+            )
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.json()["ok"])
 
     def test_finalize_match_creates_match_result(self):
         import json
 
-        with patch("apps.inventory.tasks.generate_match_drops", side_effect=Exception("skip")):
-            with patch("apps.developers.tasks.dispatch_webhook_event", side_effect=Exception("skip")):
-                self.client.post(
-                    "/api/v1/internal/game/finalize/",
-                    headers=_auth(),
-                    data=json.dumps(
-                        {
-                            "match_id": str(self.match.id),
-                            "winner_id": str(self.user1.id),
-                            "total_ticks": 100,
-                            "final_state": self._final_state(),
-                        }
-                    ),
-                    content_type="application/json",
-                )
+        with (
+            patch("apps.inventory.tasks.generate_match_drops", side_effect=Exception("skip")),
+            patch("apps.developers.tasks.dispatch_webhook_event", side_effect=Exception("skip")),
+        ):
+            self.client.post(
+                "/api/v1/internal/game/finalize/",
+                headers=_auth(),
+                data=json.dumps(
+                    {
+                        "match_id": str(self.match.id),
+                        "winner_id": str(self.user1.id),
+                        "total_ticks": 100,
+                        "final_state": self._final_state(),
+                    }
+                ),
+                content_type="application/json",
+            )
         self.assertTrue(MatchResult.objects.filter(match=self.match).exists())
 
     def test_finalize_match_updates_status_to_finished(self):
         import json
 
-        with patch("apps.inventory.tasks.generate_match_drops", side_effect=Exception("skip")):
-            with patch("apps.developers.tasks.dispatch_webhook_event", side_effect=Exception("skip")):
-                self.client.post(
-                    "/api/v1/internal/game/finalize/",
-                    headers=_auth(),
-                    data=json.dumps(
-                        {
-                            "match_id": str(self.match.id),
-                            "winner_id": str(self.user1.id),
-                            "total_ticks": 100,
-                            "final_state": self._final_state(),
-                        }
-                    ),
-                    content_type="application/json",
-                )
+        with (
+            patch("apps.inventory.tasks.generate_match_drops", side_effect=Exception("skip")),
+            patch("apps.developers.tasks.dispatch_webhook_event", side_effect=Exception("skip")),
+        ):
+            self.client.post(
+                "/api/v1/internal/game/finalize/",
+                headers=_auth(),
+                data=json.dumps(
+                    {
+                        "match_id": str(self.match.id),
+                        "winner_id": str(self.user1.id),
+                        "total_ticks": 100,
+                        "final_state": self._final_state(),
+                    }
+                ),
+                content_type="application/json",
+            )
         self.match.refresh_from_db()
         self.assertEqual(self.match.status, Match.Status.FINISHED)
 
@@ -830,21 +840,23 @@ class GameInternalAPITests(TestCase):
         """Finalize with no winner (draw/timeout) should succeed."""
         import json
 
-        with patch("apps.inventory.tasks.generate_match_drops", side_effect=Exception("skip")):
-            with patch("apps.developers.tasks.dispatch_webhook_event", side_effect=Exception("skip")):
-                resp = self.client.post(
-                    "/api/v1/internal/game/finalize/",
-                    headers=_auth(),
-                    data=json.dumps(
-                        {
-                            "match_id": str(self.match.id),
-                            "winner_id": None,
-                            "total_ticks": 50,
-                            "final_state": self._final_state(),
-                        }
-                    ),
-                    content_type="application/json",
-                )
+        with (
+            patch("apps.inventory.tasks.generate_match_drops", side_effect=Exception("skip")),
+            patch("apps.developers.tasks.dispatch_webhook_event", side_effect=Exception("skip")),
+        ):
+            resp = self.client.post(
+                "/api/v1/internal/game/finalize/",
+                headers=_auth(),
+                data=json.dumps(
+                    {
+                        "match_id": str(self.match.id),
+                        "winner_id": None,
+                        "total_ticks": 50,
+                        "final_state": self._final_state(),
+                    }
+                ),
+                content_type="application/json",
+            )
         self.assertEqual(resp.status_code, 200)
 
     # --- Cleanup match ---
@@ -1246,36 +1258,38 @@ class GameInternalAPITests(TestCase):
         import json
 
         # finalize first so PlayerResult exists
-        with patch("apps.inventory.tasks.generate_match_drops", side_effect=Exception("skip")):
-            with patch("apps.developers.tasks.dispatch_webhook_event", side_effect=Exception("skip")):
-                finalize_match_results_sync(
-                    str(self.match.id),
-                    str(self.user1.id),
-                    100,
-                    {
-                        "players": {
-                            str(self.user1.id): {
-                                "is_alive": True,
-                                "total_regions_conquered": 10,
-                                "total_units_produced": 50,
-                                "total_units_lost": 5,
-                                "total_buildings_built": 3,
-                                "eliminated_reason": "",
-                                "eliminated_tick": 0,
-                            },
-                            str(self.user2.id): {
-                                "is_alive": False,
-                                "total_regions_conquered": 4,
-                                "total_units_produced": 20,
-                                "total_units_lost": 10,
-                                "total_buildings_built": 1,
-                                "eliminated_reason": "",
-                                "eliminated_tick": 80,
-                            },
+        with (
+            patch("apps.inventory.tasks.generate_match_drops", side_effect=Exception("skip")),
+            patch("apps.developers.tasks.dispatch_webhook_event", side_effect=Exception("skip")),
+        ):
+            finalize_match_results_sync(
+                str(self.match.id),
+                str(self.user1.id),
+                100,
+                {
+                    "players": {
+                        str(self.user1.id): {
+                            "is_alive": True,
+                            "total_regions_conquered": 10,
+                            "total_units_produced": 50,
+                            "total_units_lost": 5,
+                            "total_buildings_built": 3,
+                            "eliminated_reason": "",
+                            "eliminated_tick": 0,
                         },
-                        "regions": {},
+                        str(self.user2.id): {
+                            "is_alive": False,
+                            "total_regions_conquered": 4,
+                            "total_units_produced": 20,
+                            "total_units_lost": 10,
+                            "total_buildings_built": 1,
+                            "eliminated_reason": "",
+                            "eliminated_tick": 80,
+                        },
                     },
-                )
+                    "regions": {},
+                },
+            )
         self.user2.refresh_from_db()
 
         resp = self.client.post(

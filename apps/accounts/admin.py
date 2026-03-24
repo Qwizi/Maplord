@@ -112,16 +112,12 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
                 except Exception:
                     continue  # OneToOneField may raise RelatedObjectDoesNotExist
                 if hasattr(related_qs, "all"):
-                    try:
+                    with contextlib.suppress(Exception):  # skip relations with unique constraints
                         related_qs.all().update(**{rel.field.name: target})
-                    except Exception:
-                        pass  # skip relations with unique constraints
                 elif rel.one_to_one:
-                    try:
+                    with contextlib.suppress(Exception):
                         setattr(related_qs, rel.field.name, target)
                         related_qs.save(update_fields=[rel.field.name])
-                    except Exception:
-                        pass
 
             # Merge ELO: keep the higher rating
             if source.elo_rating > target.elo_rating:

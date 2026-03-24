@@ -11,9 +11,8 @@ logger = logging.getLogger(__name__)
 # (pywebpush expects a file path, not a PEM string)
 _vapid_key_path = None
 if settings.VAPID_PRIVATE_KEY:
-    _f = tempfile.NamedTemporaryFile(mode="w", suffix=".pem", delete=False)
-    _f.write(settings.VAPID_PRIVATE_KEY)
-    _f.close()
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".pem", delete=False) as _f:
+        _f.write(settings.VAPID_PRIVATE_KEY)
     _vapid_key_path = _f.name
 
 
