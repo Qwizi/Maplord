@@ -25,6 +25,7 @@ export function usePlannedMoves(
   move: (sourceId: string, targetId: string, units: number, unitType: string) => void,
   bombard: (sourceId: string, targetIds: string[], units: number) => void,
   onClear: () => void, // callback to reset selection state in parent
+  unitManpowerMap?: Record<string, number>, // slug → manpower_cost for reserve calc
 ) {
   const [plannedMoves, setPlannedMoves] = useState<PlannedMove[]>([]);
   const [planningMode, setPlanningMode] = useState(false);
@@ -48,7 +49,15 @@ export function usePlannedMoves(
 
       const key = `${pm.sourceId}:${pm.unitType}`;
       const alreadySent = committed.get(key) ?? 0;
-      const available = (source.units?.[pm.unitType] ?? 0) - alreadySent;
+      let rawCount = source.units?.[pm.unitType] ?? 0;
+      // Subtract infantry reserved as manpower for special units
+      if (pm.unitType === "infantry" && unitManpowerMap) {
+        const reserved = Object.entries(source.units ?? {})
+          .filter(([type]) => type !== "infantry")
+          .reduce((sum, [type, count]) => sum + count * Math.max(1, unitManpowerMap[type] ?? 1), 0);
+        rawCount = Math.max(0, rawCount - reserved);
+      }
+      const available = rawCount - alreadySent;
 
       if (available <= 0) { skipped++; continue; }
 

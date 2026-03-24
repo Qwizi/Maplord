@@ -185,11 +185,14 @@ export default function GamePage({
     setSelectedRegion(null);
     setSelectedActionUnitType(null);
   }, []);
+  const unitManpowerMap = useMemo(() => {
+    return Object.fromEntries(unitsConfig.map((u) => [u.slug, u.manpower_cost ?? 1]));
+  }, [unitsConfig]);
   const {
     plannedMoves, setPlannedMoves,
     planningMode, setPlanningMode,
     executePlannedMoves, clearPlannedMoves, undoLastPlannedMove,
-  } = usePlannedMoves(myUserId, gameStateRef, attack, move, bombard, onPlanClear);
+  } = usePlannedMoves(myUserId, gameStateRef, attack, move, bombard, onPlanClear, unitManpowerMap);
 
   // processedAnimKeysRef / processedAudioKeysRef moved into useGameAnimations / useGameEventSounds
   const localDispatchKeysRef = useRef(new Map<string, number>());
@@ -348,10 +351,6 @@ export default function GamePage({
 
   const unitConfigBySlug = useMemo(() => {
     return Object.fromEntries(unitsConfig.map((unit) => [unit.slug, unit] as const));
-  }, [unitsConfig]);
-
-  const unitManpowerMap = useMemo(() => {
-    return Object.fromEntries(unitsConfig.map((u) => [u.slug, u.manpower_cost ?? 1]));
   }, [unitsConfig]);
 
   // Guard against double capital selection while waiting for server confirmation
@@ -948,7 +947,7 @@ export default function GamePage({
           const alreadyQueued = plannedMoves
             .filter(pm => pm.sourceId === selectedRegion && pm.unitType === unitType)
             .reduce((sum, pm) => sum + pm.unitCount, 0);
-          const avail = (gameState?.regions[selectedRegion!]?.units?.[unitType] ?? 0) - alreadyQueued;
+          const avail = getAvailableUnits(gameState?.regions[selectedRegion!]?.units, unitType, unitConfigBySlug) - alreadyQueued;
           if (avail <= 0) return;
           const clampedUnits = Math.min(unitsToSend, avail);
           const isAttackTarget = gameState?.regions[regionId]?.owner_id !== myUserId;

@@ -87,7 +87,7 @@ class GameSettings(models.Model):
     ap_cost_ability = models.IntegerField(default=4, help_text='AP cost for ability use')
 
     # Region Cooldowns
-    region_attack_cooldown = models.IntegerField(default=5, help_text='Ticks before a region can attack again')
+    region_attack_cooldown = models.IntegerField(default=0, help_text='Ticks before a region can attack again (0 = no cooldown)')
     region_move_cooldown = models.IntegerField(default=2, help_text='Ticks before a region can move again')
 
     # Combat Fatigue
@@ -318,7 +318,7 @@ class GameMode(models.Model):
     ap_cost_ability = models.IntegerField(default=4, help_text='AP cost for ability use')
 
     # Region Cooldowns
-    region_attack_cooldown = models.IntegerField(default=5, help_text='Ticks before a region can attack again')
+    region_attack_cooldown = models.IntegerField(default=0, help_text='Ticks before a region can attack again (0 = no cooldown)')
     region_move_cooldown = models.IntegerField(default=2, help_text='Ticks before a region can move again')
 
     # Combat Fatigue

@@ -217,7 +217,7 @@ fn default_ap_cost_produce() -> i64 { 1 }
 fn default_ap_cost_ability() -> i64 { 4 }
 
 // Region cooldown defaults
-fn default_region_attack_cooldown() -> i64 { 5 }
+fn default_region_attack_cooldown() -> i64 { 0 }
 fn default_region_move_cooldown() -> i64 { 2 }
 
 // Combat fatigue defaults
