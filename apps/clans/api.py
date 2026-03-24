@@ -50,6 +50,7 @@ from apps.pagination import paginate_qs
 User = get_user_model()
 
 INVITATION_EXPIRY_HOURS = 72
+CLAN_CREATION_COST = 2000
 
 
 @api_controller('/clans', tags=['Clans'], auth=ActiveUserJWTAuth(), permissions=[IsAuthenticated])
@@ -106,7 +107,7 @@ class ClanGlobalController:
             raise HttpError(400, 'Zaproszenie wygasło.')
 
         if get_membership(request.auth):
-            raise HttpError(400, 'Musisz najpierw opuścić obecny klan.')
+            raise HttpError(400, 'Musisz opuścić obecny klan przed dołączeniem do innego.')
 
         clan = inv.clan
         if clan.member_count >= clan.max_members:
@@ -263,13 +264,25 @@ class ClanController:
         user = request.auth
 
         if get_membership(user):
-            raise HttpError(400, 'Musisz najpierw opuścić obecny klan.')
+            raise HttpError(400, 'Musisz opuścić obecny klan przed utworzeniem nowego.')
 
         tag = payload.tag.upper()
         if Clan.objects.filter(Q(name=payload.name) | Q(tag=tag)).exists():
             raise HttpError(400, 'Nazwa lub tag klanu jest już zajęty.')
 
+        from apps.inventory.models import Wallet
+        wallet = Wallet.objects.filter(user=user).first()
+        if not wallet or wallet.gold < CLAN_CREATION_COST:
+            raise HttpError(400, f'Niewystarczająca ilość złota. Utworzenie klanu kosztuje {CLAN_CREATION_COST} złota.')
+
         with transaction.atomic():
+            wallet = Wallet.objects.select_for_update().get(pk=wallet.pk)
+            if wallet.gold < CLAN_CREATION_COST:
+                raise HttpError(400, f'Niewystarczająca ilość złota. Utworzenie klanu kosztuje {CLAN_CREATION_COST} złota.')
+            wallet.gold -= CLAN_CREATION_COST
+            wallet.total_spent += CLAN_CREATION_COST
+            wallet.save(update_fields=['gold', 'total_spent', 'updated_at'])
+
             clan = Clan.objects.create(
                 name=payload.name,
                 tag=tag,
@@ -566,7 +579,7 @@ class ClanController:
     @route.post('/{clan_id}/join/', )
     def join_or_request(self, request, clan_id: uuid.UUID, payload: JoinRequestSchema = None):
         if get_membership(request.auth):
-            raise HttpError(400, 'Musisz najpierw opuścić obecny klan.')
+            raise HttpError(400, 'Musisz opuścić obecny klan przed dołączeniem do innego.')
 
         clan = Clan.objects.filter(pk=clan_id, dissolved_at__isnull=True).first()
         if not clan:
@@ -660,36 +673,7 @@ class ClanController:
 
         return {'ok': True, 'treasury_gold': clan.treasury_gold}
 
-    @route.post('/{clan_id}/treasury/withdraw/')
-    def withdraw_gold(self, request, clan_id: uuid.UUID, payload: WithdrawSchema):
-        require_officer(request.auth, clan_id)
-
-        with transaction.atomic():
-            clan = Clan.objects.select_for_update().get(pk=clan_id)
-            if clan.treasury_gold < payload.amount:
-                raise HttpError(400, 'Niewystarczająca ilość złota w skarbcu.')
-
-            from apps.inventory.models import Wallet
-            wallet, _ = Wallet.objects.get_or_create(user=request.auth)
-
-            clan.treasury_gold -= payload.amount
-            clan.save(update_fields=['treasury_gold'])
-
-            wallet.gold += payload.amount
-            wallet.total_earned += payload.amount
-            wallet.save(update_fields=['gold', 'total_earned', 'updated_at'])
-
-            ClanActivityLog.objects.create(
-                clan=clan, actor=request.auth,
-                action=ClanActivityLog.Action.GOLD_WITHDRAWN,
-                detail={
-                    'amount': payload.amount,
-                    'reason': payload.reason,
-                    'username': request.auth.username,
-                },
-            )
-
-        return {'ok': True, 'treasury_gold': clan.treasury_gold}
+    # Withdraw disabled — treasury gold is spent only on clan wars and upgrades
 
     # ── Clan Wars ──
 
