@@ -208,8 +208,23 @@ class ClanGlobalController:
         if war.wager_gold > 0 and war.defender.treasury_gold < war.wager_gold:
             raise HttpError(400, 'Niewystarczająca ilość złota w skarbcu na zakład.')
 
-        war.status = ClanWar.Status.ACCEPTED
-        war.save(update_fields=['status'])
+        with transaction.atomic():
+            if war.wager_gold > 0:
+                locked_defender = Clan.objects.select_for_update().get(pk=war.defender_id)
+                if locked_defender.treasury_gold < war.wager_gold:
+                    raise HttpError(400, 'Niewystarczająca ilość złota w skarbcu na zakład.')
+                locked_defender.treasury_gold -= war.wager_gold
+                locked_defender.save(update_fields=['treasury_gold'])
+
+            war.status = ClanWar.Status.ACCEPTED
+            war.save(update_fields=['status'])
+
+        # Decide whether to start now or wait for scheduled time
+        from apps.clans.tasks import start_clan_war
+        if war.scheduled_at is None or war.scheduled_at <= timezone.now():
+            start_clan_war.delay(str(war.pk))
+        else:
+            start_clan_war.apply_async(args=[str(war.pk)], eta=war.scheduled_at)
 
         return {'ok': True, 'status': 'accepted'}
 
@@ -220,8 +235,16 @@ class ClanGlobalController:
             raise HttpError(404, 'Wojna nie znaleziona.')
         require_officer(request.auth, war.defender_id)
 
-        war.status = ClanWar.Status.DECLINED
-        war.save(update_fields=['status'])
+        with transaction.atomic():
+            war.status = ClanWar.Status.DECLINED
+            war.save(update_fields=['status'])
+
+            # Refund wager to challenger — it was deducted at declaration time
+            if war.wager_gold > 0:
+                challenger = Clan.objects.select_for_update().get(pk=war.challenger_id)
+                challenger.treasury_gold += war.wager_gold
+                challenger.save(update_fields=['treasury_gold'])
+
         return {'ok': True}
 
     @route.post('/wars/{war_id}/join/', response=ClanWarParticipantOutSchema)
@@ -697,22 +720,38 @@ class ClanController:
         if active_war:
             raise HttpError(400, 'Aktywna wojna między tymi klanami już istnieje.')
 
+        MIN_WAGER = 100
         if payload.wager_gold > 0:
+            if payload.wager_gold < MIN_WAGER:
+                raise HttpError(400, f'Minimalna stawka to {MIN_WAGER} złota.')
             if challenger.treasury_gold < payload.wager_gold:
                 raise HttpError(400, 'Niewystarczająca ilość złota w skarbcu na zakład.')
 
-        war = ClanWar.objects.create(
-            challenger=challenger,
-            defender=defender,
-            players_per_side=payload.players_per_side,
-            wager_gold=payload.wager_gold,
-        )
+        with transaction.atomic():
+            if payload.wager_gold > 0:
+                locked = Clan.objects.select_for_update().get(pk=challenger.pk)
+                if locked.treasury_gold < payload.wager_gold:
+                    raise HttpError(400, 'Niewystarczająca ilość złota w skarbcu na zakład.')
+                locked.treasury_gold -= payload.wager_gold
+                locked.save(update_fields=['treasury_gold'])
 
-        ClanActivityLog.objects.create(
-            clan=challenger, actor=request.auth,
-            action=ClanActivityLog.Action.WAR_DECLARED,
-            detail={'against': defender.tag, 'players_per_side': payload.players_per_side},
-        )
+            war = ClanWar.objects.create(
+                challenger=challenger,
+                defender=defender,
+                players_per_side=payload.players_per_side,
+                wager_gold=payload.wager_gold,
+                scheduled_at=payload.scheduled_at,
+            )
+
+            ClanActivityLog.objects.create(
+                clan=challenger, actor=request.auth,
+                action=ClanActivityLog.Action.WAR_DECLARED,
+                detail={
+                    'against': defender.tag,
+                    'players_per_side': payload.players_per_side,
+                    'wager_gold': payload.wager_gold,
+                },
+            )
 
         from apps.notifications.services import create_notification
         from apps.notifications.models import Notification
@@ -720,7 +759,11 @@ class ClanController:
             user=defender.leader,
             type=Notification.Type.CLAN_WAR_DECLARED,
             title=f'[{challenger.tag}] wypowiedział wojnę!',
-            data={'war_id': str(war.pk), 'challenger_tag': challenger.tag},
+            data={
+                'war_id': str(war.pk),
+                'challenger_tag': challenger.tag,
+                'wager_gold': payload.wager_gold,
+            },
         )
 
         return ClanWar.objects.select_related(

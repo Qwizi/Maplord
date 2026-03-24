@@ -48,6 +48,58 @@ def _safe_ratio(value: int, denominator: int) -> float:
     return float(value) / float(denominator) if denominator > 0 else 0.0
 
 
+def _award_match_xp(player_rows: list[dict], winner_id: str | None) -> None:
+    """Award XP to all human players after a match and check for account level-ups.
+
+    Winner receives 50 XP base; all others receive 20 XP base.
+    After awarding, if the user's accumulated XP meets the next AccountLevel
+    threshold the user's level field is bumped accordingly.
+    """
+    from apps.accounts.models import AccountLevel, User
+
+    users_xp_update: list[User] = []
+
+    for row in player_rows:
+        if row["is_bot"]:
+            continue
+
+        user = row["match_player"].user
+        xp_gain = 50 if row["pid"] == winner_id else 20
+        user.experience = (user.experience or 0) + xp_gain
+
+        # Resolve highest level whose XP threshold is met
+        new_level = (
+            AccountLevel.objects.filter(
+                experience_required__lte=user.experience,
+            )
+            .order_by('-level')
+            .values_list('level', flat=True)
+            .first()
+        )
+        if new_level is not None and new_level > (user.level or 1):
+            user.level = new_level
+
+        users_xp_update.append(user)
+
+    if users_xp_update:
+        User.objects.bulk_update(users_xp_update, ['experience', 'level'])
+
+    # Dispatch clan XP awards outside the DB loop (fire-and-forget Celery tasks)
+    for row in player_rows:
+        if row["is_bot"]:
+            continue
+        xp_gain = 50 if row["pid"] == winner_id else 20
+        try:
+            from apps.clans.tasks import award_clan_xp
+            award_clan_xp.delay(row["pid"], xp_gain)
+        except Exception as e:
+            logger.error(
+                "Failed to dispatch award_clan_xp for player %s: %s",
+                row["pid"],
+                e,
+            )
+
+
 def finalize_match_results_sync(
     match_id: str,
     winner_id: str | None,
@@ -239,6 +291,9 @@ def finalize_match_results_sync(
             from apps.accounts.models import User
             User.objects.bulk_update(users_to_update, ['elo_rating'])
         PlayerResult.objects.bulk_create(player_results_to_create)
+
+        # Award XP to non-bot players and check for level-ups
+        _award_match_xp(player_rows, winner_id)
 
         # Send match result notifications to non-bot players
         try:

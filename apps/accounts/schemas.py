@@ -35,6 +35,8 @@ class UserOutSchema(Schema):
     username: str
     role: str
     elo_rating: int
+    level: int = 1
+    experience: int = 0
     tutorial_completed: bool
     is_banned: bool
     date_joined: datetime
