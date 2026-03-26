@@ -15,8 +15,7 @@ vi.mock("lucide-react", () => ({
     React.createElement("span", { "data-testid": "icon-swords", className }),
   Coins: ({ className }: { className?: string }) =>
     React.createElement("span", { "data-testid": "icon-coins", className }),
-  Zap: ({ className }: { className?: string }) =>
-    React.createElement("span", { "data-testid": "icon-zap", className }),
+  Zap: ({ className }: { className?: string }) => React.createElement("span", { "data-testid": "icon-zap", className }),
 }));
 
 import ActiveBoosts, { type ActiveBoost, type ActiveMatchBoost } from "@/components/game/ActiveBoosts";
@@ -33,49 +32,37 @@ describe("ActiveBoosts", () => {
   // ── Returns null when empty ──────────────────────────────────────────────
 
   it("renders nothing when both boosts and matchBoosts are empty", () => {
-    const { container } = render(
-      React.createElement(ActiveBoosts, { boosts: [], matchBoosts: [] }),
-    );
+    const { container } = render(React.createElement(ActiveBoosts, { boosts: [], matchBoosts: [] }));
     expect(container.firstChild).toBeNull();
   });
 
   it("renders nothing when boosts is empty and matchBoosts is not provided", () => {
-    const { container } = render(
-      React.createElement(ActiveBoosts, { boosts: [] }),
-    );
+    const { container } = render(React.createElement(ActiveBoosts, { boosts: [] }));
     expect(container.firstChild).toBeNull();
   });
 
   // ── Known effect types render correct icons ───────────────────────────────
 
   it("renders TrendingUp icon for unit_bonus boost", () => {
-    const boosts: ActiveBoost[] = [
-      { slug: "b1", params: { effect_type: "unit_bonus", value: 0.2 } },
-    ];
+    const boosts: ActiveBoost[] = [{ slug: "b1", params: { effect_type: "unit_bonus", value: 0.2 } }];
     render(React.createElement(ActiveBoosts, { boosts }));
     expect(screen.getByTestId("icon-trending-up")).toBeTruthy();
   });
 
   it("renders Shield icon for defense_bonus boost", () => {
-    const boosts: ActiveBoost[] = [
-      { slug: "b1", params: { effect_type: "defense_bonus", value: 0.15 } },
-    ];
+    const boosts: ActiveBoost[] = [{ slug: "b1", params: { effect_type: "defense_bonus", value: 0.15 } }];
     render(React.createElement(ActiveBoosts, { boosts }));
     expect(screen.getByTestId("icon-shield")).toBeTruthy();
   });
 
   it("renders Swords icon for attack_bonus boost", () => {
-    const boosts: ActiveBoost[] = [
-      { slug: "b1", params: { effect_type: "attack_bonus", value: 0.1 } },
-    ];
+    const boosts: ActiveBoost[] = [{ slug: "b1", params: { effect_type: "attack_bonus", value: 0.1 } }];
     render(React.createElement(ActiveBoosts, { boosts }));
     expect(screen.getByTestId("icon-swords")).toBeTruthy();
   });
 
   it("renders Coins icon for energy_bonus boost", () => {
-    const boosts: ActiveBoost[] = [
-      { slug: "b1", params: { effect_type: "energy_bonus", value: 0.25 } },
-    ];
+    const boosts: ActiveBoost[] = [{ slug: "b1", params: { effect_type: "energy_bonus", value: 0.25 } }];
     render(React.createElement(ActiveBoosts, { boosts }));
     expect(screen.getByTestId("icon-coins")).toBeTruthy();
   });
@@ -83,17 +70,13 @@ describe("ActiveBoosts", () => {
   // ── Unknown effect_type falls back to Zap icon (line 49 — fallbackIcon) ────
 
   it("renders fallback Zap icon for unknown effect_type in boosts (line 49)", () => {
-    const boosts: ActiveBoost[] = [
-      { slug: "b1", params: { effect_type: "unknown_boost", value: 0.1 } },
-    ];
+    const boosts: ActiveBoost[] = [{ slug: "b1", params: { effect_type: "unknown_boost", value: 0.1 } }];
     render(React.createElement(ActiveBoosts, { boosts }));
     expect(screen.getByTestId("icon-zap")).toBeTruthy();
   });
 
   it("renders fallback Zap icon when effect_type is missing from boost params", () => {
-    const boosts: ActiveBoost[] = [
-      { slug: "b1", params: { value: 0.5 } },
-    ];
+    const boosts: ActiveBoost[] = [{ slug: "b1", params: { value: 0.5 } }];
     render(React.createElement(ActiveBoosts, { boosts }));
     // effectType is "" which is not in BOOST_ICONS → fallbackIcon()
     expect(screen.getByTestId("icon-zap")).toBeTruthy();
@@ -115,17 +98,13 @@ describe("ActiveBoosts", () => {
   // ── Value percentage display ──────────────────────────────────────────────
 
   it("displays boost value as percentage (+20%)", () => {
-    const boosts: ActiveBoost[] = [
-      { slug: "b1", params: { effect_type: "unit_bonus", value: 0.2 } },
-    ];
+    const boosts: ActiveBoost[] = [{ slug: "b1", params: { effect_type: "unit_bonus", value: 0.2 } }];
     render(React.createElement(ActiveBoosts, { boosts }));
     expect(screen.getByText("+20%")).toBeTruthy();
   });
 
   it("displays correct percentage for non-round value", () => {
-    const boosts: ActiveBoost[] = [
-      { slug: "b1", params: { effect_type: "defense_bonus", value: 0.155 } },
-    ];
+    const boosts: ActiveBoost[] = [{ slug: "b1", params: { effect_type: "defense_bonus", value: 0.155 } }];
     render(React.createElement(ActiveBoosts, { boosts }));
     // Math.round(0.155 * 100) = 16
     expect(screen.getByText("+16%")).toBeTruthy();
@@ -134,9 +113,7 @@ describe("ActiveBoosts", () => {
   // ── Tooltip title ─────────────────────────────────────────────────────────
 
   it("renders title with known label and percentage for unit_bonus", () => {
-    const boosts: ActiveBoost[] = [
-      { slug: "b1", params: { effect_type: "unit_bonus", value: 0.3 } },
-    ];
+    const boosts: ActiveBoost[] = [{ slug: "b1", params: { effect_type: "unit_bonus", value: 0.3 } }];
     const { container } = render(React.createElement(ActiveBoosts, { boosts }));
     const el = container.querySelector("[title]");
     expect(el?.getAttribute("title")).toContain("Mobilizacja");
@@ -145,9 +122,7 @@ describe("ActiveBoosts", () => {
   });
 
   it("uses effect_type as label fallback for unknown effect type", () => {
-    const boosts: ActiveBoost[] = [
-      { slug: "b1", params: { effect_type: "weird_boost", value: 0.1 } },
-    ];
+    const boosts: ActiveBoost[] = [{ slug: "b1", params: { effect_type: "weird_boost", value: 0.1 } }];
     const { container } = render(React.createElement(ActiveBoosts, { boosts }));
     const el = container.querySelector("[title]");
     expect(el?.getAttribute("title")).toContain("weird_boost");
@@ -202,9 +177,7 @@ describe("ActiveBoosts", () => {
     const matchBoosts: ActiveMatchBoost[] = [
       { slug: "mb1", effect_type: "unit_bonus", value: 0.1, ticks_remaining: 5 },
     ];
-    const { container } = render(
-      React.createElement(ActiveBoosts, { boosts: [], matchBoosts }),
-    );
+    const { container } = render(React.createElement(ActiveBoosts, { boosts: [], matchBoosts }));
     expect(container.firstChild).not.toBeNull();
   });
 

@@ -1227,14 +1227,17 @@ describe("useMatchmaking", () => {
 
     beforeEach(() => {
       capturedChannel = null;
-      vi.stubGlobal("BroadcastChannel", class MockBC {
-        onmessage: ((ev: MessageEvent) => void) | null = null;
-        constructor(_name: string) {
-          capturedChannel = this;
-        }
-        postMessage(_data: unknown) {}
-        close() {}
-      });
+      vi.stubGlobal(
+        "BroadcastChannel",
+        class MockBC {
+          onmessage: ((ev: MessageEvent) => void) | null = null;
+          constructor(_name: string) {
+            capturedChannel = this;
+          }
+          postMessage(_data: unknown) {}
+          close() {}
+        },
+      );
     });
 
     afterEach(() => {

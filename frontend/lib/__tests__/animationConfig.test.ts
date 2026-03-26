@@ -3,9 +3,9 @@ import {
   ANIMATION_DEFAULTS,
   ANIMATION_DEFAULTS_KEYS,
   type AnimationConfig,
-  type IconConfig,
   getEliminationVfx,
   getVictoryVfx,
+  type IconConfig,
   resolveAnimConfig,
   type TrailConfig,
 } from "../animationConfig";
@@ -370,16 +370,28 @@ describe("resolveAnimConfig()", () => {
   });
 
   it("uses vfxSlotOverride when provided, ignoring isNuke and actionType", () => {
-    const cfg = resolveAnimConfig("nuke", "attack", true, {
-      custom_slot: { params: { trail: { opacity: 0.11 } } },
-    }, "custom_slot");
+    const cfg = resolveAnimConfig(
+      "nuke",
+      "attack",
+      true,
+      {
+        custom_slot: { params: { trail: { opacity: 0.11 } } },
+      },
+      "custom_slot",
+    );
     expect(cfg.trail.opacity).toBe(0.11);
   });
 
   it("returns base when vfxSlotOverride points to a missing slot", () => {
-    const cfg = resolveAnimConfig("fighter", "attack", false, {
-      other_slot: { params: { trail: { opacity: 0.5 } } },
-    }, "nonexistent_slot");
+    const cfg = resolveAnimConfig(
+      "fighter",
+      "attack",
+      false,
+      {
+        other_slot: { params: { trail: { opacity: 0.5 } } },
+      },
+      "nonexistent_slot",
+    );
     expect(cfg.trail.opacity).toBe(ANIMATION_DEFAULTS.fighter.trail.opacity);
   });
 

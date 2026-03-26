@@ -222,6 +222,7 @@ export default function DashboardPage() {
             <p className="text-xs text-muted-foreground">Dostaniesz info gdy lobby się zapełni</p>
           </div>
           <button
+            type="button"
             onClick={() => {
               subscribe();
             }}
@@ -229,7 +230,11 @@ export default function DashboardPage() {
           >
             Włącz
           </button>
-          <button onClick={dismiss} className="shrink-0 text-muted-foreground hover:text-foreground transition-colors">
+          <button
+            type="button"
+            onClick={dismiss}
+            className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+          >
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -311,6 +316,7 @@ export default function DashboardPage() {
       {activeMatch && (
         <div className="px-4 md:px-0">
           <button
+            type="button"
             onClick={() => router.push(`/game/${activeMatch.id}`)}
             className="flex w-full items-center gap-4 rounded-2xl bg-primary/10 border border-primary/20 md:border-primary/30 p-4 md:p-6 md:flex-row md:text-left btn-tactical hover:bg-primary/15 md:shadow-[0_0_20px_rgba(34,211,238,0.08)] md:hover:shadow-[0_0_30px_rgba(34,211,238,0.15)]"
           >
@@ -346,6 +352,7 @@ export default function DashboardPage() {
                       const Icon = MODE_ICONS[mode.slug] ?? Swords;
                       return (
                         <button
+                          type="button"
                           key={mode.id}
                           onClick={() => setSelectedMode(mode.slug)}
                           disabled={inQueue}
@@ -379,6 +386,7 @@ export default function DashboardPage() {
                     const Icon = MODE_ICONS[mode.slug] ?? Swords;
                     return (
                       <button
+                        type="button"
                         key={mode.id}
                         onClick={() => setSelectedMode(mode.slug)}
                         disabled={inQueue}
@@ -413,6 +421,7 @@ export default function DashboardPage() {
                       <div className="flex flex-wrap gap-3">
                         {decks.map((deck) => (
                           <button
+                            type="button"
                             key={deck.id}
                             onClick={() => setSelectedDeckId(deck.id)}
                             disabled={inQueue}
@@ -502,6 +511,7 @@ export default function DashboardPage() {
                         const active = botMode === value;
                         return (
                           <button
+                            type="button"
                             key={value}
                             disabled={inQueue}
                             onClick={() => {
@@ -596,6 +606,7 @@ export default function DashboardPage() {
                     <div className="flex gap-2 overflow-x-auto pb-0.5 scrollbar-none [-ms-overflow-style:none] [scrollbar-width:none]">
                       {decks.map((deck) => (
                         <button
+                          type="button"
                           key={deck.id}
                           onClick={() => setSelectedDeckId(deck.id)}
                           disabled={inQueue}
@@ -676,6 +687,7 @@ export default function DashboardPage() {
                       const active = botMode === value;
                       return (
                         <button
+                          type="button"
                           key={value}
                           disabled={inQueue}
                           onClick={() => {
@@ -744,6 +756,8 @@ export default function DashboardPage() {
                                   "absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-card",
                                   activityDot(friend.activity_status),
                                 )}
+                                title={activityLabel(friend.activity_status, friend.activity_details)}
+                                role="status"
                                 aria-label={activityLabel(friend.activity_status, friend.activity_details)}
                               />
                             </div>
@@ -758,6 +772,7 @@ export default function DashboardPage() {
                             </div>
                           </Link>
                           <button
+                            type="button"
                             title="Napisz wiadomość"
                             onClick={() => openDMTab(friend.id, friend.username)}
                             className="shrink-0 flex items-center justify-center h-8 w-8 rounded-lg text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-primary hover:bg-primary/10 transition-all"
@@ -774,6 +789,7 @@ export default function DashboardPage() {
                             </Link>
                           )}
                           <button
+                            type="button"
                             title="Zaproś do gry"
                             disabled={inQueue}
                             onClick={async () => {
@@ -871,6 +887,7 @@ export default function DashboardPage() {
       {!user.tutorial_completed && !activeMatch && !inQueue && (
         <div className="px-4 md:px-0">
           <button
+            type="button"
             onClick={handleStartTutorial}
             disabled={tutorialMutation.isPending}
             className="flex w-full items-center gap-3 md:gap-5 rounded-2xl border border-accent/20 bg-accent/5 p-3 md:p-5 text-left transition-all hover:border-accent/35 hover:bg-accent/10 active:scale-[0.98]"
@@ -964,6 +981,7 @@ export default function DashboardPage() {
                     <span className="text-xs tabular-nums text-muted-foreground shrink-0">{friend.elo_rating} ELO</span>
                   </Link>
                   <button
+                    type="button"
                     onClick={() => openDMTab(friend.id, friend.username)}
                     title="Napisz wiadomość"
                     className="shrink-0 flex items-center justify-center h-7 w-7 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
@@ -1008,6 +1026,7 @@ export default function DashboardPage() {
 
               return (
                 <button
+                  type="button"
                   key={match.id}
                   className="flex w-full items-center gap-3 rounded-xl py-3 px-1 text-left transition-all active:bg-muted/50 hover-lift"
                   onClick={() => router.push(isActive ? `/game/${match.id}` : `/match/${match.id}`)}

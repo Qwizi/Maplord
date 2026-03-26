@@ -13,143 +13,143 @@ vi.mock("@/lib/auth", () => ({
 
 import {
   APIError,
+  acceptFriendRequest,
+  acceptGameInvite,
+  acceptInvitation,
+  acceptJoinRequest,
+  acceptWar,
   BannedError,
-  getLevelStat,
-  login,
-  register,
-  logoutAPI,
-  refreshToken,
-  getOnlineStats,
-  getMe,
-  setPassword,
+  buyFromListing,
+  cancelListing,
+  cancelWar,
   changePassword,
   changeUsername,
-  getSocialAuthURL,
-  socialAuthCallback,
-  getLinkedSocialAccounts,
-  linkSocialAccount,
-  unlinkSocialAccount,
-  getVapidKey,
-  subscribePush,
-  unsubscribePush,
-  getWsTicket,
-  getLeaderboard,
+  cleanupTutorial,
+  completeTutorial,
+  craftItem,
+  createAPIKey,
+  createClan,
+  createDeck,
+  createDeveloperApp,
+  createListing,
+  createShareLink,
+  createWebhook,
+  declareWar,
+  declineInvitation,
+  declineJoinRequest,
+  declineWar,
+  deleteAPIKey,
+  deleteDeck,
+  deleteDeveloperApp,
+  deleteWebhook,
+  demoteMember,
+  dissolveClan,
+  donateGold,
+  equipCosmetic,
+  getAPIKeys,
+  getAppByClientId,
+  getAppUsage,
+  getAvailableEvents,
+  getAvailableScopes,
+  getClan,
+  getClanActivityLog,
+  getClanChat,
+  getClanJoinRequests,
+  getClanLeaderboard,
+  getClanMembers,
+  getClanStats,
+  getClans,
+  getClanTreasury,
+  getClanWars,
   getConfig,
-  getGameModes,
+  getConversations,
+  getDeck,
+  getDeveloperApp,
+  getDeveloperApps,
+  getEquippedCosmetics,
+  getFriends,
   getGameMode,
+  getGameModes,
+  getItemCategories,
+  getLeaderboard,
+  getLevelStat,
+  getLinkedSocialAccounts,
+  getMarketConfig,
+  getMarketListings,
+  getMatch,
+  getMatchmakingStatus,
+  getMatchResult,
+  getMatchSnapshots,
+  getMe,
+  getMessages,
+  getMyClan,
+  getMyDecks,
+  getMyDrops,
+  getMyInventory,
+  getMyInvitations,
+  getMyListings,
+  getMyMatches,
+  getMyTradeHistory,
+  getMyWallet,
+  getNotifications,
+  getOnlineStats,
+  getPlayerMatches,
+  getReceivedRequests,
+  getRecipes,
   getRegions,
   getRegionsGraph,
   getRegionTilesUrl,
-  getMatchmakingStatus,
-  getMyMatches,
-  getPlayerMatches,
-  getMatch,
-  getMatchResult,
-  getMatchSnapshots,
-  getSnapshot,
-  startTutorial,
-  completeTutorial,
-  cleanupTutorial,
-  createShareLink,
+  getSentRequests,
   getSharedResource,
   getSharedSnapshot,
-  createDeveloperApp,
-  getDeveloperApps,
-  getDeveloperApp,
-  updateDeveloperApp,
-  deleteDeveloperApp,
-  createAPIKey,
-  getAPIKeys,
-  deleteAPIKey,
-  createWebhook,
-  getWebhooks,
-  updateWebhook,
-  deleteWebhook,
-  testWebhook,
-  getWebhookDeliveries,
-  getAppUsage,
-  getAvailableScopes,
-  getAvailableEvents,
-  getItemCategories,
-  getMyInventory,
-  getMyWallet,
-  getMyDrops,
-  openCrate,
-  getMarketConfig,
-  getMarketListings,
-  getMyListings,
-  getMyTradeHistory,
-  createListing,
-  buyFromListing,
-  cancelListing,
-  getEquippedCosmetics,
-  equipCosmetic,
-  unequipCosmetic,
-  getRecipes,
-  craftItem,
-  getMyDecks,
-  createDeck,
-  getDeck,
-  updateDeck,
-  deleteDeck,
-  setDefaultDeck,
-  getAppByClientId,
-  oauthAuthorize,
-  getFriends,
-  getReceivedRequests,
-  getSentRequests,
-  sendFriendRequest,
-  acceptFriendRequest,
-  rejectFriendRequest,
-  removeFriend,
-  inviteFriendToGame,
-  acceptGameInvite,
-  rejectGameInvite,
-  getConversations,
-  getMessages,
-  sendMessage,
+  getSnapshot,
+  getSocialAuthURL,
   getUnreadMessageCount,
-  getNotifications,
   getUnreadNotificationCount,
-  markNotificationRead,
-  markAllNotificationsRead,
-  createClan,
-  getClans,
-  getMyClan,
-  getClan,
-  updateClan,
-  dissolveClan,
-  getClanMembers,
-  leaveClan,
-  kickMember,
-  promoteMember,
-  demoteMember,
-  transferLeadership,
-  invitePlayer,
-  getMyInvitations,
-  acceptInvitation,
-  declineInvitation,
-  joinClan,
-  getClanJoinRequests,
-  acceptJoinRequest,
-  declineJoinRequest,
-  getClanTreasury,
-  donateGold,
-  withdrawGold,
-  declareWar,
-  acceptWar,
-  declineWar,
-  joinWar,
-  getClanWars,
-  getWarParticipants,
+  getVapidKey,
   getWar,
+  getWarParticipants,
+  getWebhookDeliveries,
+  getWebhooks,
+  getWsTicket,
+  inviteFriendToGame,
+  invitePlayer,
+  joinClan,
+  joinWar,
+  kickMember,
+  leaveClan,
   leaveWar,
-  cancelWar,
-  getClanLeaderboard,
-  getClanStats,
-  getClanActivityLog,
-  getClanChat,
+  linkSocialAccount,
+  login,
+  logoutAPI,
+  markAllNotificationsRead,
+  markNotificationRead,
+  oauthAuthorize,
+  openCrate,
+  promoteMember,
+  refreshToken,
+  register,
+  rejectFriendRequest,
+  rejectGameInvite,
+  removeFriend,
   sendClanChatMessage,
+  sendFriendRequest,
+  sendMessage,
+  setDefaultDeck,
+  setPassword,
+  socialAuthCallback,
+  startTutorial,
+  subscribePush,
+  testWebhook,
+  transferLeadership,
+  unequipCosmetic,
+  unlinkSocialAccount,
+  unsubscribePush,
+  updateClan,
+  updateDeck,
+  updateDeveloperApp,
+  updateWebhook,
+  withdrawGold,
 } from "../api";
 
 // ---------------------------------------------------------------------------
@@ -504,8 +504,12 @@ describe("getLevelStat()", () => {
 // ---------------------------------------------------------------------------
 
 describe("logoutAPI()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /auth/logout/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeNoContentResponse());
@@ -517,8 +521,12 @@ describe("logoutAPI()", () => {
 });
 
 describe("refreshToken()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("returns a dummy token pair", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({}));
@@ -528,8 +536,12 @@ describe("refreshToken()", () => {
 });
 
 describe("getOnlineStats()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /auth/online-stats and returns stats", async () => {
     const stats = { online: 10, in_queue: 2, in_game: 5 };
@@ -542,8 +554,12 @@ describe("getOnlineStats()", () => {
 });
 
 describe("getMe()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /auth/me", async () => {
     const user = { id: "1", username: "u" };
@@ -556,8 +572,12 @@ describe("getMe()", () => {
 });
 
 describe("setPassword()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /auth/set-password/ with token and new password", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ ok: true }));
@@ -573,8 +593,12 @@ describe("setPassword()", () => {
 });
 
 describe("changePassword()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /auth/change-password/ with correct body", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ ok: true }));
@@ -590,8 +614,12 @@ describe("changePassword()", () => {
 });
 
 describe("changeUsername()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /auth/change-username/ with username in body", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ ok: true, username: "newname" }));
@@ -608,8 +636,12 @@ describe("changeUsername()", () => {
 // ---------------------------------------------------------------------------
 
 describe("getSocialAuthURL()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs the social auth URL for google", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ url: "https://accounts.google.com/..." }));
@@ -629,8 +661,12 @@ describe("getSocialAuthURL()", () => {
 });
 
 describe("socialAuthCallback()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /auth/social/google/callback", async () => {
     const tokens = { access: "a", refresh: "r", is_new_user: false };
@@ -649,8 +685,12 @@ describe("socialAuthCallback()", () => {
 });
 
 describe("getLinkedSocialAccounts()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /auth/social/accounts with token", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse([]));
@@ -664,11 +704,22 @@ describe("getLinkedSocialAccounts()", () => {
 });
 
 describe("linkSocialAccount()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /auth/social/discord/link", async () => {
-    const account = { id: "acc1", provider: "discord", display_name: "User#1234", email: "u@d.com", avatar_url: "", created_at: "" };
+    const account = {
+      id: "acc1",
+      provider: "discord",
+      display_name: "User#1234",
+      email: "u@d.com",
+      avatar_url: "",
+      created_at: "",
+    };
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse(account));
     const result = await linkSocialAccount("discord", "code", "https://app.com/cb");
     expect(result).toEqual(account);
@@ -679,8 +730,12 @@ describe("linkSocialAccount()", () => {
 });
 
 describe("unlinkSocialAccount()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("DELETEs /auth/social/{accountId}/unlink", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeNoContentResponse());
@@ -696,8 +751,12 @@ describe("unlinkSocialAccount()", () => {
 // ---------------------------------------------------------------------------
 
 describe("getVapidKey()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /auth/push/vapid-key/ and returns the key string", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ vapid_public_key: "BPublicKey123" }));
@@ -709,8 +768,12 @@ describe("getVapidKey()", () => {
 });
 
 describe("subscribePush()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs the subscription object to /auth/push/subscribe/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeNoContentResponse());
@@ -724,8 +787,12 @@ describe("subscribePush()", () => {
 });
 
 describe("unsubscribePush()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /auth/push/unsubscribe/ with the endpoint", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeNoContentResponse());
@@ -739,8 +806,12 @@ describe("unsubscribePush()", () => {
 });
 
 describe("getWsTicket()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /auth/ws-ticket/ and returns ticket data", async () => {
     const ticket = { ticket: "t1", challenge: "ch", difficulty: 4 };
@@ -754,8 +825,12 @@ describe("getWsTicket()", () => {
 });
 
 describe("getLeaderboard()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /auth/leaderboard and returns paginated entries", async () => {
     const data = { items: [{ id: "1", username: "top" }], count: 1 };
@@ -774,11 +849,26 @@ describe("getLeaderboard()", () => {
 // ---------------------------------------------------------------------------
 
 describe("getGameModes()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /config/game-modes/ and returns list", async () => {
-    const modes = [{ id: "m1", name: "Standard", slug: "standard", description: "", max_players: 8, min_players: 2, is_default: true, order: 1 }];
+    const modes = [
+      {
+        id: "m1",
+        name: "Standard",
+        slug: "standard",
+        description: "",
+        max_players: 8,
+        min_players: 2,
+        is_default: true,
+        order: 1,
+      },
+    ];
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse(modes));
     const result = await getGameModes();
     expect(result).toEqual(modes);
@@ -788,8 +878,12 @@ describe("getGameModes()", () => {
 });
 
 describe("getGameMode()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /config/game-modes/{slug}/", async () => {
     const mode = { id: "m1", slug: "standard" };
@@ -806,8 +900,12 @@ describe("getGameMode()", () => {
 // ---------------------------------------------------------------------------
 
 describe("getRegions()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /geo/regions/ and returns GeoJSON", async () => {
     const geo = { type: "FeatureCollection", features: [] };
@@ -820,8 +918,12 @@ describe("getRegions()", () => {
 });
 
 describe("getRegionsGraph()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /geo/regions/graph/ without matchId", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse([]));
@@ -882,8 +984,12 @@ describe("getRegionTilesUrl()", () => {
 // ---------------------------------------------------------------------------
 
 describe("getMatchmakingStatus()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /matchmaking/status/", async () => {
     const status = { state: "idle" as const };
@@ -896,8 +1002,12 @@ describe("getMatchmakingStatus()", () => {
 });
 
 describe("getMyMatches()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /matches/ with pagination", async () => {
     const data = { items: [], count: 0 };
@@ -912,8 +1022,12 @@ describe("getMyMatches()", () => {
 });
 
 describe("getPlayerMatches()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /matches/player/{userId}/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ items: [], count: 0 }));
@@ -924,8 +1038,12 @@ describe("getPlayerMatches()", () => {
 });
 
 describe("getMatch()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /matches/{matchId}/ and returns a Match", async () => {
     const match = { id: "m1", status: "in_progress", players: [] };
@@ -938,8 +1056,12 @@ describe("getMatch()", () => {
 });
 
 describe("getMatchResult()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /game/results/{matchId}/", async () => {
     const result = { id: "r1", match_id: "m1", duration_seconds: 120, total_ticks: 200, player_results: [] };
@@ -952,8 +1074,12 @@ describe("getMatchResult()", () => {
 });
 
 describe("getMatchSnapshots()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /game/snapshots/{matchId}/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse([{ tick: 1, created_at: "" }]));
@@ -965,8 +1091,12 @@ describe("getMatchSnapshots()", () => {
 });
 
 describe("getSnapshot()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /game/snapshots/{matchId}/{tick}/", async () => {
     const snap = { tick: 42, state_data: {}, created_at: "" };
@@ -983,8 +1113,12 @@ describe("getSnapshot()", () => {
 // ---------------------------------------------------------------------------
 
 describe("startTutorial()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /matches/tutorial/start/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ match_id: "tut-1" }));
@@ -997,8 +1131,12 @@ describe("startTutorial()", () => {
 });
 
 describe("completeTutorial()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /auth/tutorial/complete/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ ok: true }));
@@ -1011,8 +1149,12 @@ describe("completeTutorial()", () => {
 });
 
 describe("cleanupTutorial()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /matches/tutorial/cleanup/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ ok: true }));
@@ -1029,8 +1171,12 @@ describe("cleanupTutorial()", () => {
 // ---------------------------------------------------------------------------
 
 describe("createShareLink()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /share/create/ with resource type and id", async () => {
     const link = { token: "sh1", resource_type: "match_result", resource_id: "m1" };
@@ -1045,8 +1191,12 @@ describe("createShareLink()", () => {
 });
 
 describe("getSharedResource()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /share/{token}/", async () => {
     const data = { resource_type: "match_result", match: {}, result: null, snapshot_ticks: [] };
@@ -1059,8 +1209,12 @@ describe("getSharedResource()", () => {
 });
 
 describe("getSharedSnapshot()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /share/{token}/snapshots/{tick}/", async () => {
     const snap = { tick: 10, state_data: {}, created_at: "" };
@@ -1077,11 +1231,23 @@ describe("getSharedSnapshot()", () => {
 // ---------------------------------------------------------------------------
 
 describe("createDeveloperApp()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /developers/apps/ with data and token", async () => {
-    const app = { id: "app1", name: "MyApp", description: "", client_id: "cid", client_secret: "csec", is_active: true, created_at: "" };
+    const app = {
+      id: "app1",
+      name: "MyApp",
+      description: "",
+      client_id: "cid",
+      client_secret: "csec",
+      is_active: true,
+      created_at: "",
+    };
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse(app));
     const result = await createDeveloperApp("tok", { name: "MyApp", description: "desc" });
     expect(result).toEqual(app);
@@ -1095,8 +1261,12 @@ describe("createDeveloperApp()", () => {
 });
 
 describe("getDeveloperApps()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /developers/apps/ and returns paginated apps", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ items: [], count: 0 }));
@@ -1108,8 +1278,12 @@ describe("getDeveloperApps()", () => {
 });
 
 describe("getDeveloperApp()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /developers/apps/{appId}/", async () => {
     const app = { id: "app1", name: "App" };
@@ -1122,8 +1296,12 @@ describe("getDeveloperApp()", () => {
 });
 
 describe("updateDeveloperApp()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("PATCHes /developers/apps/{appId}/ with data", async () => {
     const app = { id: "app1", name: "NewName" };
@@ -1137,8 +1315,12 @@ describe("updateDeveloperApp()", () => {
 });
 
 describe("deleteDeveloperApp()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("DELETEs /developers/apps/{appId}/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeNoContentResponse());
@@ -1154,11 +1336,24 @@ describe("deleteDeveloperApp()", () => {
 // ---------------------------------------------------------------------------
 
 describe("createAPIKey()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /developers/apps/{appId}/keys/", async () => {
-    const key = { id: "k1", prefix: "ml_", scopes: ["read"], rate_limit: 100, is_active: true, last_used: null, created_at: "", key: "ml_abc" };
+    const key = {
+      id: "k1",
+      prefix: "ml_",
+      scopes: ["read"],
+      rate_limit: 100,
+      is_active: true,
+      last_used: null,
+      created_at: "",
+      key: "ml_abc",
+    };
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse(key));
     const result = await createAPIKey("tok", "app1", { scopes: ["read"], rate_limit: 100 });
     expect(result).toEqual(key);
@@ -1170,8 +1365,12 @@ describe("createAPIKey()", () => {
 });
 
 describe("getAPIKeys()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /developers/apps/{appId}/keys/ with pagination", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ items: [], count: 0 }));
@@ -1183,8 +1382,12 @@ describe("getAPIKeys()", () => {
 });
 
 describe("deleteAPIKey()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("DELETEs /developers/apps/{appId}/keys/{keyId}/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeNoContentResponse());
@@ -1200,11 +1403,23 @@ describe("deleteAPIKey()", () => {
 // ---------------------------------------------------------------------------
 
 describe("createWebhook()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /developers/apps/{appId}/webhooks/", async () => {
-    const wh = { id: "wh1", url: "https://example.com/hook", secret: "s", events: ["match.end"], is_active: true, failure_count: 0, created_at: "" };
+    const wh = {
+      id: "wh1",
+      url: "https://example.com/hook",
+      secret: "s",
+      events: ["match.end"],
+      is_active: true,
+      failure_count: 0,
+      created_at: "",
+    };
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse(wh));
     const result = await createWebhook("tok", "app1", { url: "https://example.com/hook", events: ["match.end"] });
     expect(result).toEqual(wh);
@@ -1215,8 +1430,12 @@ describe("createWebhook()", () => {
 });
 
 describe("getWebhooks()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /developers/apps/{appId}/webhooks/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ items: [], count: 0 }));
@@ -1227,8 +1446,12 @@ describe("getWebhooks()", () => {
 });
 
 describe("updateWebhook()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("PATCHes /developers/apps/{appId}/webhooks/{webhookId}/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ id: "wh1" }));
@@ -1241,8 +1464,12 @@ describe("updateWebhook()", () => {
 });
 
 describe("deleteWebhook()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("DELETEs /developers/apps/{appId}/webhooks/{webhookId}/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeNoContentResponse());
@@ -1254,8 +1481,12 @@ describe("deleteWebhook()", () => {
 });
 
 describe("testWebhook()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /developers/apps/{appId}/webhooks/{webhookId}/test/", async () => {
     const res = { success: true, status_code: 200, message: "ok" };
@@ -1269,8 +1500,12 @@ describe("testWebhook()", () => {
 });
 
 describe("getWebhookDeliveries()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /developers/apps/{appId}/webhooks/{webhookId}/deliveries/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ items: [], count: 0 }));
@@ -1282,11 +1517,24 @@ describe("getWebhookDeliveries()", () => {
 });
 
 describe("getAppUsage()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /developers/apps/{appId}/usage/", async () => {
-    const usage = { app_id: "app1", total_api_calls: 50, active_keys: 2, total_webhooks: 1, active_webhooks: 1, total_deliveries: 10, successful_deliveries: 9, failed_deliveries: 1 };
+    const usage = {
+      app_id: "app1",
+      total_api_calls: 50,
+      active_keys: 2,
+      total_webhooks: 1,
+      active_webhooks: 1,
+      total_deliveries: 10,
+      successful_deliveries: 9,
+      failed_deliveries: 1,
+    };
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse(usage));
     const result = await getAppUsage("tok", "app1");
     expect(result).toEqual(usage);
@@ -1296,8 +1544,12 @@ describe("getAppUsage()", () => {
 });
 
 describe("getAvailableScopes()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /developers/scopes/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ scopes: ["read", "write"] }));
@@ -1309,8 +1561,12 @@ describe("getAvailableScopes()", () => {
 });
 
 describe("getAvailableEvents()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /developers/events/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ events: ["match.end", "match.start"] }));
@@ -1326,8 +1582,12 @@ describe("getAvailableEvents()", () => {
 // ---------------------------------------------------------------------------
 
 describe("getItemCategories()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /inventory/items/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse([]));
@@ -1339,8 +1599,12 @@ describe("getItemCategories()", () => {
 });
 
 describe("getMyInventory()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /inventory/my/ with pagination", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ items: [], count: 0 }));
@@ -1352,8 +1616,12 @@ describe("getMyInventory()", () => {
 });
 
 describe("getMyWallet()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /inventory/wallet/", async () => {
     const wallet = { gold: 500, total_earned: 1000, total_spent: 500 };
@@ -1366,8 +1634,12 @@ describe("getMyWallet()", () => {
 });
 
 describe("getMyDrops()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /inventory/drops/ with pagination", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ items: [], count: 0 }));
@@ -1379,8 +1651,12 @@ describe("getMyDrops()", () => {
 });
 
 describe("openCrate()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /inventory/open-crate/ with crate and key slugs", async () => {
     const drops = { drops: [{ item_name: "Knife", item_slug: "knife", rarity: "rare", quantity: 1 }] };
@@ -1399,8 +1675,12 @@ describe("openCrate()", () => {
 // ---------------------------------------------------------------------------
 
 describe("getMarketConfig()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /marketplace/config/", async () => {
     const cfg = { transaction_fee_percent: 5, listing_duration_hours: 72, max_active_listings_per_user: 10 };
@@ -1413,8 +1693,12 @@ describe("getMarketConfig()", () => {
 });
 
 describe("getMarketListings()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /marketplace/listings/ without filters", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ items: [], count: 0 }));
@@ -1435,8 +1719,12 @@ describe("getMarketListings()", () => {
 });
 
 describe("getMyListings()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /marketplace/my-listings/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ items: [], count: 0 }));
@@ -1447,8 +1735,12 @@ describe("getMyListings()", () => {
 });
 
 describe("getMyTradeHistory()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /marketplace/history/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ items: [], count: 0 }));
@@ -1459,24 +1751,54 @@ describe("getMyTradeHistory()", () => {
 });
 
 describe("createListing()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /marketplace/create-listing/ with listing data", async () => {
-    const listing = { id: "l1", seller_username: "u", item: {} as never, listing_type: "sell", quantity: 1, quantity_remaining: 1, price_per_unit: 100, status: "active", is_bot_listing: false, created_at: "", expires_at: null };
+    const listing = {
+      id: "l1",
+      seller_username: "u",
+      item: {} as never,
+      listing_type: "sell",
+      quantity: 1,
+      quantity_remaining: 1,
+      price_per_unit: 100,
+      status: "active",
+      is_bot_listing: false,
+      created_at: "",
+      expires_at: null,
+    };
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse(listing));
-    const result = await createListing("tok", { item_slug: "knife", listing_type: "sell", quantity: 1, price_per_unit: 100 });
+    const result = await createListing("tok", {
+      item_slug: "knife",
+      listing_type: "sell",
+      quantity: 1,
+      price_per_unit: 100,
+    });
     expect(result).toEqual(listing);
     const [url, opts] = getLastCall();
     expect(url).toMatch(/\/marketplace\/create-listing\/$/);
     expect(opts.method).toBe("POST");
-    expect(JSON.parse(opts.body as string)).toEqual({ item_slug: "knife", listing_type: "sell", quantity: 1, price_per_unit: 100 });
+    expect(JSON.parse(opts.body as string)).toEqual({
+      item_slug: "knife",
+      listing_type: "sell",
+      quantity: 1,
+      price_per_unit: 100,
+    });
   });
 });
 
 describe("buyFromListing()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /marketplace/buy/ with listing_id and quantity", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ message: "Purchased" }));
@@ -1490,8 +1812,12 @@ describe("buyFromListing()", () => {
 });
 
 describe("cancelListing()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /marketplace/cancel/{listingId}/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ message: "Cancelled" }));
@@ -1508,8 +1834,12 @@ describe("cancelListing()", () => {
 // ---------------------------------------------------------------------------
 
 describe("getEquippedCosmetics()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /inventory/cosmetics/equipped/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse([]));
@@ -1521,11 +1851,22 @@ describe("getEquippedCosmetics()", () => {
 });
 
 describe("equipCosmetic()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /inventory/cosmetics/equip/ with payload", async () => {
-    const detail = { slot: "flag", item_slug: "flag-uk", item_name: "UK Flag", asset_url: null, cosmetic_params: null, instance: null };
+    const detail = {
+      slot: "flag",
+      item_slug: "flag-uk",
+      item_name: "UK Flag",
+      asset_url: null,
+      cosmetic_params: null,
+      instance: null,
+    };
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse(detail));
     const result = await equipCosmetic("tok", { item_slug: "flag-uk" });
     expect(result).toEqual(detail);
@@ -1537,8 +1878,12 @@ describe("equipCosmetic()", () => {
 });
 
 describe("unequipCosmetic()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /inventory/cosmetics/unequip/ with slot", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ detail: "Unequipped" }));
@@ -1556,8 +1901,12 @@ describe("unequipCosmetic()", () => {
 // ---------------------------------------------------------------------------
 
 describe("getRecipes()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /crafting/recipes/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse([]));
@@ -1569,8 +1918,12 @@ describe("getRecipes()", () => {
 });
 
 describe("craftItem()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /crafting/craft/ with recipe_slug", async () => {
     const craftResult = { message: "Crafted!", item_name: "Knife", item_slug: "knife", quantity: 1, instance: null };
@@ -1589,8 +1942,12 @@ describe("craftItem()", () => {
 // ---------------------------------------------------------------------------
 
 describe("getMyDecks()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /inventory/decks/ with pagination", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ items: [], count: 0 }));
@@ -1602,8 +1959,12 @@ describe("getMyDecks()", () => {
 });
 
 describe("createDeck()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /inventory/decks/ with name", async () => {
     const deck = { id: "d1", name: "My Deck", is_default: false, is_editable: true, items: [] };
@@ -1618,8 +1979,12 @@ describe("createDeck()", () => {
 });
 
 describe("getDeck()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /inventory/decks/{deckId}/", async () => {
     const deck = { id: "d1", name: "My Deck", is_default: false, is_editable: true, items: [] };
@@ -1632,8 +1997,12 @@ describe("getDeck()", () => {
 });
 
 describe("updateDeck()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("PUTs to /inventory/decks/{deckId}/ with updated data", async () => {
     const deck = { id: "d1", name: "Renamed", is_default: false, is_editable: true, items: [] };
@@ -1647,8 +2016,12 @@ describe("updateDeck()", () => {
 });
 
 describe("deleteDeck()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("DELETEs /inventory/decks/{deckId}/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeNoContentResponse());
@@ -1660,8 +2033,12 @@ describe("deleteDeck()", () => {
 });
 
 describe("setDefaultDeck()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /inventory/decks/{deckId}/set-default/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ ok: true }));
@@ -1678,8 +2055,12 @@ describe("setDefaultDeck()", () => {
 // ---------------------------------------------------------------------------
 
 describe("getAppByClientId()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /oauth/app-info/?client_id={clientId}", async () => {
     const appInfo = { name: "TestApp", description: "A test app" };
@@ -1699,18 +2080,32 @@ describe("getAppByClientId()", () => {
 });
 
 describe("oauthAuthorize()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /oauth/authorize/ with data", async () => {
     const authResult = { code: "authcode123", state: "s1" };
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse(authResult));
-    const result = await oauthAuthorize({ client_id: "cid", redirect_uri: "https://app.com/cb", scope: "read", state: "s1" });
+    const result = await oauthAuthorize({
+      client_id: "cid",
+      redirect_uri: "https://app.com/cb",
+      scope: "read",
+      state: "s1",
+    });
     expect(result).toEqual(authResult);
     const [url, opts] = getLastCall();
     expect(url).toMatch(/\/oauth\/authorize\/$/);
     expect(opts.method).toBe("POST");
-    expect(JSON.parse(opts.body as string)).toEqual({ client_id: "cid", redirect_uri: "https://app.com/cb", scope: "read", state: "s1" });
+    expect(JSON.parse(opts.body as string)).toEqual({
+      client_id: "cid",
+      redirect_uri: "https://app.com/cb",
+      scope: "read",
+      state: "s1",
+    });
   });
 });
 
@@ -1719,8 +2114,12 @@ describe("oauthAuthorize()", () => {
 // ---------------------------------------------------------------------------
 
 describe("getFriends()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /friends/ with pagination", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ items: [], count: 0 }));
@@ -1732,8 +2131,12 @@ describe("getFriends()", () => {
 });
 
 describe("getReceivedRequests()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /friends/requests/received/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ items: [], count: 0 }));
@@ -1744,8 +2147,12 @@ describe("getReceivedRequests()", () => {
 });
 
 describe("getSentRequests()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /friends/requests/sent/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ items: [], count: 0 }));
@@ -1756,8 +2163,12 @@ describe("getSentRequests()", () => {
 });
 
 describe("sendFriendRequest()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /friends/request/ with username", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ id: "fr1", status: "pending" }));
@@ -1770,8 +2181,12 @@ describe("sendFriendRequest()", () => {
 });
 
 describe("acceptFriendRequest()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /friends/{friendshipId}/accept/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ id: "fr1", status: "accepted" }));
@@ -1783,8 +2198,12 @@ describe("acceptFriendRequest()", () => {
 });
 
 describe("rejectFriendRequest()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /friends/{friendshipId}/reject/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ id: "fr1", status: "rejected" }));
@@ -1796,8 +2215,12 @@ describe("rejectFriendRequest()", () => {
 });
 
 describe("removeFriend()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("DELETEs /friends/{friendshipId}/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeNoContentResponse());
@@ -1809,8 +2232,12 @@ describe("removeFriend()", () => {
 });
 
 describe("inviteFriendToGame()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /friends/{friendshipId}/invite-game/ with game_mode", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ lobby_id: "lob1" }));
@@ -1824,8 +2251,12 @@ describe("inviteFriendToGame()", () => {
 });
 
 describe("acceptGameInvite()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /friends/invite-accept/{notificationId}/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ lobby_id: "lob1", game_mode: "standard" }));
@@ -1838,8 +2269,12 @@ describe("acceptGameInvite()", () => {
 });
 
 describe("rejectGameInvite()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /friends/invite-reject/{notificationId}/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeNoContentResponse());
@@ -1855,8 +2290,12 @@ describe("rejectGameInvite()", () => {
 // ---------------------------------------------------------------------------
 
 describe("getConversations()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /messages/conversations/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse([]));
@@ -1868,8 +2307,12 @@ describe("getConversations()", () => {
 });
 
 describe("getMessages()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /messages/{userId}/ with pagination", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ items: [], count: 0 }));
@@ -1881,8 +2324,12 @@ describe("getMessages()", () => {
 });
 
 describe("sendMessage()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /messages/{userId}/ with content", async () => {
     const msg = { id: "msg1", content: "Hello!", is_read: false, created_at: "" };
@@ -1897,8 +2344,12 @@ describe("sendMessage()", () => {
 });
 
 describe("getUnreadMessageCount()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /messages/unread-total/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ count: 3 }));
@@ -1914,8 +2365,12 @@ describe("getUnreadMessageCount()", () => {
 // ---------------------------------------------------------------------------
 
 describe("getNotifications()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /notifications/ with pagination", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ items: [], count: 0 }));
@@ -1927,8 +2382,12 @@ describe("getNotifications()", () => {
 });
 
 describe("getUnreadNotificationCount()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /notifications/unread-count", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ count: 5 }));
@@ -1940,8 +2399,12 @@ describe("getUnreadNotificationCount()", () => {
 });
 
 describe("markNotificationRead()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /notifications/{id}/read/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeNoContentResponse());
@@ -1953,8 +2416,12 @@ describe("markNotificationRead()", () => {
 });
 
 describe("markAllNotificationsRead()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /notifications/read-all/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeNoContentResponse());
@@ -1970,8 +2437,12 @@ describe("markAllNotificationsRead()", () => {
 // ---------------------------------------------------------------------------
 
 describe("createClan()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /clans/ with clan data", async () => {
     const clan = { id: "c1", name: "Warriors", tag: "WAR" };
@@ -1986,8 +2457,12 @@ describe("createClan()", () => {
 });
 
 describe("getClans()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /clans/ without search", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ items: [], count: 0 }));
@@ -2006,8 +2481,12 @@ describe("getClans()", () => {
 });
 
 describe("getMyClan()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /clans/my/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ clan: null, membership: null }));
@@ -2019,8 +2498,12 @@ describe("getMyClan()", () => {
 });
 
 describe("getClan()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /clans/{clanId}/", async () => {
     const clan = { id: "c1", name: "Warriors" };
@@ -2033,8 +2516,12 @@ describe("getClan()", () => {
 });
 
 describe("updateClan()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("PATCHes /clans/{clanId}/ with data", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ id: "c1", name: "Elite" }));
@@ -2047,8 +2534,12 @@ describe("updateClan()", () => {
 });
 
 describe("dissolveClan()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("DELETEs /clans/{clanId}/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ ok: true }));
@@ -2065,8 +2556,12 @@ describe("dissolveClan()", () => {
 // ---------------------------------------------------------------------------
 
 describe("getClanMembers()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /clans/{clanId}/members/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ items: [], count: 0 }));
@@ -2077,8 +2572,12 @@ describe("getClanMembers()", () => {
 });
 
 describe("leaveClan()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /clans/{clanId}/leave/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ ok: true }));
@@ -2091,8 +2590,12 @@ describe("leaveClan()", () => {
 });
 
 describe("kickMember()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /clans/{clanId}/kick/{userId}/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ ok: true }));
@@ -2105,8 +2608,12 @@ describe("kickMember()", () => {
 });
 
 describe("promoteMember()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /clans/{clanId}/promote/{userId}/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ ok: true, new_role: "officer" }));
@@ -2119,8 +2626,12 @@ describe("promoteMember()", () => {
 });
 
 describe("demoteMember()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /clans/{clanId}/demote/{userId}/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ ok: true, new_role: "member" }));
@@ -2133,8 +2644,12 @@ describe("demoteMember()", () => {
 });
 
 describe("transferLeadership()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /clans/{clanId}/transfer-leadership/{userId}/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ ok: true }));
@@ -2151,8 +2666,12 @@ describe("transferLeadership()", () => {
 // ---------------------------------------------------------------------------
 
 describe("invitePlayer()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /clans/{clanId}/invite/{userId}/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ id: "inv1" }));
@@ -2165,8 +2684,12 @@ describe("invitePlayer()", () => {
 });
 
 describe("getMyInvitations()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /clans/my-invitations/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ items: [], count: 0 }));
@@ -2177,8 +2700,12 @@ describe("getMyInvitations()", () => {
 });
 
 describe("acceptInvitation()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /clans/invitations/{invitationId}/accept/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ ok: true, clan_id: "c1" }));
@@ -2191,8 +2718,12 @@ describe("acceptInvitation()", () => {
 });
 
 describe("declineInvitation()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /clans/invitations/{invitationId}/decline/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ ok: true }));
@@ -2209,8 +2740,12 @@ describe("declineInvitation()", () => {
 // ---------------------------------------------------------------------------
 
 describe("joinClan()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /clans/{clanId}/join/ with optional message", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ ok: true, joined: true }));
@@ -2231,8 +2766,12 @@ describe("joinClan()", () => {
 });
 
 describe("getClanJoinRequests()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /clans/{clanId}/join-requests/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ items: [], count: 0 }));
@@ -2243,8 +2782,12 @@ describe("getClanJoinRequests()", () => {
 });
 
 describe("acceptJoinRequest()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /clans/join-requests/{requestId}/accept/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ ok: true }));
@@ -2257,8 +2800,12 @@ describe("acceptJoinRequest()", () => {
 });
 
 describe("declineJoinRequest()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /clans/join-requests/{requestId}/decline/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ ok: true }));
@@ -2275,8 +2822,12 @@ describe("declineJoinRequest()", () => {
 // ---------------------------------------------------------------------------
 
 describe("getClanTreasury()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /clans/{clanId}/treasury/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ treasury_gold: 1000, tax_percent: 5 }));
@@ -2288,8 +2839,12 @@ describe("getClanTreasury()", () => {
 });
 
 describe("donateGold()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /clans/{clanId}/treasury/donate/ with amount", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ ok: true, treasury_gold: 1500 }));
@@ -2303,8 +2858,12 @@ describe("donateGold()", () => {
 });
 
 describe("withdrawGold()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /clans/{clanId}/treasury/withdraw/ with amount and reason", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ ok: true, treasury_gold: 800 }));
@@ -2329,8 +2888,12 @@ describe("withdrawGold()", () => {
 // ---------------------------------------------------------------------------
 
 describe("declareWar()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /clans/{clanId}/wars/declare/{targetId}/", async () => {
     const war = { id: "w1", status: "pending" };
@@ -2345,8 +2908,12 @@ describe("declareWar()", () => {
 });
 
 describe("acceptWar()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /clans/wars/{warId}/accept/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ ok: true }));
@@ -2359,8 +2926,12 @@ describe("acceptWar()", () => {
 });
 
 describe("declineWar()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /clans/wars/{warId}/decline/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ ok: true }));
@@ -2373,8 +2944,12 @@ describe("declineWar()", () => {
 });
 
 describe("joinWar()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /clans/wars/{warId}/join/", async () => {
     const participant = { id: "p1", user: { id: "u1", username: "fighter", elo_rating: 1200 }, clan_id: "c1" };
@@ -2388,8 +2963,12 @@ describe("joinWar()", () => {
 });
 
 describe("getClanWars()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /clans/{clanId}/wars/ with pagination", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ items: [], count: 0 }));
@@ -2401,8 +2980,12 @@ describe("getClanWars()", () => {
 });
 
 describe("getWarParticipants()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /clans/wars/{warId}/participants/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse([]));
@@ -2414,8 +2997,12 @@ describe("getWarParticipants()", () => {
 });
 
 describe("getWar()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /clans/wars/{warId}/", async () => {
     const war = { id: "w1", status: "active" };
@@ -2428,8 +3015,12 @@ describe("getWar()", () => {
 });
 
 describe("leaveWar()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /clans/wars/{warId}/leave/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ ok: true }));
@@ -2442,8 +3033,12 @@ describe("leaveWar()", () => {
 });
 
 describe("cancelWar()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /clans/wars/{warId}/cancel/", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ ok: true }));
@@ -2460,8 +3055,12 @@ describe("cancelWar()", () => {
 // ---------------------------------------------------------------------------
 
 describe("getClanLeaderboard()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /clans/leaderboard/ without sort", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ items: [], count: 0 }));
@@ -2480,11 +3079,25 @@ describe("getClanLeaderboard()", () => {
 });
 
 describe("getClanStats()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /clans/{clanId}/stats/", async () => {
-    const stats = { clan_id: "c1", level: 5, experience: 1000, elo_rating: 1500, member_count: 20, wars_total: 10, wars_won: 7, wars_lost: 3, war_win_rate: 0.7 };
+    const stats = {
+      clan_id: "c1",
+      level: 5,
+      experience: 1000,
+      elo_rating: 1500,
+      member_count: 20,
+      wars_total: 10,
+      wars_won: 7,
+      wars_lost: 3,
+      war_win_rate: 0.7,
+    };
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse(stats));
     const result = await getClanStats("tok", "c1");
     expect(result).toEqual(stats);
@@ -2498,8 +3111,12 @@ describe("getClanStats()", () => {
 // ---------------------------------------------------------------------------
 
 describe("getClanActivityLog()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /clans/{clanId}/activity-log/ with pagination", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ items: [], count: 0 }));
@@ -2511,8 +3128,12 @@ describe("getClanActivityLog()", () => {
 });
 
 describe("getClanChat()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("GETs /clans/{clanId}/chat/ with pagination", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ items: [], count: 0 }));
@@ -2524,8 +3145,12 @@ describe("getClanChat()", () => {
 });
 
 describe("sendClanChatMessage()", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("POSTs to /clans/{clanId}/chat/ with content", async () => {
     const msg = { id: "cm1", content: "Hello clan!", created_at: "" };
@@ -2544,8 +3169,12 @@ describe("sendClanChatMessage()", () => {
 // ---------------------------------------------------------------------------
 
 describe("fetchPaginated — omits params when not given", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("does not append limit/offset when both are undefined", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ items: [], count: 0 }));
@@ -2561,8 +3190,12 @@ describe("fetchPaginated — omits params when not given", () => {
 // ---------------------------------------------------------------------------
 
 describe("error handling — 500 server error", () => {
-  beforeEach(() => { vi.stubGlobal("fetch", vi.fn()); });
-  afterEach(() => { vi.unstubAllGlobals(); });
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it("throws APIError with status 500", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeErrorResponse("Internal Server Error", 500));

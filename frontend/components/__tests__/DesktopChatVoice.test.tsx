@@ -13,8 +13,7 @@ vi.mock("lucide-react", () => ({
     React.createElement("span", { "data-testid": "icon-chevron-up", className }),
   MessageSquare: ({ className }: { className?: string }) =>
     React.createElement("span", { "data-testid": "icon-message-square", className }),
-  Mic: ({ className }: { className?: string }) =>
-    React.createElement("span", { "data-testid": "icon-mic", className }),
+  Mic: ({ className }: { className?: string }) => React.createElement("span", { "data-testid": "icon-mic", className }),
   MicOff: ({ className }: { className?: string }) =>
     React.createElement("span", { "data-testid": "icon-mic-off", className }),
   Phone: ({ className }: { className?: string }) =>
@@ -50,7 +49,9 @@ function defaultProps(overrides: Partial<Parameters<typeof DesktopChatVoice>[0]>
   };
 }
 
-function makeMessage(overrides: Partial<{ user_id: string; username: string; content: string; timestamp: number }> = {}) {
+function makeMessage(
+  overrides: Partial<{ user_id: string; username: string; content: string; timestamp: number }> = {},
+) {
   return {
     user_id: "user-1",
     username: "Alpha",

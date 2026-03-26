@@ -714,7 +714,9 @@ describe("useChat", () => {
         const ws = { readyState: 1, sent: [] as string[] } as unknown as MockWebSocket;
         ws.onmessage = (evt) => onMessage(JSON.parse(evt.data as string));
         ws.send = (data: string) => (ws as unknown as { sent: string[] }).sent.push(data);
-        ws.close = () => { (ws as unknown as { readyState: number }).readyState = 3; };
+        ws.close = () => {
+          (ws as unknown as { readyState: number }).readyState = 3;
+        };
         capturedWs = ws;
 
         Object.defineProperty(ws, "onopen", {

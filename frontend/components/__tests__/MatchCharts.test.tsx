@@ -284,9 +284,7 @@ describe("MatchCharts", () => {
 
   it("uses fallback color for Bar when player not in match.players (line 135)", () => {
     const result = makeMatchResult({
-      player_results: [
-        makePlayerResult({ user_id: "user-x", username: "Unknown" }),
-      ],
+      player_results: [makePlayerResult({ user_id: "user-x", username: "Unknown" })],
     });
     // match.players is empty — no match for user-x
     const match = makeMatch({ players: [] });

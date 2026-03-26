@@ -243,9 +243,7 @@ describe("TutorialOverlay", () => {
 
   it("does not crash when uiTarget points to non-existent DOM element", () => {
     const step = makeStep({ uiTarget: "nonexistent-element", manualAdvance: true });
-    expect(() =>
-      render(React.createElement(TutorialOverlay, { ...defaultProps, step })),
-    ).not.toThrow();
+    expect(() => render(React.createElement(TutorialOverlay, { ...defaultProps, step }))).not.toThrow();
   });
 
   // ── Different stepIndex/totalSteps combinations ─────────────────────────────
@@ -307,9 +305,7 @@ describe("TutorialOverlay", () => {
     } as DOMRect);
 
     const step = makeStep({ uiTarget: "visible-target", manualAdvance: true });
-    const { container } = render(
-      React.createElement(TutorialOverlay, { ...defaultProps, step }),
-    );
+    const { container } = render(React.createElement(TutorialOverlay, { ...defaultProps, step }));
 
     // Allow the requestAnimationFrame update to run
     await act(async () => {
@@ -334,9 +330,7 @@ describe("TutorialOverlay", () => {
     // getBoundingClientRect returns zeros by default in jsdom → rect.width === 0 → return null
 
     const step = makeStep({ uiTarget: "zero-width-target", manualAdvance: true });
-    const { container } = render(
-      React.createElement(TutorialOverlay, { ...defaultProps, step }),
-    );
+    const { container } = render(React.createElement(TutorialOverlay, { ...defaultProps, step }));
 
     // Pointer overlay should not be present since rect.width === 0
     const pointerOverlay = container.querySelector(".pointer-events-none.fixed.inset-0.z-\\[99\\]");

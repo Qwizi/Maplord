@@ -260,20 +260,14 @@ describe("MatchIntroOverlay", () => {
 
   it("shows mapReady true loading step when only map is not ready", () => {
     render(
-      React.createElement(
-        MatchIntroOverlay,
-        makeProps({ connected: true, gameStateLoaded: true, mapReady: false }),
-      ),
+      React.createElement(MatchIntroOverlay, makeProps({ connected: true, gameStateLoaded: true, mapReady: false })),
     );
     expect(screen.getByText("Ładowanie mapy...")).toBeTruthy();
   });
 
   it("shows gameStateLoaded loading step when game data not yet loaded", () => {
     render(
-      React.createElement(
-        MatchIntroOverlay,
-        makeProps({ connected: true, gameStateLoaded: false, mapReady: false }),
-      ),
+      React.createElement(MatchIntroOverlay, makeProps({ connected: true, gameStateLoaded: false, mapReady: false })),
     );
     expect(screen.getByText("Ładowanie danych gry...")).toBeTruthy();
   });
