@@ -2046,22 +2046,21 @@ def test_start_clan_war_full_flow(clan, rival_clan, leader, other_user):
     ClanWarParticipant.objects.create(war=war, clan=clan, user=leader)
     ClanWarParticipant.objects.create(war=war, clan=rival_clan, user=other_user)
 
-    fake_match_id = str(war.pk)  # reuse war UUID for simplicity
+    from apps.matchmaking.models import Match
+
+    real_match = Match.objects.create(status=Match.Status.WAITING)
+    fake_match_id = str(real_match.pk)
     with (
         patch(
-            "apps.clans.tasks._create_match_from_users",
+            "apps.matchmaking.internal_api._create_match_from_users",
             return_value={"match_id": fake_match_id},
         ),
-        patch("apps.matchmaking.models.Match.objects.get") as mock_match_get,
         patch("apps.accounts.push.send_push_to_users"),
         patch("apps.matchmaking.events.publish_lobby_event"),
-        patch("apps.clans.tasks.redis_lib") as mock_redis_mod,
+        patch("redis.Redis") as mock_redis_cls,
     ):
-        mock_match = MagicMock()
-        mock_match_get.return_value = mock_match
-
         mock_r = MagicMock()
-        mock_redis_mod.Redis.return_value = mock_r
+        mock_redis_cls.return_value = mock_r
 
         start_clan_war(str(war.pk))
 
@@ -2393,7 +2392,7 @@ def test_promote_member_already_at_max_returns_400(tc, clan, leader, leader_toke
     # Let's have an officer promote a member to officer (same rank as actor) → 403
     officer_user = User.objects.create_user(email="promo_off@t.com", username="promo_officer", password="x")
     ClanMembership.objects.create(clan=clan, user=officer_user, role=ClanMembership.Role.OFFICER)
-    officer_token = _get_token(tc, officer_user)
+    officer_token = _get_token(tc, officer_user, password="x")
 
     target_member = User.objects.create_user(email="promo_tgt@t.com", username="promo_target", password="x")
     ClanMembership.objects.create(clan=clan, user=target_member, role=ClanMembership.Role.MEMBER)
@@ -2426,7 +2425,7 @@ def test_demote_member_equal_rank_returns_403(tc, clan, leader, leader_membershi
     """demote_member returns 403 when target has equal or higher rank (line 665)."""
     officer_user = User.objects.create_user(email="demoter@t.com", username="demoter", password="x")
     ClanMembership.objects.create(clan=clan, user=officer_user, role=ClanMembership.Role.OFFICER)
-    demoter_token = _get_token(tc, officer_user)
+    demoter_token = _get_token(tc, officer_user, password="x")
 
     # Another officer — equal rank → 403
     ClanMembership.objects.create(clan=clan, user=other_user, role=ClanMembership.Role.OFFICER)
@@ -2471,9 +2470,9 @@ def test_join_or_request_clan_full(tc, clan, leader, member_user, member_token, 
 
 
 def test_get_treasury_clan_not_found(tc, leader, leader_token, leader_membership):
-    """get_treasury returns 404 when clan doesn't exist (line 848)."""
+    """get_treasury returns 403 when user is not a member of the given clan UUID (membership check precedes clan existence check)."""
     resp = tc.get(f"/api/v1/clans/{uuid.uuid4()}/treasury/", **_auth(leader_token))
-    assert resp.status_code == 404
+    assert resp.status_code == 403
 
 
 def test_declare_war_challenger_clan_not_found(tc, clan, rival_clan, leader, leader_token, leader_membership):

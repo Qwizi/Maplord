@@ -4,6 +4,7 @@ from ninja import Schema
 from ninja_extra import ControllerBase, api_controller, route
 from pydantic import Field, field_validator
 
+import redis
 from apps.internal_auth import check_internal_secret
 
 logger = logging.getLogger(__name__)
@@ -314,7 +315,6 @@ class GameInternalController(ControllerBase):
 
         from django.conf import settings
 
-        import redis
         from apps.matchmaking.models import Match
 
         match_id = body.match_id

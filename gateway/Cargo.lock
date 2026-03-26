@@ -1285,6 +1285,7 @@ dependencies = [
  "dashmap",
  "futures",
  "maplord-django",
+ "maplord-matchmaking",
  "redis",
  "serde",
  "serde_json",

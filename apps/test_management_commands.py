@@ -685,14 +685,8 @@ class TestLoadGameConfig:
         fixture = self._make_fixture(tmp_path)
 
         with (
-            patch("django.core.management.call_command"),
+            patch("apps.game_config.management.commands.load_game_config.call_command"),
         ):
-            # Only patch the sub-commands so we don't actually run imports
-            def side_effect(cmd, *args, **kwargs):
-                if cmd != "load_game_config":
-                    return
-                raise Exception("recursive call")
-
             call_command(
                 "load_game_config",
                 "--fixture",
@@ -997,9 +991,10 @@ class TestLoadGameConfig:
         cmd = Command()
         cmd.stdout = MagicMock()
         # Call _load_game_modes with empty entries when no GameSettings exist
+        count_before = GameMode.objects.count()
         cmd._load_game_modes([])  # GameSettings.objects.first() returns None here
-        # Should not raise; GameMode count stays 0
-        assert GameMode.objects.count() == 0
+        # Should not raise; no new GameModes created
+        assert GameMode.objects.count() == count_before
 
     def test_dev_mode_overrides(self, tmp_path, capsys):
         """--dev flag should set minimal costs and high energy."""
@@ -1284,8 +1279,9 @@ class TestLoadGameConfig:
         cmd = Command()
         cmd.stdout = MagicMock()
         # No GameSettings in DB, no entries → should return early without error
+        count_before = GameMode.objects.count()
         cmd._merge_game_modes([])
-        assert GameMode.objects.count() == 0
+        assert GameMode.objects.count() == count_before
 
     def test_get_new_default_fields_returns_only_defaulted_fields(self):
         """_get_new_default_fields returns fixture fields that are still at model default."""

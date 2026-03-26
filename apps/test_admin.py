@@ -751,7 +751,7 @@ class TestInventoryAdmin:
             category=cat,
             item_type=Item.ItemType.COSMETIC,
             rarity=Item.Rarity.COMMON,
-            cosmetic_slot=CosmeticSlot.AVATAR_FRAME,
+            cosmetic_slot=CosmeticSlot.UNIT_INFANTRY,
         )
         ec = EquippedCosmetic(item=item)
         result = admin.display_item_type(ec)

@@ -3043,7 +3043,7 @@ def _make_tutorial_prerequisites():
     )
 
     AbilityType.objects.get_or_create(
-        slug="nuke",
+        slug="ab_province_nuke",
         defaults={
             "name": "Nuke",
             "is_active": True,

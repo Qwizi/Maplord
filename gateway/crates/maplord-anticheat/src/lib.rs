@@ -349,6 +349,7 @@ impl Detectors {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn violation_score(&self, player_id: &str) -> u32 {
         self.profiles
             .get(player_id)
@@ -356,11 +357,13 @@ impl Detectors {
             .unwrap_or(0)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn apply_violation_score(&mut self, player_id: &str, severity: u32) {
         let profile = self.profile(player_id);
         profile.violation_score = profile.violation_score.saturating_add(severity);
     }
 
+    #[allow(dead_code)]
     pub(crate) fn worst_verdict_for_score(
         &mut self,
         player_id: &str,
@@ -400,6 +403,7 @@ pub struct AnticheatEngine {
     redis: ConnectionManager,
     detectors: Detectors,
     /// Wall-clock ms at match start, used to compute relative action timestamps.
+    #[allow(dead_code)]
     match_start_ms: u64,
 }
 
