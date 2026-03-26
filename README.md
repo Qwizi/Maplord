@@ -1,4 +1,4 @@
-# MapLord 2.0
+# MapLord
 
 Real-time strategy web game on a world map. Players claim territories, build armies, and compete in live matches.
 
