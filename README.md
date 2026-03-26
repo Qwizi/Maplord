@@ -85,4 +85,4 @@ CalVer: `vYYYY.M.DD.patch` (e.g. `v2026.3.26.1`).
 
 ## License
 
-Proprietary. All rights reserved.
+[MIT](LICENSE)
