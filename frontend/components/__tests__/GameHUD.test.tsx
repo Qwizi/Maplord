@@ -344,7 +344,7 @@ describe("GameHUD", () => {
 
   it("shows AP max denominator", () => {
     render(<GameHUD {...defaultProps({ myActionPoints: 5 })} />);
-    expect(screen.getByText("/10")).toBeInTheDocument();
+    expect(screen.getByText("/15")).toBeInTheDocument();
   });
 
   it("renders AP stat at low AP (< 3) without crashing", () => {

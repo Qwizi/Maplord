@@ -245,7 +245,8 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: "ability_submarine",
     title: "Zdolnosc: Zwiad",
-    description: "Ujawnia ukryte jednostki wroga w wybranym regionie na 10 tur. Kliknij ikone, potem kliknij WROGI region.",
+    description:
+      "Ujawnia ukryte jednostki wroga w wybranym regionie na 10 tur. Kliknij ikone, potem kliknij WROGI region.",
     uiTarget: "ability-bar",
     allowedAbility: "ab_pr_submarine",
     getHighlightRegions: (state, userId) => getEnemyRegions(state, userId).slice(0, 3),
