@@ -41,6 +41,7 @@ function makePlayer(id: string, overrides: Partial<GamePlayer> = {}): GamePlayer
     is_alive: true,
     capital_region_id: null,
     energy: 100,
+    action_points: 15,
     ...overrides,
   };
 }
@@ -344,7 +345,7 @@ describe("GameHUD", () => {
 
   it("shows AP max denominator", () => {
     render(<GameHUD {...defaultProps({ myActionPoints: 5 })} />);
-    expect(screen.getByText("/10")).toBeInTheDocument();
+    expect(screen.getByText("/15")).toBeInTheDocument();
   });
 
   it("renders AP stat at low AP (< 3) without crashing", () => {
