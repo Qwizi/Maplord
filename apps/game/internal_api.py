@@ -30,6 +30,10 @@ class CleanupRequest(Schema):
     match_id: str
 
 
+class ServerStatusUpdate(Schema):
+    status: str  # "online", "offline", "maintenance"
+
+
 class StatusUpdateRequest(Schema):
     status: str
 
@@ -460,3 +464,24 @@ class GameInternalController(ControllerBase):
                 "config": m.config,
             }
         return modules
+
+    @route.patch("/server-status/{server_id}/")
+    def update_server_status(self, request, server_id: str, body: ServerStatusUpdate):
+        """Update a community server's status (called by gateway on connect/disconnect)."""
+        if not check_internal_secret(request):
+            return self.create_response({"error": "Unauthorized"}, status_code=403)
+
+        from django.utils import timezone
+
+        from apps.developers.models import CommunityServer
+
+        try:
+            server = CommunityServer.objects.get(id=server_id)
+        except CommunityServer.DoesNotExist:
+            return self.create_response({"error": "Server not found"}, status_code=404)
+
+        server.status = body.status
+        if body.status == "online":
+            server.last_heartbeat = timezone.now()
+        server.save(update_fields=["status", "last_heartbeat"])
+        return {"ok": True}

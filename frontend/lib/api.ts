@@ -999,7 +999,8 @@ export interface CommunityServer {
 
 export async function getPublicServers(region?: string): Promise<CommunityServer[]> {
   const params = region ? `?region=${region}` : "";
-  return fetchAPI<CommunityServer[]>(`/servers/${params}`);
+  const res = await fetchAPI<{ items: CommunityServer[]; count: number }>(`/servers/${params}`);
+  return res.items;
 }
 
 export async function getServer(id: string): Promise<CommunityServer> {

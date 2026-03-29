@@ -864,6 +864,25 @@ impl DjangoClient {
         Ok(())
     }
 
+    /// Update a community server's status in Django DB.
+    pub async fn update_server_status(
+        &self,
+        server_id: &str,
+        status: &str,
+    ) -> Result<(), DjangoError> {
+        #[derive(Serialize)]
+        struct Body {
+            status: String,
+        }
+        self.patch(
+            &format!("/api/v1/internal/server-status/{server_id}/"),
+            &Body {
+                status: status.to_string(),
+            },
+        )
+        .await
+    }
+
     pub async fn get_latest_snapshot(
         &self,
         match_id: &str,

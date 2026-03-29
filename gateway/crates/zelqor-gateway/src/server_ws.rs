@@ -94,6 +94,17 @@ async fn handle_server_socket(socket: WebSocket, _token: String, state: AppState
 
     state.server_registry.register(connected);
 
+    // Update Django DB — mark server as online.
+    {
+        let django = state.django.clone();
+        let sid = server_id.clone();
+        tokio::spawn(async move {
+            if let Err(e) = django.update_server_status(&sid, "online").await {
+                warn!(server_id = %sid, "Failed to set server online in Django: {e}");
+            }
+        });
+    }
+
     // Spawn task: forwards queued gateway→node messages to the WebSocket sink.
     let send_task = tokio::spawn(async move {
         while let Some(msg) = rx.recv().await {
@@ -138,6 +149,18 @@ async fn handle_server_socket(socket: WebSocket, _token: String, state: AppState
     }
 
     state.server_registry.unregister(&server_id);
+
+    // Update Django DB — mark server as offline.
+    {
+        let django = state.django.clone();
+        let sid = server_id.clone();
+        tokio::spawn(async move {
+            if let Err(e) = django.update_server_status(&sid, "offline").await {
+                warn!(server_id = %sid, "Failed to set server offline in Django: {e}");
+            }
+        });
+    }
+
     info!(server_id = %server_id, "Gamenode disconnected");
 }
 
