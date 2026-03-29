@@ -3,6 +3,8 @@ mod chat;
 mod config;
 mod game;
 mod matchmaking_ws;
+mod server_registry;
+mod server_ws;
 mod social;
 mod state;
 mod voice;
@@ -41,6 +43,7 @@ async fn shutdown_signal(state: crate::state::AppState) {
 use crate::chat::new_chat_connections;
 use crate::config::AppConfig;
 use crate::game::new_game_connections;
+use crate::server_registry::ServerRegistry;
 use crate::social::new_social_connections;
 use crate::state::AppState;
 use dashmap::DashMap;
@@ -169,6 +172,8 @@ async fn main() {
     let chat_rate_limits = Arc::new(DashMap::new());
     let action_rate_limits = Arc::new(DashMap::new());
 
+    let server_registry = Arc::new(ServerRegistry::new());
+
     let app_state = AppState {
         config: config.clone(),
         redis: redis_conn,
@@ -181,6 +186,7 @@ async fn main() {
         chat_rate_limits,
         action_rate_limits,
         shutting_down: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        server_registry,
     };
 
     // Start lobby pub/sub listener (Django/Celery → Gateway events)
@@ -223,6 +229,8 @@ async fn main() {
         .route("/ws/chat/", get(chat::ws_chat_handler))
         // Social notifications / DM WebSocket route
         .route("/ws/social/", get(social::ws_social_handler))
+        // Gamenode server WebSocket route
+        .route("/ws/server/", get(server_ws::ws_server_handler))
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
         .with_state(app_state.clone());

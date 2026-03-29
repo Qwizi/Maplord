@@ -14,6 +14,7 @@ from apps.developers.models import (
     VALID_EVENTS,
     VALID_SCOPES,
     APIKey,
+    CommunityServer,
     DeveloperApp,
     Webhook,
     WebhookDelivery,
@@ -24,6 +25,10 @@ from apps.developers.schemas import (
     APIKeyOutSchema,
     AvailableEventsSchema,
     AvailableScopesSchema,
+    CommunityServerCreateSchema,
+    CommunityServerListSchema,
+    CommunityServerOutSchema,
+    CommunityServerUpdateSchema,
     DeveloperAppCreatedSchema,
     DeveloperAppCreateSchema,
     DeveloperAppOutSchema,
@@ -329,6 +334,73 @@ class DeveloperController:
         )
 
     # -------------------------------------------------------------------------
+    # Community Servers CRUD
+    # -------------------------------------------------------------------------
+
+    @route.post("/apps/{app_id}/servers/", response=CommunityServerOutSchema)
+    def register_server(self, request, app_id: uuid.UUID, payload: CommunityServerCreateSchema):
+        """Register a community server for a developer app."""
+        app = self._get_app(request, app_id)
+        server = CommunityServer.objects.create(
+            app=app,
+            name=payload.name,
+            description=payload.description,
+            region=payload.region,
+            max_players=payload.max_players,
+            is_public=payload.is_public,
+            custom_config=payload.custom_config,
+        )
+        return CommunityServerOutSchema.from_orm(server)
+
+    @route.get("/apps/{app_id}/servers/", response=dict)
+    def list_servers(self, request, app_id: uuid.UUID, limit: int = 50, offset: int = 0):
+        """List all community servers for a developer app."""
+        app = self._get_app(request, app_id)
+        qs = app.servers.order_by("-created_at")
+        return paginate_qs(qs, limit, offset, schema=CommunityServerOutSchema)
+
+    @route.patch("/apps/{app_id}/servers/{server_id}/", response=CommunityServerOutSchema)
+    def update_server(self, request, app_id: uuid.UUID, server_id: uuid.UUID, payload: CommunityServerUpdateSchema):
+        """Update a community server's configuration."""
+        app = self._get_app(request, app_id)
+        try:
+            server = app.servers.get(id=server_id)
+        except CommunityServer.DoesNotExist:
+            raise HttpError(404, "Not found") from None
+
+        update_fields = []
+        if payload.name is not None:
+            server.name = payload.name
+            update_fields.append("name")
+        if payload.description is not None:
+            server.description = payload.description
+            update_fields.append("description")
+        if payload.max_players is not None:
+            server.max_players = payload.max_players
+            update_fields.append("max_players")
+        if payload.is_public is not None:
+            server.is_public = payload.is_public
+            update_fields.append("is_public")
+        if payload.custom_config is not None:
+            server.custom_config = payload.custom_config
+            update_fields.append("custom_config")
+        if update_fields:
+            update_fields.append("updated_at")
+            server.save(update_fields=update_fields)
+        return CommunityServerOutSchema.from_orm(server)
+
+    @route.delete("/apps/{app_id}/servers/{server_id}/")
+    def deregister_server(self, request, app_id: uuid.UUID, server_id: uuid.UUID):
+        """Deregister (delete) a community server."""
+        app = self._get_app(request, app_id)
+        try:
+            server = app.servers.get(id=server_id)
+        except CommunityServer.DoesNotExist:
+            raise HttpError(404, "Not found") from None
+        server.delete()
+        return {"ok": True}
+
+    # -------------------------------------------------------------------------
     # Meta listings
     # -------------------------------------------------------------------------
 
@@ -341,3 +413,24 @@ class DeveloperController:
     def list_events(self, request):
         """Return all valid webhook event types."""
         return AvailableEventsSchema(events=VALID_EVENTS)
+
+
+@api_controller("/servers", tags=["Community Servers"], auth=None)
+@require_module_controller("developers")
+class CommunityServerController:
+    @route.get("/", response=dict)
+    def list_public_servers(self, request, limit: int = 50, offset: int = 0, region: str | None = None):
+        """List all public online community servers."""
+        qs = CommunityServer.objects.filter(is_public=True, status="online").select_related("app")
+        if region:
+            qs = qs.filter(region=region)
+        return paginate_qs(qs, limit, offset, schema=CommunityServerListSchema)
+
+    @route.get("/{server_id}/", response=CommunityServerOutSchema)
+    def get_server(self, request, server_id: uuid.UUID):
+        """Get details for a specific public community server."""
+        try:
+            server = CommunityServer.objects.get(id=server_id, is_public=True)
+        except CommunityServer.DoesNotExist:
+            raise HttpError(404, "Not found") from None
+        return CommunityServerOutSchema.from_orm(server)

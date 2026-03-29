@@ -16,6 +16,7 @@ from apps.developers.models import (
 )
 from apps.developers.schemas import (
     OAuthAuthorizeRequestSchema,
+    OAuthClientCredentialsResponseSchema,
     OAuthTokenRequestSchema,
     OAuthTokenResponseSchema,
     OAuthUserInfoSchema,
@@ -96,8 +97,12 @@ class OAuthController:
             return self._grant_authorization_code(payload)
         elif payload.grant_type == "refresh_token":
             return self._grant_refresh_token(payload)
+        elif payload.grant_type == "client_credentials":
+            return self._grant_client_credentials(payload)
         else:
-            raise HttpError(400, 'Unsupported grant_type. Use "authorization_code" or "refresh_token".')
+            raise HttpError(
+                400, 'Unsupported grant_type. Use "authorization_code", "refresh_token", or "client_credentials".'
+            )
 
     def _grant_authorization_code(self, payload: OAuthTokenRequestSchema):
         app = _verify_client(payload.client_id, payload.client_secret)
@@ -174,6 +179,36 @@ class OAuthController:
             expires_in=expires_in,
             refresh_token=new_token.refresh_token,
             scope=" ".join(new_token.scopes),
+        )
+
+    def _grant_client_credentials(self, payload: OAuthTokenRequestSchema):
+        app = _verify_client(payload.client_id, payload.client_secret)
+        if app is None:
+            raise HttpError(401, "Invalid client credentials.")
+
+        if "server:connect" not in (app.allowed_scopes if hasattr(app, "allowed_scopes") else VALID_SCOPES):
+            # The scope check: any active app may use server:connect; we just
+            # ensure the global VALID_SCOPES list contains it (already true after
+            # the models.py change).  If the app has a restricted scope list in
+            # future, that check would go here.
+            pass
+
+        # Check that server:connect is a valid global scope (guards against
+        # misconfiguration where the constant was not updated).
+        if "server:connect" not in VALID_SCOPES:
+            raise HttpError(403, "server:connect scope is not enabled on this server.")
+
+        token = OAuthAccessToken.objects.create(
+            app=app,
+            user=app.owner,
+            scopes=["server:connect"],
+        )
+
+        expires_in = int((token.expires_at - timezone.now()).total_seconds())
+        return OAuthClientCredentialsResponseSchema(
+            access_token=token.access_token,
+            expires_in=expires_in,
+            scope="server:connect",
         )
 
     # -------------------------------------------------------------------------

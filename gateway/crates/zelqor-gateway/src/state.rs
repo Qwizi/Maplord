@@ -1,6 +1,7 @@
 use crate::chat::ChatConnections;
 use crate::config::AppConfig;
 use crate::game::GameConnections;
+use crate::server_registry::ServerRegistry;
 use crate::social::SocialConnections;
 use dashmap::DashMap;
 use zelqor_django::DjangoClient;
@@ -29,4 +30,6 @@ pub struct AppState {
     pub action_rate_limits: Arc<DashMap<String, (u32, Instant)>>,
     /// Set to `true` when a shutdown signal has been received.
     pub shutting_down: Arc<AtomicBool>,
+    /// Registry of connected gamenode servers.
+    pub server_registry: Arc<ServerRegistry>,
 }

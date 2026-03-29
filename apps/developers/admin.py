@@ -4,6 +4,7 @@ from unfold.decorators import display
 
 from apps.developers.models import (
     APIKey,
+    CommunityServer,
     DeveloperApp,
     OAuthAccessToken,
     OAuthAuthorizationCode,
@@ -68,6 +69,29 @@ class WebhookDeliveryAdmin(ModelAdmin):
     @display(description="Success", label=True)
     def display_success(self, obj):
         return "SUCCESS" if obj.success else "FAILED"
+
+
+@admin.register(CommunityServer)
+class CommunityServerAdmin(ModelAdmin):
+    list_display = (
+        "name",
+        "app",
+        "region",
+        "display_status",
+        "is_public",
+        "is_verified",
+        "last_heartbeat",
+        "created_at",
+    )
+    list_filter = ("status", "is_public", "is_verified", "region")
+    list_filter_submit = True
+    list_fullwidth = True
+    search_fields = ("name", "app__name", "region")
+    readonly_fields = ("id", "created_at", "updated_at")
+
+    @display(description="Status", label=True)
+    def display_status(self, obj):
+        return obj.status.upper()
 
 
 @admin.register(OAuthAuthorizationCode)

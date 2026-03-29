@@ -243,3 +243,93 @@ class OAuthUserInfoSchema(Schema):
     elo_rating: int
     avatar: str | None = None
     date_joined: str
+
+
+class OAuthClientCredentialsRequestSchema(Schema):
+    grant_type: str  # must be "client_credentials"
+    client_id: str
+    client_secret: str
+    scope: str | None = None  # optional, defaults to "server:connect"
+
+
+class OAuthClientCredentialsResponseSchema(Schema):
+    access_token: str
+    token_type: str = "Bearer"
+    expires_in: int
+    scope: str
+
+
+# === Community Server Schemas ===
+
+
+class CommunityServerCreateSchema(Schema):
+    name: str
+    description: str = ""
+    region: str
+    max_players: int = 100
+    is_public: bool = True
+    custom_config: dict = {}
+
+
+class CommunityServerUpdateSchema(Schema):
+    name: str | None = None
+    description: str | None = None
+    max_players: int | None = None
+    is_public: bool | None = None
+    custom_config: dict | None = None
+
+
+class CommunityServerOutSchema(Schema):
+    id: str
+    name: str
+    description: str
+    region: str
+    max_players: int
+    is_public: bool
+    status: str
+    last_heartbeat: str | None = None
+    server_version: str
+    is_verified: bool
+    created_at: str
+
+    class Config:
+        from_attributes = True
+
+    @classmethod
+    def from_orm(cls, obj):
+        return cls(
+            id=str(obj.id),
+            name=obj.name,
+            description=obj.description,
+            region=obj.region,
+            max_players=obj.max_players,
+            is_public=obj.is_public,
+            status=obj.status,
+            last_heartbeat=obj.last_heartbeat.isoformat() if obj.last_heartbeat else None,
+            server_version=obj.server_version,
+            is_verified=obj.is_verified,
+            created_at=obj.created_at.isoformat(),
+        )
+
+
+class CommunityServerListSchema(Schema):
+    id: str
+    name: str
+    region: str
+    status: str
+    max_players: int
+    is_verified: bool
+
+    class Config:
+        from_attributes = True
+
+    @classmethod
+    def from_orm(cls, obj):
+        return cls(
+            id=str(obj.id),
+            name=obj.name,
+            region=obj.region,
+            status=obj.status,
+            max_players=obj.max_players,
+            is_verified=obj.is_verified,
+        )

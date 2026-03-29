@@ -11,6 +11,10 @@ VALID_EVENTS = [
     "match.started",
     "match.finished",
     "player.elo_changed",
+    "server.online",
+    "server.offline",
+    "server.match_started",
+    "server.match_finished",
 ]
 
 VALID_SCOPES = [
@@ -20,6 +24,7 @@ VALID_SCOPES = [
     "config:read",
     "webhooks:manage",
     "user:profile",
+    "server:connect",
 ]
 
 
@@ -194,3 +199,31 @@ class OAuthAccessToken(models.Model):
 
     def __str__(self):
         return f"AccessToken({self.app.name}, {self.user}, revoked={self.is_revoked})"
+
+
+class CommunityServer(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    app = models.ForeignKey(DeveloperApp, on_delete=models.CASCADE, related_name="servers")
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    region = models.CharField(max_length=50, db_index=True)
+    max_players = models.PositiveIntegerField(default=100)
+    is_public = models.BooleanField(default=True)
+    status = models.CharField(
+        max_length=20,
+        choices=[("online", "Online"), ("offline", "Offline"), ("maintenance", "Maintenance")],
+        default="offline",
+    )
+    last_heartbeat = models.DateTimeField(null=True, blank=True)
+    server_version = models.CharField(max_length=50, blank=True)
+    custom_config = models.JSONField(default=dict, blank=True)
+    allowed_plugins = models.JSONField(default=list, blank=True)
+    is_verified = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.name} ({self.region})"

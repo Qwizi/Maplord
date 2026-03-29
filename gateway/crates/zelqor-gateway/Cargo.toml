@@ -14,6 +14,7 @@ zelqor-matchmaking = { path = "../zelqor-matchmaking" }
 zelqor-django = { path = "../zelqor-django" }
 zelqor-ai = { path = "../zelqor-ai" }
 zelqor-anticheat = { path = "../zelqor-anticheat" }
+zelqor-protocol = { path = "../zelqor-protocol" }
 
 tokio = { workspace = true }
 serde = { workspace = true }

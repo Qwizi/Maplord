@@ -8,6 +8,8 @@ members = [
     "crates/zelqor-django",
     "crates/zelqor-ai",
     "crates/zelqor-anticheat",
+    "crates/zelqor-protocol",
+    "crates/zelqor-gamenode",
 ]
 
 [profile.release]
