@@ -383,7 +383,7 @@ async fn start_server(api_url_override: &Option<String>) -> Result<()> {
     let gateway_url = base_url
         .replace("/api/v1", "")
         .replace("/api", "");
-    let compose_content = generate_compose(&gateway_url, &client_id, &client_secret);
+    let compose_content = generate_compose(&gateway_url, &base_url, &client_id, &client_secret);
     fs::write(&compose_path, &compose_content)
         .context("Failed to write docker-compose.yml")?;
 
@@ -558,7 +558,7 @@ fn prompt_credentials() -> Result<(String, String)> {
     Ok((client_id, client_secret))
 }
 
-fn generate_compose(gateway_url: &str, client_id: &str, client_secret: &str) -> String {
+fn generate_compose(gateway_url: &str, oauth_url: &str, client_id: &str, client_secret: &str) -> String {
     format!(
         r#"services:
   zelqor-gamenode:
@@ -566,6 +566,7 @@ fn generate_compose(gateway_url: &str, client_id: &str, client_secret: &str) -> 
     restart: unless-stopped
     environment:
       GATEWAY_URL: "{gateway_url}"
+      OAUTH_URL: "{oauth_url}"
       CLIENT_ID: "{client_id}"
       CLIENT_SECRET: "{client_secret}"
       REDIS_URL: "redis://redis:6379/1"
