@@ -473,7 +473,7 @@ async fn stop_server() -> Result<()> {
     Ok(())
 }
 
-const GAMENODE_IMAGE: &str = "ghcr.io/qwizi/zelqor-gateway:latest";
+const GAMENODE_IMAGE: &str = "ghcr.io/qwizi/zelqor-gamenode:latest";
 
 async fn build_gamenode_image() -> Result<()> {
     output::header("Build Gamenode Docker Image");
@@ -489,7 +489,7 @@ async fn build_gamenode_image() -> Result<()> {
             "-t",
             GAMENODE_IMAGE,
             "-f",
-            &gateway_dir.join("Dockerfile").to_string_lossy(),
+            &gateway_dir.join("Dockerfile.gamenode").to_string_lossy(),
             &gateway_dir.to_string_lossy(),
         ])
         .stdout(Stdio::inherit())
@@ -537,12 +537,12 @@ fn find_gateway_dir() -> Result<std::path::PathBuf> {
         std::path::PathBuf::from("../../gateway"),
     ];
     for candidate in &candidates {
-        if candidate.join("Dockerfile").exists() {
+        if candidate.join("Dockerfile.gamenode").exists() {
             return Ok(candidate.clone());
         }
     }
     bail!(
-        "Could not find gateway/Dockerfile. Run from the Zelqor project root, \
+        "Could not find gateway/Dockerfile.gamenode. Run from the Zelqor project root, \
          or clone the repo: git clone https://github.com/qwizi/zelqor.git"
     );
 }
@@ -563,7 +563,6 @@ fn generate_compose(gateway_url: &str, client_id: &str, client_secret: &str) -> 
         r#"services:
   zelqor-gamenode:
     image: {image}
-    command: zelqor-gamenode
     restart: unless-stopped
     environment:
       GATEWAY_URL: "{gateway_url}"
