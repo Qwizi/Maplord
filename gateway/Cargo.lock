@@ -3041,9 +3041,12 @@ dependencies = [
 name = "zelqor-django"
 version = "0.1.0"
 dependencies = [
+ "hex",
+ "hmac",
  "reqwest",
  "serde",
  "serde_json",
+ "sha2",
  "tokio",
  "tracing",
  "uuid",

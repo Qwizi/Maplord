@@ -12,12 +12,31 @@ use axum::{
     routing::get,
     Router,
 };
-use zelqor_django::DjangoClient;
+use zelqor_django::{DjangoClient, DjangoClientConfig};
 use zelqor_matchmaking::MatchmakingManager;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use tracing::{error, info};
+
+async fn shutdown_signal(state: crate::state::AppState) {
+    use tokio::signal::unix::{signal, SignalKind};
+
+    let mut sigterm = signal(SignalKind::terminate()).expect("Failed to install SIGTERM handler");
+
+    tokio::select! {
+        _ = sigterm.recv() => {
+            info!("Received SIGTERM");
+        }
+        _ = tokio::signal::ctrl_c() => {
+            info!("Received SIGINT (Ctrl+C)");
+        }
+    }
+
+    info!("Received shutdown signal, draining connections...");
+    state.shutting_down.store(true, Ordering::SeqCst);
+}
 
 use crate::chat::new_chat_connections;
 use crate::config::AppConfig;
@@ -125,10 +144,16 @@ async fn main() {
         .await
         .expect("Failed to connect to Redis");
 
-    // Create Django client
-    let django = DjangoClient::new(
+    // Create Django client with circuit breaker + retry config
+    let django = DjangoClient::new_with_config(
         config.django_internal_url.clone(),
         config.internal_secret.clone(),
+        DjangoClientConfig {
+            request_timeout_ms: config.django_request_timeout_ms,
+            retry_count: config.django_retry_count,
+            circuit_failure_threshold: config.circuit_breaker_failure_threshold,
+            circuit_reset_timeout_secs: config.circuit_breaker_reset_timeout_secs,
+        },
     );
 
     // Create matchmaking manager
@@ -155,6 +180,7 @@ async fn main() {
         username_cache,
         chat_rate_limits,
         action_rate_limits,
+        shutting_down: Arc::new(std::sync::atomic::AtomicBool::new(false)),
     };
 
     // Start lobby pub/sub listener (Django/Celery → Gateway events)
@@ -199,12 +225,15 @@ async fn main() {
         .route("/ws/social/", get(social::ws_social_handler))
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
-        .with_state(app_state);
+        .with_state(app_state.clone());
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", config.gateway_port))
         .await
         .expect("Failed to bind");
 
     info!("Listening on 0.0.0.0:{}", config.gateway_port);
-    axum::serve(listener, app).await.expect("Server failed");
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal(app_state))
+        .await
+        .expect("Server failed");
 }

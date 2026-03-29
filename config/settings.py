@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     "apps.notifications",
     "apps.clans",
     "apps.payments",
+    "apps.dlq",
 ]
 
 MIDDLEWARE = [
@@ -127,6 +128,10 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "UTC"
+# Ensure tasks are not lost when a worker dies mid-execution
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+# Acknowledge tasks only after they complete (pairs with REJECT_ON_WORKER_LOST)
+CELERY_TASK_ACKS_LATE = True
 CELERY_BEAT_SCHEDULE = {
     "cleanup-stale-matches": {
         "task": "apps.game.tasks.cleanup_stale_matches",
@@ -159,6 +164,10 @@ CELERY_BEAT_SCHEDULE = {
     "expire-pending-clan-wars": {
         "task": "apps.clans.tasks.expire_pending_wars",
         "schedule": 3600,  # every hour
+    },
+    "retry-dead-letter-tasks": {
+        "task": "apps.dlq.tasks.retry_dead_letter_tasks",
+        "schedule": 60,  # every 60 seconds
     },
 }
 
@@ -213,6 +222,7 @@ STRIPE_WEBHOOK_SECRET = config("STRIPE_WEBHOOK_SECRET", default="")
 # CORS
 # Internal API secret for Rust gateway
 INTERNAL_SECRET = config("INTERNAL_SECRET", default="dev-internal-secret")
+INTERNAL_SECRET_PREV = config("INTERNAL_SECRET_PREV", default="")
 
 
 # Unfold Admin
