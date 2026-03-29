@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-pub const DEFAULT_API_URL: &str = "http://localhost:8000/api/v1";
+pub const DEFAULT_API_URL: &str = "https://zelqor.qwizi.ovh/api/v1";
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
 pub struct CliConfig {
     pub api_url: Option<String>,
