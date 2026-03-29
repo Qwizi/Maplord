@@ -11,6 +11,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
+from apps.developers.models import CommunityServer, DeveloperApp
 from apps.game.models import GameStateSnapshot, MatchResult, PlayerResult
 from apps.game.tasks import (
     _balanced_round_elo_changes,
@@ -23,6 +24,22 @@ from apps.game_config.models import GameSettings
 from apps.matchmaking.models import Match, MatchPlayer
 
 User = get_user_model()
+
+
+def _make_verified_server(owner):
+    """Create a verified CommunityServer for use in ranked match tests."""
+    app = DeveloperApp.objects.create(
+        name="Test App",
+        client_secret_hash="fakehash",
+        owner=owner,
+    )
+    return CommunityServer.objects.create(
+        app=app,
+        name="Test Server",
+        region="eu-west",
+        is_verified=True,
+    )
+
 
 INTERNAL_SECRET = "test-internal-secret"
 WRONG_SECRET = "wrong-secret"
@@ -161,10 +178,12 @@ def two_player_match(db):
         password="testpass123",
         elo_rating=1000,
     )
+    server = _make_verified_server(user1)
     match = Match.objects.create(
         status=Match.Status.IN_PROGRESS,
         max_players=2,
         started_at=timezone.now() - timedelta(minutes=10),
+        server=server,
     )
     MatchPlayer.objects.create(match=match, user=user1, color="#FF0000")
     MatchPlayer.objects.create(match=match, user=user2, color="#0000FF")
