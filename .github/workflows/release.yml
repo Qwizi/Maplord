@@ -272,8 +272,7 @@ jobs:
   # ── Gamenode image (community servers — no gateway binary) ────────
   build-gamenode:
     name: Build and push gamenode image
-    needs: [changes, release]
-    if: needs.changes.outputs.gateway == 'true'
+    needs: [release]
     runs-on: ubuntu-latest
     steps:
       - name: Check out the repository
@@ -314,8 +313,7 @@ jobs:
   # ── CLI binaries ─────────────────────────────────────────────────
   build-cli:
     name: Build CLI (${{ matrix.target }})
-    needs: [changes, release]
-    if: needs.changes.outputs.cli == 'true'
+    needs: [release]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
