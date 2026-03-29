@@ -23,15 +23,15 @@ async fn fetch_access_token(
     client: &reqwest::Client,
     cfg: &NodeConfig,
 ) -> anyhow::Result<String> {
-    let params = [
-        ("grant_type", "client_credentials"),
-        ("client_id", &cfg.client_id),
-        ("client_secret", &cfg.client_secret),
-    ];
+    let body = serde_json::json!({
+        "grant_type": "client_credentials",
+        "client_id": cfg.client_id,
+        "client_secret": cfg.client_secret,
+    });
 
     let resp = client
         .post(cfg.token_url())
-        .form(&params)
+        .json(&body)
         .send()
         .await
         .map_err(|e| anyhow::anyhow!("OAuth request failed: {e}"))?;

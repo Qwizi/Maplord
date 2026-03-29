@@ -7,6 +7,8 @@ pub struct NodeConfig {
     pub client_secret: String,
     /// Base URL of the central gateway (e.g. `http://gateway:8080`).
     pub gateway_url: String,
+    /// Base URL of the Django backend for OAuth (e.g. `http://backend:8000`).
+    pub django_url: String,
     /// Redis connection URL (e.g. `redis://redis:6379/1`).
     pub redis_url: String,
     /// Human-readable name for this server node.
@@ -27,6 +29,8 @@ impl NodeConfig {
                 .unwrap_or_else(|_| "dev-secret".into()),
             gateway_url: std::env::var("GATEWAY_URL")
                 .unwrap_or_else(|_| "http://gateway:8080".into()),
+            django_url: std::env::var("DJANGO_INTERNAL_URL")
+                .unwrap_or_else(|_| "http://backend:8000".into()),
             redis_url: std::env::var("REDIS_URL")
                 .unwrap_or_else(|_| "redis://redis:6379/1".into()),
             server_name: std::env::var("SERVER_NAME")
@@ -51,9 +55,9 @@ impl NodeConfig {
         format!("{base}/ws/server/?token={token}")
     }
 
-    /// Return the OAuth token endpoint URL.
+    /// Return the OAuth token endpoint URL (on Django backend).
     pub fn token_url(&self) -> String {
-        format!("{}/oauth/token/", self.gateway_url)
+        format!("{}/api/v1/oauth/token/", self.django_url)
     }
 }
 
@@ -67,6 +71,7 @@ mod tests {
             client_id: "id".into(),
             client_secret: "secret".into(),
             gateway_url: "http://gateway:8080".into(),
+            django_url: "http://backend:8000".into(),
             redis_url: "redis://redis:6379/1".into(),
             server_name: "test".into(),
             region: "dev".into(),
@@ -83,6 +88,7 @@ mod tests {
             client_id: "id".into(),
             client_secret: "secret".into(),
             gateway_url: "https://gateway.zelqor.com".into(),
+            django_url: "https://api.zelqor.com".into(),
             redis_url: "redis://redis:6379/1".into(),
             server_name: "prod".into(),
             region: "eu-west".into(),
@@ -93,17 +99,18 @@ mod tests {
     }
 
     #[test]
-    fn token_url_appends_path() {
+    fn token_url_uses_django_url() {
         let cfg = NodeConfig {
             client_id: "id".into(),
             client_secret: "secret".into(),
             gateway_url: "http://gateway:8080".into(),
+            django_url: "http://backend:8000".into(),
             redis_url: "redis://redis:6379/1".into(),
             server_name: "test".into(),
             region: "dev".into(),
             max_matches: 5,
         };
-        assert_eq!(cfg.token_url(), "http://gateway:8080/oauth/token/");
+        assert_eq!(cfg.token_url(), "http://backend:8000/api/v1/oauth/token/");
     }
 
     #[test]

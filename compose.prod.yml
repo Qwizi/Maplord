@@ -86,6 +86,7 @@ services:
       REDIS_PORT: "6379"
       REDIS_GAME_DB: "1"
       GATEWAY_URL: http://gateway:8080
+      DJANGO_INTERNAL_URL: http://backend:8000
       CLIENT_ID: ${GAMENODE_CLIENT_ID}
       CLIENT_SECRET: ${GAMENODE_CLIENT_SECRET}
       SERVER_NAME: "Official Server"
