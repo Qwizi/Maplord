@@ -1,10 +1,12 @@
 use crate::chat::ChatConnections;
 use crate::config::AppConfig;
 use crate::game::GameConnections;
+use crate::server_registry::ServerRegistry;
 use crate::social::SocialConnections;
 use dashmap::DashMap;
 use zelqor_django::DjangoClient;
 use zelqor_matchmaking::MatchmakingManager;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -26,4 +28,8 @@ pub struct AppState {
     pub chat_rate_limits: Arc<DashMap<String, Instant>>,
     /// Action count + window start per user for game action rate limiting
     pub action_rate_limits: Arc<DashMap<String, (u32, Instant)>>,
+    /// Set to `true` when a shutdown signal has been received.
+    pub shutting_down: Arc<AtomicBool>,
+    /// Registry of connected gamenode servers.
+    pub server_registry: Arc<ServerRegistry>,
 }

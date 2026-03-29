@@ -220,12 +220,13 @@ class OAuthAuthorizeRequestSchema(Schema):
 
 
 class OAuthTokenRequestSchema(Schema):
-    grant_type: str  # 'authorization_code' or 'refresh_token'
-    client_id: str
-    client_secret: str
+    grant_type: str  # 'authorization_code', 'refresh_token', 'client_credentials', or device_code URN
+    client_id: str = ""
+    client_secret: str = ""
     code: str | None = None  # for authorization_code
     redirect_uri: str | None = None  # for authorization_code
     refresh_token: str | None = None  # for refresh_token
+    device_code: str | None = None  # for urn:ietf:params:oauth:grant-type:device_code
 
 
 class OAuthTokenResponseSchema(Schema):
@@ -243,3 +244,175 @@ class OAuthUserInfoSchema(Schema):
     elo_rating: int
     avatar: str | None = None
     date_joined: str
+
+
+class DeviceAuthorizationRequestSchema(Schema):
+    client_id: str | None = None
+
+
+class DeviceAuthorizationResponseSchema(Schema):
+    device_code: str
+    user_code: str
+    verification_uri: str
+    expires_in: int
+    interval: int
+
+
+class DeviceAuthorizeSchema(Schema):
+    user_code: str
+
+
+class OAuthClientCredentialsRequestSchema(Schema):
+    grant_type: str  # must be "client_credentials"
+    client_id: str
+    client_secret: str
+    scope: str | None = None  # optional, defaults to "server:connect"
+
+
+class OAuthClientCredentialsResponseSchema(Schema):
+    access_token: str
+    token_type: str = "Bearer"
+    expires_in: int
+    scope: str
+
+
+# === Community Server Schemas ===
+
+
+class CommunityServerCreateSchema(Schema):
+    name: str
+    description: str = ""
+    region: str
+    max_players: int = 100
+    is_public: bool = True
+    custom_config: dict = {}
+
+
+class CommunityServerUpdateSchema(Schema):
+    name: str | None = None
+    description: str | None = None
+    max_players: int | None = None
+    is_public: bool | None = None
+    custom_config: dict | None = None
+
+
+class CommunityServerOutSchema(Schema):
+    id: str
+    name: str
+    description: str
+    region: str
+    max_players: int
+    is_public: bool
+    status: str
+    last_heartbeat: str | None = None
+    server_version: str
+    is_verified: bool
+    created_at: str
+
+    class Config:
+        from_attributes = True
+
+    @classmethod
+    def from_orm(cls, obj):
+        return cls(
+            id=str(obj.id),
+            name=obj.name,
+            description=obj.description,
+            region=obj.region,
+            max_players=obj.max_players,
+            is_public=obj.is_public,
+            status=obj.status,
+            last_heartbeat=obj.last_heartbeat.isoformat() if obj.last_heartbeat else None,
+            server_version=obj.server_version,
+            is_verified=obj.is_verified,
+            created_at=obj.created_at.isoformat(),
+        )
+
+
+class CommunityServerListSchema(Schema):
+    id: str
+    name: str
+    region: str
+    status: str
+    max_players: int
+    is_verified: bool
+
+    class Config:
+        from_attributes = True
+
+    @classmethod
+    def from_orm(cls, obj):
+        return cls(
+            id=str(obj.id),
+            name=obj.name,
+            region=obj.region,
+            status=obj.status,
+            max_players=obj.max_players,
+            is_verified=obj.is_verified,
+        )
+
+
+# === Plugin Schemas ===
+
+
+class PluginCreateSchema(Schema):
+    name: str
+    slug: str
+    description: str = ""
+    hooks: list[str] = []
+
+
+class PluginOutSchema(Schema):
+    id: str
+    name: str
+    slug: str
+    description: str
+    version: str
+    hooks: list[str]
+    is_published: bool
+    is_approved: bool
+    download_count: int
+    created_at: str
+
+    class Config:
+        from_attributes = True
+
+    @classmethod
+    def from_orm(cls, obj):
+        return cls(
+            id=str(obj.id),
+            name=obj.name,
+            slug=obj.slug,
+            description=obj.description,
+            version=obj.version,
+            hooks=obj.hooks,
+            is_published=obj.is_published,
+            is_approved=obj.is_approved,
+            download_count=obj.download_count,
+            created_at=obj.created_at.isoformat(),
+        )
+
+
+class PluginListSchema(Schema):
+    id: str
+    name: str
+    slug: str
+    version: str
+    hooks: list[str]
+    is_approved: bool
+    download_count: int
+
+    class Config:
+        from_attributes = True
+
+    @classmethod
+    def from_orm(cls, obj):
+        return cls(
+            id=str(obj.id),
+            name=obj.name,
+            slug=obj.slug,
+            version=obj.version,
+            hooks=obj.hooks,
+            is_approved=obj.is_approved,
+            download_count=obj.download_count,
+        )

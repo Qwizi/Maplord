@@ -25,6 +25,7 @@ frontend/.pnpm-store/
 
 # Rust gateway
 gateway/target/
+cli/target/
 
 # Test / Coverage
 .pytest_cache/
@@ -71,3 +72,4 @@ pixi/
 .claude-flow/
 .rtk/
 .swarm/
+.zelqor-server-*/

@@ -11,6 +11,10 @@ VALID_EVENTS = [
     "match.started",
     "match.finished",
     "player.elo_changed",
+    "server.online",
+    "server.offline",
+    "server.match_started",
+    "server.match_finished",
 ]
 
 VALID_SCOPES = [
@@ -20,6 +24,8 @@ VALID_SCOPES = [
     "config:read",
     "webhooks:manage",
     "user:profile",
+    "server:connect",
+    "plugins:manage",
 ]
 
 
@@ -39,7 +45,7 @@ class DeveloperApp(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.client_id:
-            self.client_id = "ml_" + secrets.token_hex(16)
+            self.client_id = "zq_" + secrets.token_hex(16)
         super().save(*args, **kwargs)
 
     @classmethod
@@ -50,6 +56,29 @@ class DeveloperApp(models.Model):
 
     def __str__(self):
         return self.name
+
+    # ------------------------------------------------------------------
+    # First-party CLI app (singleton)
+    # ------------------------------------------------------------------
+
+    CLI_CLIENT_ID = "zq_cli"
+
+    @classmethod
+    def get_cli_app(cls) -> "DeveloperApp":
+        """Return the built-in Zelqor CLI app, creating it on first call."""
+        from apps.accounts.models import User
+
+        app, created = cls.objects.get_or_create(
+            client_id=cls.CLI_CLIENT_ID,
+            defaults={
+                "name": "Zelqor CLI",
+                "description": "Built-in first-party CLI application.",
+                "client_secret_hash": "cli-no-secret",
+                "owner": User.objects.filter(is_superuser=True).first() or User.objects.first(),
+                "is_active": True,
+            },
+        )
+        return app
 
 
 class APIKey(models.Model):
@@ -69,7 +98,7 @@ class APIKey(models.Model):
 
     @classmethod
     def generate_key(cls) -> tuple[str, str, str]:
-        raw_key = "ml_" + secrets.token_urlsafe(48)
+        raw_key = "zq_" + secrets.token_urlsafe(48)
         prefix = raw_key[:12]
         key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
         return raw_key, prefix, key_hash
@@ -194,3 +223,99 @@ class OAuthAccessToken(models.Model):
 
     def __str__(self):
         return f"AccessToken({self.app.name}, {self.user}, revoked={self.is_revoked})"
+
+
+class DeviceAuthorizationCode(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    app = models.ForeignKey(DeveloperApp, on_delete=models.CASCADE, related_name="device_codes")
+    device_code = models.CharField(max_length=64, unique=True, db_index=True)
+    user_code = models.CharField(max_length=10, unique=True, db_index=True)
+    scopes = models.JSONField(default=list)
+    is_authorized = models.BooleanField(default=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="device_authorizations",
+    )
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    @property
+    def is_expired(self) -> bool:
+        return timezone.now() > self.expires_at
+
+    def __str__(self):
+        return f"DeviceCode({self.app.name}, {self.user_code}, authorized={self.is_authorized})"
+
+
+class CommunityServer(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    app = models.ForeignKey(DeveloperApp, on_delete=models.CASCADE, related_name="servers")
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    region = models.CharField(max_length=50, db_index=True)
+    max_players = models.PositiveIntegerField(default=100)
+    is_public = models.BooleanField(default=True)
+    status = models.CharField(
+        max_length=20,
+        choices=[("online", "Online"), ("offline", "Offline"), ("maintenance", "Maintenance")],
+        default="offline",
+    )
+    last_heartbeat = models.DateTimeField(null=True, blank=True)
+    server_version = models.CharField(max_length=50, blank=True)
+    custom_config = models.JSONField(default=dict, blank=True)
+    allowed_plugins = models.JSONField(default=list, blank=True)
+    is_verified = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.name} ({self.region})"
+
+
+class Plugin(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    app = models.ForeignKey(DeveloperApp, on_delete=models.CASCADE, related_name="plugins")
+    name = models.CharField(max_length=100)
+    slug = models.SlugField(unique=True)
+    description = models.TextField(blank=True)
+    version = models.CharField(max_length=50)
+    wasm_blob = models.FileField(upload_to="plugins/", blank=True)
+    wasm_hash = models.CharField(max_length=128, blank=True)
+    hooks = models.JSONField(default=list)
+    is_published = models.BooleanField(default=False)
+    is_approved = models.BooleanField(default=False)
+    download_count = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.name} v{self.version}"
+
+
+class PluginVersion(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    plugin = models.ForeignKey(Plugin, on_delete=models.CASCADE, related_name="versions")
+    version = models.CharField(max_length=50)
+    wasm_blob = models.FileField(upload_to="plugins/versions/")
+    wasm_hash = models.CharField(max_length=128)
+    changelog = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        unique_together = [("plugin", "version")]
+
+    def __str__(self):
+        return f"{self.plugin.name} v{self.version}"

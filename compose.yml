@@ -54,6 +54,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    command: bash scripts/docker_init.sh uv run python manage.py runserver 0.0.0.0:8000
 
   celery:
     build:
@@ -75,7 +76,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: uv run celery -A config worker -l info
+    command: uv run celery -A config worker -l info --concurrency=2
 
   celery-beat:
     build:
@@ -126,6 +127,35 @@ services:
         condition: service_healthy
       backend:
         condition: service_started
+
+  gamenode:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile.dev
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_GAME_DB: "1"
+      GATEWAY_URL: http://gateway:8080
+      CLIENT_ID: ${GAMENODE_CLIENT_ID:-official-gamenode}
+      CLIENT_SECRET: ${GAMENODE_CLIENT_SECRET:-dev-gamenode-secret}
+      SERVER_NAME: "Official Server"
+      REGION: eu-west
+      MAX_MATCHES: "100"
+      RUST_LOG: info,zelqor_gamenode=debug
+    volumes:
+      - ./gateway:/app
+      - gateway_target:/app/target
+    depends_on:
+      redis:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+      backend:
+        condition: service_started
+    command: cargo-watch -x 'run --bin zelqor-gamenode' -w crates
 
   frontend:
     build:

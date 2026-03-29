@@ -1,6 +1,106 @@
+use hmac::{Hmac, Mac};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use sha2::Sha256;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use tokio::sync::RwLock;
+
+// ---------------------------------------------------------------------------
+// Circuit breaker
+// ---------------------------------------------------------------------------
+
+/// Configuration for the circuit breaker and HTTP retry behaviour.
+#[derive(Clone, Debug)]
+pub struct DjangoClientConfig {
+    /// Per-request timeout in milliseconds (default: 5000).
+    pub request_timeout_ms: u64,
+    /// Maximum number of retry attempts for 5xx / network errors (default: 3).
+    pub retry_count: u32,
+    /// Number of consecutive failures before the circuit opens (default: 5).
+    pub circuit_failure_threshold: u32,
+    /// How long the circuit stays open before allowing a probe (default: 30s).
+    pub circuit_reset_timeout_secs: u64,
+}
+
+impl Default for DjangoClientConfig {
+    fn default() -> Self {
+        Self {
+            request_timeout_ms: 5000,
+            retry_count: 3,
+            circuit_failure_threshold: 5,
+            circuit_reset_timeout_secs: 30,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CircuitState {
+    /// Requests pass through normally.
+    Closed,
+    /// Circuit tripped — requests fail fast.
+    Open,
+    /// One probe request allowed to test recovery.
+    HalfOpen,
+}
+
+struct CircuitBreaker {
+    state: RwLock<CircuitState>,
+    failure_count: AtomicU32,
+    last_failure: RwLock<Option<Instant>>,
+    failure_threshold: u32,
+    reset_timeout: Duration,
+}
+
+impl CircuitBreaker {
+    fn new(failure_threshold: u32, reset_timeout_secs: u64) -> Self {
+        Self {
+            state: RwLock::new(CircuitState::Closed),
+            failure_count: AtomicU32::new(0),
+            last_failure: RwLock::new(None),
+            failure_threshold,
+            reset_timeout: Duration::from_secs(reset_timeout_secs),
+        }
+    }
+
+    /// Returns the effective state, transitioning Open -> HalfOpen if enough
+    /// time has elapsed since the last failure.
+    async fn effective_state(&self) -> CircuitState {
+        let state = *self.state.read().await;
+        if state == CircuitState::Open {
+            let last = *self.last_failure.read().await;
+            if let Some(t) = last {
+                if t.elapsed() >= self.reset_timeout {
+                    *self.state.write().await = CircuitState::HalfOpen;
+                    return CircuitState::HalfOpen;
+                }
+            }
+        }
+        state
+    }
+
+    /// Record a successful call: reset failure counter and close the circuit.
+    async fn record_success(&self) {
+        self.failure_count.store(0, Ordering::Relaxed);
+        *self.state.write().await = CircuitState::Closed;
+    }
+
+    /// Record a failure: increment counter, open circuit if threshold reached.
+    async fn record_failure(&self) {
+        let prev = self.failure_count.fetch_add(1, Ordering::Relaxed);
+        *self.last_failure.write().await = Some(Instant::now());
+        if prev + 1 >= self.failure_threshold {
+            *self.state.write().await = CircuitState::Open;
+            tracing::warn!(
+                failures = prev + 1,
+                threshold = self.failure_threshold,
+                "DjangoClient circuit breaker opened"
+            );
+        }
+    }
+}
 
 /// Client for Django internal API endpoints.
 #[derive(Clone)]
@@ -8,6 +108,8 @@ pub struct DjangoClient {
     client: Client,
     base_url: String,
     internal_secret: String,
+    config: DjangoClientConfig,
+    circuit: Arc<CircuitBreaker>,
 }
 
 // --- Request/Response types ---
@@ -312,16 +414,34 @@ pub struct FindOrCreateLobbyResult {
 }
 
 impl DjangoClient {
+    /// Create a client with default configuration (5s timeout, 3 retries,
+    /// circuit threshold 5, reset timeout 30s).
     pub fn new(base_url: String, internal_secret: String) -> Self {
+        Self::new_with_config(base_url, internal_secret, DjangoClientConfig::default())
+    }
+
+    /// Create a client with explicit configuration.
+    pub fn new_with_config(
+        base_url: String,
+        internal_secret: String,
+        config: DjangoClientConfig,
+    ) -> Self {
         let client = Client::builder()
             .pool_max_idle_per_host(10)
             .build()
             .expect("Failed to create HTTP client");
 
+        let circuit = Arc::new(CircuitBreaker::new(
+            config.circuit_failure_threshold,
+            config.circuit_reset_timeout_secs,
+        ));
+
         Self {
             client,
             base_url: base_url.trim_end_matches('/').to_string(),
             internal_secret,
+            config,
+            circuit,
         }
     }
 
@@ -329,20 +449,128 @@ impl DjangoClient {
         format!("{}{}", self.base_url, path)
     }
 
-    async fn get<T: for<'de> Deserialize<'de>>(&self, path: &str) -> Result<T, DjangoError> {
-        let resp = self
-            .client
-            .get(self.url(path))
-            .header("X-Internal-Secret", &self.internal_secret)
-            .send()
-            .await
-            .map_err(DjangoError::Request)?;
+    /// Compute HMAC-SHA256 signature header value for internal API auth.
+    ///
+    /// Format: `ts=<unix>,sig=<hex_hmac>`
+    /// Signed message: `{timestamp}.{method}.{path}.{body_sha256}`
+    fn sign_request(&self, method: &str, path: &str, body: &[u8]) -> String {
+        let ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
 
-        if !resp.status().is_success() {
-            return Err(DjangoError::Status(resp.status().as_u16(), path.to_string()));
+        let body_hash = {
+            use sha2::Digest;
+            let mut hasher = Sha256::new();
+            hasher.update(body);
+            hex::encode(hasher.finalize())
+        };
+
+        let message = format!("{ts}.{method}.{path}.{body_hash}");
+
+        let mut mac =
+            Hmac::<Sha256>::new_from_slice(self.internal_secret.as_bytes()).expect("HMAC key");
+        mac.update(message.as_bytes());
+        let sig = hex::encode(mac.finalize().into_bytes());
+
+        format!("ts={ts},sig={sig}")
+    }
+
+    /// Returns `true` for errors that should be retried (5xx, timeout, network).
+    /// 4xx errors are the caller's fault and are never retried.
+    fn is_retriable(err: &DjangoError) -> bool {
+        match err {
+            DjangoError::Timeout => true,
+            DjangoError::Request(_) => true,
+            DjangoError::Status(code, _) => *code >= 500,
+            DjangoError::CircuitOpen => false,
         }
+    }
 
-        resp.json().await.map_err(DjangoError::Request)
+    /// Check the circuit breaker before sending a request. Returns `Err` if
+    /// the circuit is open and the reset timeout has not yet elapsed.
+    async fn check_circuit(&self) -> Result<(), DjangoError> {
+        match self.circuit.effective_state().await {
+            CircuitState::Open => Err(DjangoError::CircuitOpen),
+            _ => Ok(()),
+        }
+    }
+
+    /// Execute `f` with timeout + circuit breaker accounting.
+    ///
+    /// `f` receives a `&Client` and must return a `Result<T, DjangoError>`.
+    /// On 5xx / network errors the circuit failure counter is incremented; on
+    /// 4xx the counter is *not* incremented (caller error, not backend failure).
+    /// On success the counter is reset.
+    async fn execute_with_resilience<T, F, Fut>(&self, f: F) -> Result<T, DjangoError>
+    where
+        F: Fn() -> Fut,
+        Fut: std::future::Future<Output = Result<T, DjangoError>>,
+    {
+        self.check_circuit().await?;
+
+        let timeout = Duration::from_millis(self.config.request_timeout_ms);
+        let max_retries = self.config.retry_count;
+
+        let mut attempt = 0u32;
+        loop {
+            let result = tokio::time::timeout(timeout, f())
+                .await
+                .unwrap_or(Err(DjangoError::Timeout));
+
+            match &result {
+                Ok(_) => {
+                    self.circuit.record_success().await;
+                    return result;
+                }
+                Err(err) if !Self::is_retriable(err) => {
+                    // 4xx — return immediately, do not penalise the circuit.
+                    return result;
+                }
+                Err(_) => {
+                    self.circuit.record_failure().await;
+                    attempt += 1;
+                    if attempt >= max_retries {
+                        return result;
+                    }
+                    // Check circuit again — it may have just opened.
+                    self.check_circuit().await?;
+                    // Exponential backoff: 100ms, 200ms, 400ms, …
+                    let backoff = Duration::from_millis(100 * (1u64 << attempt.min(6)));
+                    tokio::time::sleep(backoff).await;
+                }
+            }
+        }
+    }
+
+    async fn get<T: for<'de> Deserialize<'de>>(&self, path: &str) -> Result<T, DjangoError> {
+        let url = self.url(path);
+        let path_owned = path.to_string();
+        let sig = self.sign_request("GET", path, b"");
+        self.execute_with_resilience(|| {
+            let client = self.client.clone();
+            let url = url.clone();
+            let sig = sig.clone();
+            let path_owned = path_owned.clone();
+            async move {
+                let resp = client
+                    .get(&url)
+                    .header("X-Internal-Signature", &sig)
+                    .send()
+                    .await
+                    .map_err(DjangoError::Request)?;
+
+                if !resp.status().is_success() {
+                    return Err(DjangoError::Status(
+                        resp.status().as_u16(),
+                        path_owned.clone(),
+                    ));
+                }
+
+                resp.json().await.map_err(DjangoError::Request)
+            }
+        })
+        .await
     }
 
     async fn post<B: Serialize, T: for<'de> Deserialize<'de>>(
@@ -350,20 +578,41 @@ impl DjangoClient {
         path: &str,
         body: &B,
     ) -> Result<T, DjangoError> {
-        let resp = self
-            .client
-            .post(self.url(path))
-            .header("X-Internal-Secret", &self.internal_secret)
-            .json(body)
-            .send()
-            .await
-            .map_err(DjangoError::Request)?;
+        // Serialize body once so the closure can be called multiple times
+        // on retry without re-borrowing the caller's `body`.
+        let body_json: serde_json::Value = serde_json::to_value(body)
+            .map_err(|e| DjangoError::Status(0, format!("serialization error: {e}")))?;
 
-        if !resp.status().is_success() {
-            return Err(DjangoError::Status(resp.status().as_u16(), path.to_string()));
-        }
+        let url = self.url(path);
+        let path_owned = path.to_string();
+        let body_bytes = serde_json::to_vec(&body_json).unwrap_or_default();
+        let sig = self.sign_request("POST", path, &body_bytes);
+        self.execute_with_resilience(|| {
+            let client = self.client.clone();
+            let url = url.clone();
+            let sig = sig.clone();
+            let path_owned = path_owned.clone();
+            let body_json = body_json.clone();
+            async move {
+                let resp = client
+                    .post(&url)
+                    .header("X-Internal-Signature", &sig)
+                    .json(&body_json)
+                    .send()
+                    .await
+                    .map_err(DjangoError::Request)?;
 
-        resp.json().await.map_err(DjangoError::Request)
+                if !resp.status().is_success() {
+                    return Err(DjangoError::Status(
+                        resp.status().as_u16(),
+                        path_owned.clone(),
+                    ));
+                }
+
+                resp.json().await.map_err(DjangoError::Request)
+            }
+        })
+        .await
     }
 
     async fn patch<B: Serialize>(
@@ -371,20 +620,39 @@ impl DjangoClient {
         path: &str,
         body: &B,
     ) -> Result<(), DjangoError> {
-        let resp = self
-            .client
-            .patch(self.url(path))
-            .header("X-Internal-Secret", &self.internal_secret)
-            .json(body)
-            .send()
-            .await
-            .map_err(DjangoError::Request)?;
+        let body_json: serde_json::Value = serde_json::to_value(body)
+            .map_err(|e| DjangoError::Status(0, format!("serialization error: {e}")))?;
 
-        if !resp.status().is_success() {
-            return Err(DjangoError::Status(resp.status().as_u16(), path.to_string()));
-        }
+        let url = self.url(path);
+        let path_owned = path.to_string();
+        let body_bytes = serde_json::to_vec(&body_json).unwrap_or_default();
+        let sig = self.sign_request("PATCH", path, &body_bytes);
+        self.execute_with_resilience(|| {
+            let client = self.client.clone();
+            let url = url.clone();
+            let sig = sig.clone();
+            let path_owned = path_owned.clone();
+            let body_json = body_json.clone();
+            async move {
+                let resp = client
+                    .patch(&url)
+                    .header("X-Internal-Signature", &sig)
+                    .json(&body_json)
+                    .send()
+                    .await
+                    .map_err(DjangoError::Request)?;
 
-        Ok(())
+                if !resp.status().is_success() {
+                    return Err(DjangoError::Status(
+                        resp.status().as_u16(),
+                        path_owned.clone(),
+                    ));
+                }
+
+                Ok(())
+            }
+        })
+        .await
     }
 
     // --- User endpoints ---
@@ -594,6 +862,25 @@ impl DjangoClient {
             )
             .await?;
         Ok(())
+    }
+
+    /// Update a community server's status in Django DB.
+    pub async fn update_server_status(
+        &self,
+        server_id: &str,
+        status: &str,
+    ) -> Result<(), DjangoError> {
+        #[derive(Serialize)]
+        struct Body {
+            status: String,
+        }
+        self.patch(
+            &format!("/api/v1/internal/server-status/{server_id}/"),
+            &Body {
+                status: status.to_string(),
+            },
+        )
+        .await
     }
 
     pub async fn get_latest_snapshot(
@@ -885,6 +1172,34 @@ impl DjangoClient {
     ) -> Result<HashMap<String, SystemModuleState>, DjangoError> {
         self.get("/api/v1/internal/game/system-modules/").await
     }
+
+    // --- Server info / dispatch ---
+
+    /// Fetch server metadata from Django to determine if a gamenode is verified.
+    pub async fn get_server_info(
+        &self,
+        server_id: &str,
+    ) -> Result<ServerInfoResponse, DjangoError> {
+        self.get(&format!("/api/v1/internal/server-info/{server_id}/"))
+            .await
+    }
+
+    /// Assign a gamenode server to a match after dispatching it.
+    pub async fn assign_server_to_match(
+        &self,
+        match_id: &str,
+        server_id: &str,
+    ) -> Result<(), DjangoError> {
+        #[derive(Serialize)]
+        struct Body<'a> {
+            server_id: &'a str,
+        }
+        self.patch(
+            &format!("/api/v1/internal/matches/{match_id}/assign-server/"),
+            &Body { server_id },
+        )
+        .await
+    }
 }
 
 /// State of a system module as returned by Django.
@@ -895,10 +1210,22 @@ pub struct SystemModuleState {
     pub config: HashMap<String, serde_json::Value>,
 }
 
+/// Server metadata returned by Django's `/server-info/{id}/` endpoint.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerInfoResponse {
+    pub server_uuid: String,
+    pub is_verified: bool,
+    pub region: String,
+}
+
 #[derive(Debug)]
 pub enum DjangoError {
     Request(reqwest::Error),
     Status(u16, String),
+    /// The request timed out.
+    Timeout,
+    /// The circuit breaker is open — requests are failing fast.
+    CircuitOpen,
 }
 
 impl std::fmt::Display for DjangoError {
@@ -907,6 +1234,10 @@ impl std::fmt::Display for DjangoError {
             DjangoError::Request(e) => write!(f, "Django request error: {e}"),
             DjangoError::Status(code, path) => {
                 write!(f, "Django returned status {code} for {path}")
+            }
+            DjangoError::Timeout => write!(f, "Django request timed out"),
+            DjangoError::CircuitOpen => {
+                write!(f, "Django circuit breaker is open — too many recent failures")
             }
         }
     }
@@ -1325,7 +1656,7 @@ mod tests {
 
     mod http_tests {
         use super::*;
-        use wiremock::matchers::{header, method, path, query_param};
+        use wiremock::matchers::{header, header_exists, method, path, query_param};
         use wiremock::{Mock, MockServer, ResponseTemplate};
 
         // ------------------------------------------------------------------
@@ -1337,15 +1668,15 @@ mod tests {
         }
 
         // ------------------------------------------------------------------
-        // Header injection: X-Internal-Secret must be present on every call.
+        // Header injection: X-Internal-Signature must be present on every call.
         // ------------------------------------------------------------------
 
         #[tokio::test]
-        async fn get_sends_internal_secret_header() {
+        async fn get_sends_hmac_signature_header() {
             let server = MockServer::start().await;
             Mock::given(method("GET"))
                 .and(path("/api/v1/internal/users/u1/"))
-                .and(header("X-Internal-Secret", "test-secret"))
+                .and(header_exists("X-Internal-Signature"))
                 .respond_with(
                     ResponseTemplate::new(200).set_body_json(serde_json::json!({
                         "id": "u1",
@@ -1359,15 +1690,15 @@ mod tests {
 
             let client = make_client(&server);
             let result = client.get_user("u1").await;
-            assert!(result.is_ok(), "should succeed when header is correct");
+            assert!(result.is_ok(), "should succeed when HMAC header is present");
         }
 
         #[tokio::test]
-        async fn post_sends_internal_secret_header() {
+        async fn post_sends_hmac_signature_header() {
             let server = MockServer::start().await;
             Mock::given(method("POST"))
                 .and(path("/api/v1/internal/matchmaking/queue/add/"))
-                .and(header("X-Internal-Secret", "test-secret"))
+                .and(header_exists("X-Internal-Signature"))
                 .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
                 .expect(1)
                 .mount(&server)

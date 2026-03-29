@@ -15,6 +15,14 @@ pub struct AppConfig {
     /// Allowed WebSocket origins — shares CORS_ALLOWED_ORIGINS with Django.
     /// Empty = allow all (dev mode).
     pub allowed_ws_origins: Vec<String>,
+    /// Per-request timeout for Django internal API calls, in milliseconds.
+    pub django_request_timeout_ms: u64,
+    /// Maximum retry attempts for Django 5xx / network errors.
+    pub django_retry_count: u32,
+    /// Number of consecutive failures before the circuit breaker opens.
+    pub circuit_breaker_failure_threshold: u32,
+    /// Seconds the circuit breaker stays open before allowing a probe request.
+    pub circuit_breaker_reset_timeout_secs: u64,
 }
 
 impl AppConfig {
@@ -53,6 +61,22 @@ impl AppConfig {
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty())
                 .collect(),
+            django_request_timeout_ms: std::env::var("DJANGO_REQUEST_TIMEOUT_MS")
+                .unwrap_or_else(|_| "5000".into())
+                .parse()
+                .unwrap_or(5000),
+            django_retry_count: std::env::var("DJANGO_RETRY_COUNT")
+                .unwrap_or_else(|_| "3".into())
+                .parse()
+                .unwrap_or(3),
+            circuit_breaker_failure_threshold: std::env::var("CIRCUIT_BREAKER_FAILURE_THRESHOLD")
+                .unwrap_or_else(|_| "5".into())
+                .parse()
+                .unwrap_or(5),
+            circuit_breaker_reset_timeout_secs: std::env::var("CIRCUIT_BREAKER_RESET_TIMEOUT_SECS")
+                .unwrap_or_else(|_| "30".into())
+                .parse()
+                .unwrap_or(30),
         }
     }
 
@@ -134,6 +158,10 @@ mod tests {
                 livekit_api_key: "key".to_string(),
                 livekit_api_secret: "devsecret-zelqor-at-least-32-chars-long".to_string(),
                 allowed_ws_origins: vec![],
+                django_request_timeout_ms: 5000,
+                django_retry_count: 3,
+                circuit_breaker_failure_threshold: 5,
+                circuit_breaker_reset_timeout_secs: 30,
             }
         }
 
@@ -444,6 +472,10 @@ mod tests {
                 livekit_api_key: "prodkey".to_string(),
                 livekit_api_secret: "devsecret-zelqor-at-least-32-chars-long".to_string(),
                 allowed_ws_origins: vec![],
+                django_request_timeout_ms: 5000,
+                django_retry_count: 3,
+                circuit_breaker_failure_threshold: 5,
+                circuit_breaker_reset_timeout_secs: 30,
             }
         }
 

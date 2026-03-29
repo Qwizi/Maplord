@@ -13,6 +13,7 @@ ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1,backend", c
 if "localhost" not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append("localhost")
 CSRF_TRUSTED_ORIGINS = config("CSRF_TRUSTED_ORIGINS", default="", cast=Csv())
+FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:3000")
 
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 5000
 
@@ -44,6 +45,7 @@ INSTALLED_APPS = [
     "apps.notifications",
     "apps.clans",
     "apps.payments",
+    "apps.dlq",
 ]
 
 MIDDLEWARE = [
@@ -127,6 +129,11 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "UTC"
+CELERY_RESULT_EXPIRES = 3600  # Auto-delete task results after 1 hour
+# Ensure tasks are not lost when a worker dies mid-execution
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+# Acknowledge tasks only after they complete (pairs with REJECT_ON_WORKER_LOST)
+CELERY_TASK_ACKS_LATE = True
 CELERY_BEAT_SCHEDULE = {
     "cleanup-stale-matches": {
         "task": "apps.game.tasks.cleanup_stale_matches",
@@ -159,6 +166,18 @@ CELERY_BEAT_SCHEDULE = {
     "expire-pending-clan-wars": {
         "task": "apps.clans.tasks.expire_pending_wars",
         "schedule": 3600,  # every hour
+    },
+    "retry-dead-letter-tasks": {
+        "task": "apps.dlq.tasks.retry_dead_letter_tasks",
+        "schedule": 60,  # every 60 seconds
+    },
+    "publish-outbox-events": {
+        "task": "apps.game.tasks.publish_outbox_events",
+        "schedule": 2,  # every 2 seconds
+    },
+    "cleanup-expired-device-codes": {
+        "task": "apps.developers.tasks.cleanup_expired_device_codes",
+        "schedule": 300,  # every 5 minutes
     },
 }
 
@@ -213,6 +232,7 @@ STRIPE_WEBHOOK_SECRET = config("STRIPE_WEBHOOK_SECRET", default="")
 # CORS
 # Internal API secret for Rust gateway
 INTERNAL_SECRET = config("INTERNAL_SECRET", default="dev-internal-secret")
+INTERNAL_SECRET_PREV = config("INTERNAL_SECRET_PREV", default="")
 
 
 # Unfold Admin
@@ -507,6 +527,9 @@ JWT_COOKIE_HTTPONLY = True
 JWT_COOKIE_SAMESITE = "Lax"  # Lax allows top-level navigations
 JWT_COOKIE_PATH = "/"
 JWT_COOKIE_DOMAIN = config("COOKIE_DOMAIN", default=None)  # None = current domain
+
+# Outbox pattern — set to False to use legacy synchronous side-effect handling
+OUTBOX_ENABLED = config("OUTBOX_ENABLED", default=True, cast=bool)
 
 # Production safety checks — insecure defaults must never reach a production deployment.
 if not DEBUG and SECRET_KEY.startswith("django-insecure"):

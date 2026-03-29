@@ -111,3 +111,30 @@ class AnticheatViolation(models.Model):
 
     def __str__(self):
         return f"{self.violation_kind} ({self.severity}) - {self.player} in match {self.match_id}"
+
+
+class OutboxEvent(models.Model):
+    """Transactional outbox for reliable event publishing.
+
+    Events are written atomically alongside core match-finalization writes.
+    A periodic Celery task (publish_outbox_events) picks up unpublished events
+    and dispatches the appropriate handler tasks, then marks them published.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    aggregate_type = models.CharField(max_length=50, db_index=True)  # e.g. "match"
+    aggregate_id = models.CharField(max_length=100, db_index=True)  # match UUID as string
+    event_type = models.CharField(max_length=100, db_index=True)  # e.g. "match.finalized"
+    payload = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    published = models.BooleanField(default=False, db_index=True)
+    published_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["created_at"]
+        indexes = [
+            models.Index(fields=["published", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"OutboxEvent {self.event_type} ({self.aggregate_type}:{self.aggregate_id}) published={self.published}"

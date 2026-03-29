@@ -63,7 +63,7 @@ class TestDeveloperAppModel:
         from apps.developers.models import DeveloperApp
 
         app = DeveloperApp.objects.create(name="App With ID", client_secret_hash="fakehash", owner=self.user)
-        assert app.client_id.startswith("ml_")
+        assert app.client_id.startswith("zq_")
         assert len(app.client_id) > 5
 
     def test_client_id_unique(self):
@@ -127,7 +127,7 @@ class TestAPIKeyModel:
         from apps.developers.models import APIKey
 
         raw_key, prefix, key_hash = APIKey.generate_key()
-        assert raw_key.startswith("ml_")
+        assert raw_key.startswith("zq_")
         assert prefix == raw_key[:12]
         assert key_hash == hashlib.sha256(raw_key.encode()).hexdigest()
 
@@ -468,7 +468,7 @@ class TestAPIKeyAPI:
         assert resp.status_code == 200
         data = resp.json()
         assert "key" in data
-        assert data["key"].startswith("ml_")
+        assert data["key"].startswith("zq_")
 
     def test_create_api_key_invalid_scope(self):
         resp = self.client.post(
@@ -1892,7 +1892,7 @@ class TestOAuthAdditionalPaths:
             "/api/v1/oauth/token/",
             data=json.dumps(
                 {
-                    "grant_type": "client_credentials",
+                    "grant_type": "totally_invalid_grant",
                     "client_id": self.client_id,
                     "client_secret": self.raw_secret,
                 }
