@@ -78,7 +78,7 @@ services:
         condition: service_started
 
   gamenode:
-    image: ghcr.io/qwizi/zelqor-gateway:${TAG:-latest}
+    image: ghcr.io/qwizi/zelqor-gamenode:${TAG:-latest}
     restart: unless-stopped
     env_file: .env
     environment:
@@ -86,7 +86,6 @@ services:
       REDIS_PORT: "6379"
       REDIS_GAME_DB: "1"
       GATEWAY_URL: http://gateway:8080
-      DJANGO_INTERNAL_URL: http://backend:8000
       CLIENT_ID: ${GAMENODE_CLIENT_ID}
       CLIENT_SECRET: ${GAMENODE_CLIENT_SECRET}
       SERVER_NAME: "Official Server"
@@ -99,7 +98,6 @@ services:
         condition: service_started
       backend:
         condition: service_started
-    command: zelqor-gamenode
 
   celery:
     image: ghcr.io/qwizi/zelqor:${TAG:-latest}
