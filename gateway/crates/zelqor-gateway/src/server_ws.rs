@@ -111,13 +111,13 @@ async fn handle_server_socket(socket: WebSocket, _token: String, state: AppState
     });
 
     // Receive loop: handle messages from the gamenode (heartbeats, state updates).
-    let registry = state.server_registry.clone();
     let server_id_recv = server_id.clone();
+    let state_recv = state.clone();
     let recv_task = tokio::spawn(async move {
         while let Some(msg_result) = ws_source.next().await {
             match msg_result {
                 Ok(Message::Text(text)) => {
-                    handle_node_message(&text, &server_id_recv, &registry);
+                    handle_node_message(&text, &server_id_recv, &state_recv);
                 }
                 Ok(Message::Close(_)) => {
                     info!(server_id = %server_id_recv, "Gamenode sent Close frame");
@@ -181,11 +181,7 @@ async fn wait_for_register(
 }
 
 /// Dispatch an inbound text message from a connected gamenode.
-fn handle_node_message(
-    text: &str,
-    server_id: &str,
-    registry: &crate::server_registry::ServerRegistry,
-) {
+fn handle_node_message(text: &str, server_id: &str, state: &AppState) {
     let msg: NodeToGateway = match serde_json::from_str(text) {
         Ok(m) => m,
         Err(e) => {
@@ -199,30 +195,44 @@ fn handle_node_message(
             active_matches,
             cpu_load,
         } => {
-            registry.update_heartbeat(server_id, active_matches, cpu_load);
+            state
+                .server_registry
+                .update_heartbeat(server_id, active_matches, cpu_load);
         }
         NodeToGateway::TickBroadcast {
             ref match_id,
             tick,
-            ..
+            ref tick_data,
         } => {
-            info!(server_id = %server_id, match_id = %match_id, tick, "TickBroadcast received");
-            // TODO: forward tick data to match players via game_connections.
+            tracing::debug!(server_id = %server_id, match_id = %match_id, tick, "TickBroadcast");
+            crate::game::broadcast_to_match(match_id, tick_data, &state.game_connections);
         }
         NodeToGateway::MatchFinished {
             ref match_id,
             ref winner_id,
             total_ticks,
-            ..
+            ref final_state,
         } => {
             info!(
                 server_id = %server_id,
                 match_id = %match_id,
-                winner_id = ?winner_id,
+                ?winner_id,
                 total_ticks,
-                "MatchFinished received"
+                "MatchFinished"
             );
-            // TODO: call Django to record match result and trigger ELO calculation.
+            let django = state.django.clone();
+            let match_id = match_id.clone();
+            let winner_id = winner_id.clone();
+            let final_state = final_state.clone();
+            tokio::spawn(async move {
+                let _ = django
+                    .finalize_match(&match_id, winner_id.as_deref(), total_ticks, final_state)
+                    .await;
+                // Schedule cleanup after 2 minutes so match data is still
+                // readable briefly before Django removes it.
+                tokio::time::sleep(tokio::time::Duration::from_secs(120)).await;
+                let _ = django.cleanup_match(&match_id).await;
+            });
         }
         NodeToGateway::PlayerEliminated {
             ref match_id,
@@ -232,13 +242,27 @@ fn handle_node_message(
                 server_id = %server_id,
                 match_id = %match_id,
                 user_id = %user_id,
-                "PlayerEliminated received"
+                "PlayerEliminated"
             );
-            // TODO: notify the eliminated player via social_connections.
+            let notification = serde_json::json!({
+                "type": "notification",
+                "event": "player_eliminated",
+                "match_id": match_id,
+                "user_id": user_id,
+            });
+            let text_msg = Message::Text(notification.to_string().into());
+            if let Some(senders) = state.social_connections.get(user_id) {
+                for sender in senders.value().iter() {
+                    let _ = sender.send(text_msg.clone());
+                }
+            }
         }
         NodeToGateway::Register { .. } => {
             // Duplicate Register after the initial handshake — ignore.
-            warn!(server_id = %server_id, "Received unexpected Register message after handshake");
+            warn!(
+                server_id = %server_id,
+                "Received unexpected Register message after handshake"
+            );
         }
     }
 }

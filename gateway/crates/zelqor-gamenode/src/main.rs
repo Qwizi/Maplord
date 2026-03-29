@@ -1,10 +1,12 @@
 mod config;
+mod match_runner;
 
 use config::NodeConfig;
 use futures_util::{SinkExt, StreamExt};
+use match_runner::{MatchCommand, MatchResult, MatchRunner};
 use serde::Deserialize;
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use tokio::sync::mpsc;
 use tokio::time::{interval, Duration};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::{error, info, warn};
@@ -89,9 +91,6 @@ async fn main() {
         .build()
         .expect("Failed to build HTTP client");
 
-    // Shared active-match counter updated as matches start / finish.
-    let active_matches: Arc<AtomicU32> = Arc::new(AtomicU32::new(0));
-
     // Set up shutdown signal handling.
     let shutdown = Arc::new(tokio::sync::Notify::new());
     let shutdown_tx = shutdown.clone();
@@ -117,7 +116,7 @@ async fn main() {
                 info!("Gamenode shutting down cleanly");
                 break;
             }
-            _ = run_connection(&cfg, &http_client, active_matches.clone()) => {
+            _ = run_connection(&cfg, &http_client) => {
                 warn!("Gateway connection closed, reconnecting in 5 seconds...");
                 tokio::time::sleep(Duration::from_secs(5)).await;
             }
@@ -126,11 +125,7 @@ async fn main() {
 }
 
 /// Establish a single connection lifecycle: authenticate, connect, register, run loop.
-async fn run_connection(
-    cfg: &NodeConfig,
-    http_client: &reqwest::Client,
-    active_matches: Arc<AtomicU32>,
-) {
+async fn run_connection(cfg: &NodeConfig, http_client: &reqwest::Client) {
     // 1. Obtain access token.
     let access_token = match fetch_access_token(http_client, cfg).await {
         Ok(t) => {
@@ -178,17 +173,20 @@ async fn run_connection(
         "Sent Register to gateway"
     );
 
-    // 4. Spawn heartbeat task.
+    // 4. Create the match runner and a channel for match results.
+    let match_runner = MatchRunner::new();
+    let (result_tx, mut result_rx) = mpsc::unbounded_channel::<MatchResult>();
+
+    // 5. Spawn heartbeat task — sends HeartbeatAck every 10 seconds.
     let (hb_tx, mut hb_rx) = tokio::sync::mpsc::unbounded_channel::<NodeToGateway>();
-    let active_matches_hb = active_matches.clone();
 
     tokio::spawn(async move {
         let mut ticker = interval(Duration::from_secs(10));
         loop {
             ticker.tick().await;
             let ack = NodeToGateway::HeartbeatAck {
-                active_matches: active_matches_hb.load(Ordering::Relaxed),
-                // cpu_load is a stub — real implementation would query sysinfo.
+                // active_count() reads the DashMap length; cheap O(1) call.
+                active_matches: 0, // placeholder; updated below via a separate channel
                 cpu_load: 0.0,
             };
             if hb_tx.send(ack).is_err() {
@@ -198,11 +196,20 @@ async fn run_connection(
         }
     });
 
-    // 5. Main message loop.
+    // 6. Main message loop.
     loop {
         tokio::select! {
             // Outbound: heartbeats queued by the heartbeat task.
             Some(msg) = hb_rx.recv() => {
+                // Patch the heartbeat with the current active_count.
+                let msg = if let NodeToGateway::HeartbeatAck { cpu_load, .. } = msg {
+                    NodeToGateway::HeartbeatAck {
+                        active_matches: match_runner.active_count(),
+                        cpu_load,
+                    }
+                } else {
+                    msg
+                };
                 if let Err(e) = send_msg(&mut ws_sink, &msg).await {
                     error!("Failed to send heartbeat: {e}");
                     break;
@@ -210,11 +217,40 @@ async fn run_connection(
                 info!("Sent HeartbeatAck to gateway");
             }
 
+            // Match results: forward to gateway as NodeToGateway messages.
+            Some(result) = result_rx.recv() => {
+                let outbound = match result {
+                    MatchResult::Tick { match_id, tick, tick_data } => {
+                        NodeToGateway::TickBroadcast { match_id, tick, tick_data }
+                    }
+                    MatchResult::Finished {
+                        match_id,
+                        winner_id,
+                        total_ticks,
+                        final_state,
+                    } => {
+                        NodeToGateway::MatchFinished {
+                            match_id,
+                            winner_id,
+                            total_ticks,
+                            final_state,
+                        }
+                    }
+                    MatchResult::PlayerEliminated { match_id, user_id } => {
+                        NodeToGateway::PlayerEliminated { match_id, user_id }
+                    }
+                };
+                if let Err(e) = send_msg(&mut ws_sink, &outbound).await {
+                    error!("Failed to send match result to gateway: {e}");
+                    break;
+                }
+            }
+
             // Inbound: messages from the gateway.
             maybe_msg = ws_source.next() => {
                 match maybe_msg {
                     Some(Ok(Message::Text(text))) => {
-                        handle_gateway_message(&text, active_matches.clone());
+                        handle_gateway_message(&text, &match_runner, &result_tx);
                     }
                     Some(Ok(Message::Ping(data))) => {
                         // Respond to ping frames.
@@ -245,7 +281,11 @@ async fn run_connection(
 }
 
 /// Dispatch a single inbound text frame from the gateway.
-fn handle_gateway_message(text: &str, active_matches: Arc<AtomicU32>) {
+fn handle_gateway_message(
+    text: &str,
+    match_runner: &MatchRunner,
+    result_tx: &mpsc::UnboundedSender<MatchResult>,
+) {
     let msg: GatewayToNode = match serde_json::from_str(text) {
         Ok(m) => m,
         Err(e) => {
@@ -256,34 +296,39 @@ fn handle_gateway_message(text: &str, active_matches: Arc<AtomicU32>) {
 
     match msg {
         GatewayToNode::StartMatch {
-            ref match_id,
-            ref match_data,
+            match_id,
+            match_data,
         } => {
             info!(match_id = %match_id, "Received StartMatch");
-            // TODO: integrate with zelqor-engine to launch game loop.
-            active_matches.fetch_add(1, Ordering::Relaxed);
-            let _ = match_data; // Will be used when game loop is wired up.
+            match_runner.start_match(match_id, match_data, result_tx.clone());
         }
         GatewayToNode::PlayerAction {
-            ref match_id,
-            ref user_id,
-            ref action,
+            match_id,
+            user_id,
+            action,
         } => {
             info!(match_id = %match_id, user_id = %user_id, "Received PlayerAction");
-            // TODO: forward to the running game loop for this match.
-            let _ = action;
+            match_runner.send_command(
+                &match_id,
+                MatchCommand::PlayerAction { user_id, action },
+            );
         }
         GatewayToNode::PlayerConnect {
-            ref match_id,
-            ref user_id,
+            match_id,
+            user_id,
         } => {
             info!(match_id = %match_id, user_id = %user_id, "Player connected to match");
+            match_runner.send_command(&match_id, MatchCommand::PlayerConnect { user_id });
         }
         GatewayToNode::PlayerDisconnect {
-            ref match_id,
-            ref user_id,
+            match_id,
+            user_id,
         } => {
             info!(match_id = %match_id, user_id = %user_id, "Player disconnected from match");
+            match_runner.send_command(
+                &match_id,
+                MatchCommand::PlayerDisconnect { user_id },
+            );
         }
         GatewayToNode::Heartbeat => {
             info!("Received Heartbeat ping from gateway");

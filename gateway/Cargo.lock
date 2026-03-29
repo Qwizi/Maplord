@@ -3111,6 +3111,7 @@ name = "zelqor-gamenode"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "dashmap",
  "dotenvy",
  "futures-util",
  "reqwest",
