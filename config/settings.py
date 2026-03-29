@@ -169,6 +169,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.dlq.tasks.retry_dead_letter_tasks",
         "schedule": 60,  # every 60 seconds
     },
+    "publish-outbox-events": {
+        "task": "apps.game.tasks.publish_outbox_events",
+        "schedule": 2,  # every 2 seconds
+    },
 }
 
 # Redis direct connection (game state store)
@@ -517,6 +521,9 @@ JWT_COOKIE_HTTPONLY = True
 JWT_COOKIE_SAMESITE = "Lax"  # Lax allows top-level navigations
 JWT_COOKIE_PATH = "/"
 JWT_COOKIE_DOMAIN = config("COOKIE_DOMAIN", default=None)  # None = current domain
+
+# Outbox pattern — set to False to use legacy synchronous side-effect handling
+OUTBOX_ENABLED = config("OUTBOX_ENABLED", default=True, cast=bool)
 
 # Production safety checks — insecure defaults must never reach a production deployment.
 if not DEBUG and SECRET_KEY.startswith("django-insecure"):

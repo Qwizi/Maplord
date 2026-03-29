@@ -99,18 +99,178 @@ def _award_match_xp(player_rows: list[dict], winner_id: str | None) -> None:
             )
 
 
+def _build_player_rows(match, players_data: dict, total_ticks: int, winner_id: str | None) -> list[dict]:
+    """Build the player_rows list from match players and final state data."""
+    player_rows = []
+    for mp in match.players.select_related("user").all():
+        pid = str(mp.user_id)
+        player_info = players_data.get(pid, {})
+
+        owned_regions = int(player_info.get("total_regions_conquered", 0))
+        total_units = int(player_info.get("total_units_produced", 0))
+        cumulative_units_lost = int(player_info.get("total_units_lost", 0))
+        buildings_count = int(player_info.get("total_buildings_built", 0))
+
+        player_rows.append(
+            {
+                "match_player": mp,
+                "pid": pid,
+                "is_bot": mp.user.is_bot,
+                "is_alive": bool(player_info.get("is_alive", False)),
+                "eliminated_reason": str(player_info.get("eliminated_reason") or ""),
+                "eliminated_tick": int(player_info.get("eliminated_tick") or 0),
+                "owned_regions": owned_regions,
+                "total_units": total_units,
+                "units_lost": cumulative_units_lost,
+                "buildings_built": buildings_count,
+                "rating_before": int(mp.user.elo_rating),
+            }
+        )
+
+    player_rows.sort(
+        key=lambda row: (
+            0 if row["pid"] == winner_id else 1,
+            0 if row["is_alive"] else 1,
+            -row["owned_regions"],
+            -row["total_units"],
+            row["match_player"].joined_at,
+        )
+    )
+
+    for index, row in enumerate(player_rows, start=1):
+        row["placement"] = index
+
+    return player_rows
+
+
+def _compute_elo_changes(player_rows: list[dict], total_ticks: int, k_factor: int, is_ranked: bool) -> list[int]:
+    """Compute balanced ELO changes for all players."""
+    max_regions = max((row["owned_regions"] for row in player_rows), default=0)
+    max_units = max((row["total_units"] for row in player_rows), default=0)
+    max_buildings = max((row["buildings_built"] for row in player_rows), default=0)
+    max_survival_ticks = max(total_ticks, 1)
+
+    raw_changes: list[float] = []
+    for row in player_rows:
+        if row["is_bot"] or not is_ranked:
+            row["raw_elo_change"] = 0.0
+            row["performance_score"] = 0.0
+            row["base_elo_component"] = 0.0
+            raw_changes.append(0.0)
+            survived_ticks = row["eliminated_tick"] or total_ticks
+            row["survived_ticks"] = survived_ticks
+            continue
+
+        placement_total = 0.0
+        expected_total = 0.0
+        for opponent in player_rows:
+            if opponent["pid"] == row["pid"] or opponent["is_bot"]:
+                continue
+            if row["placement"] < opponent["placement"]:
+                actual_score = 1.0
+            elif row["placement"] > opponent["placement"]:
+                actual_score = 0.0
+            else:
+                actual_score = 0.5
+            expected_score = 1 / (1 + 10 ** ((opponent["rating_before"] - row["rating_before"]) / 400))
+            placement_total += actual_score
+            expected_total += expected_score
+
+        survived_ticks = row["eliminated_tick"] or total_ticks
+        row["survived_ticks"] = survived_ticks
+        discipline_penalty = 0.0
+        if row["eliminated_reason"] == "left_match":
+            discipline_penalty = get_module_config("leaderboard", "discipline_penalty_left_match", -0.2)
+        elif row["eliminated_reason"] == "disconnect_timeout":
+            discipline_penalty = get_module_config("leaderboard", "discipline_penalty_disconnect", -0.12)
+
+        w_regions = get_module_config("leaderboard", "perf_weight_regions", 0.35)
+        w_units = get_module_config("leaderboard", "perf_weight_units", 0.25)
+        w_buildings = get_module_config("leaderboard", "perf_weight_buildings", 0.15)
+        w_survival = get_module_config("leaderboard", "perf_weight_survival", 0.25)
+        performance_score = (
+            w_regions * _safe_ratio(row["owned_regions"], max_regions)
+            + w_units * _safe_ratio(row["total_units"], max_units)
+            + w_buildings * _safe_ratio(row["buildings_built"], max_buildings)
+            + w_survival * _safe_ratio(survived_ticks, max_survival_ticks)
+            + discipline_penalty
+        )
+        row["performance_score"] = performance_score
+        row["base_elo_component"] = k_factor * (placement_total - expected_total)
+        raw_changes.append(0.0)  # placeholder, computed below
+
+    if is_ranked:
+        # Recompute raw changes only for humans
+        human_indices = [i for i, r in enumerate(player_rows) if not r["is_bot"]]
+        human_perf = [player_rows[i]["performance_score"] for i in human_indices]
+        average_performance = sum(human_perf) / len(human_perf) if human_perf else 0.0
+
+        perf_component_weight = get_module_config("leaderboard", "performance_component_weight", 0.35)
+        for i in human_indices:
+            row = player_rows[i]
+            performance_component = k_factor * perf_component_weight * (row["performance_score"] - average_performance)
+            row["raw_elo_change"] = row["base_elo_component"] + performance_component
+            raw_changes[i] = row["raw_elo_change"]
+
+    return _balanced_round_elo_changes(raw_changes)
+
+
+def _build_outbox_payload(
+    match_id: str,
+    winner_id: str | None,
+    total_ticks: int,
+    player_rows: list[dict],
+) -> dict:
+    """Build the serialisable outbox payload (no ORM objects — IDs only)."""
+    player_summaries = []
+    for row in player_rows:
+        player_summaries.append(
+            {
+                "user_id": row["pid"],
+                "is_bot": row["is_bot"],
+                "placement": row["placement"],
+                "final_elo_change": row.get("final_elo_change", 0),
+                "owned_regions": row["owned_regions"],
+                "total_units": row["total_units"],
+                "units_lost": row.get("units_lost", 0),
+                "buildings_built": row["buildings_built"],
+                "is_alive": row["is_alive"],
+                "eliminated_reason": row.get("eliminated_reason", ""),
+                # deck/cosmetic snapshots for StatTrak handler
+                "deck_snapshot": row["match_player"].deck_snapshot,
+                "cosmetic_snapshot": row["match_player"].cosmetic_snapshot,
+            }
+        )
+    return {
+        "match_id": str(match_id),
+        "winner_id": str(winner_id) if winner_id else None,
+        "total_ticks": total_ticks,
+        "players": player_summaries,
+    }
+
+
 def finalize_match_results_sync(
     match_id: str,
     winner_id: str | None,
     total_ticks: int,
     final_state: dict,
 ):
-    """Persist match results immediately and idempotently."""
+    """Persist match results immediately and idempotently.
+
+    When OUTBOX_ENABLED=True (the default) side-effect work (StatTrak, drops,
+    webhooks, clan-war resolution, notifications) is deferred via OutboxEvent
+    records written atomically with the core transaction.  A periodic Celery
+    task (publish_outbox_events) then picks up and dispatches those events.
+
+    When OUTBOX_ENABLED=False the legacy synchronous behaviour is preserved.
+    """
     from django.utils import timezone
 
-    from apps.game.models import GameStateSnapshot, MatchResult, PlayerResult
+    from apps.game.models import GameStateSnapshot, MatchResult, OutboxEvent, PlayerResult
     from apps.game_config.models import GameSettings
     from apps.matchmaking.models import Match
+
+    outbox_enabled = getattr(settings, "OUTBOX_ENABLED", True)
 
     with transaction.atomic():
         match = Match.objects.select_for_update().get(id=match_id)
@@ -139,7 +299,6 @@ def finalize_match_results_sync(
             total_ticks=total_ticks,
         )
 
-        final_state.get("regions", {})
         players_data = final_state.get("players", {})
         snapshot_k = match.settings_snapshot.get("elo_k_factor") if match.settings_snapshot else None
         if snapshot_k is not None:
@@ -148,120 +307,14 @@ def finalize_match_results_sync(
             settings_obj = GameSettings.get()
             k_factor = max(1, int(settings_obj.elo_k_factor))
 
-        player_rows = []
-        for mp in match.players.select_related("user").all():
-            pid = str(mp.user_id)
-            player_info = players_data.get(pid, {})
-
-            owned_regions = int(player_info.get("total_regions_conquered", 0))
-            total_units = int(player_info.get("total_units_produced", 0))
-            cumulative_units_lost = int(player_info.get("total_units_lost", 0))
-            buildings_count = int(player_info.get("total_buildings_built", 0))
-
-            player_rows.append(
-                {
-                    "match_player": mp,
-                    "pid": pid,
-                    "is_bot": mp.user.is_bot,
-                    "is_alive": bool(player_info.get("is_alive", False)),
-                    "eliminated_reason": str(player_info.get("eliminated_reason") or ""),
-                    "eliminated_tick": int(player_info.get("eliminated_tick") or 0),
-                    "owned_regions": owned_regions,
-                    "total_units": total_units,
-                    "units_lost": cumulative_units_lost,
-                    "buildings_built": buildings_count,
-                    "rating_before": int(mp.user.elo_rating),
-                }
-            )
-
-        player_rows.sort(
-            key=lambda row: (
-                0 if row["pid"] == winner_id else 1,
-                0 if row["is_alive"] else 1,
-                -row["owned_regions"],
-                -row["total_units"],
-                row["match_player"].joined_at,
-            )
-        )
-
-        for index, row in enumerate(player_rows, start=1):
-            row["placement"] = index
-
-        max_regions = max((row["owned_regions"] for row in player_rows), default=0)
-        max_units = max((row["total_units"] for row in player_rows), default=0)
-        max_buildings = max((row["buildings_built"] for row in player_rows), default=0)
-        max_survival_ticks = max(total_ticks, 1)
+        player_rows = _build_player_rows(match, players_data, total_ticks, winner_id)
 
         # Determine if match is ranked (configurable minimum human player count)
         min_human_players = get_module_config("leaderboard", "min_human_players_for_ranked", 2)
         human_rows = [r for r in player_rows if not r["is_bot"]]
         is_ranked = len(human_rows) >= min_human_players
 
-        raw_changes: list[float] = []
-        for row in player_rows:
-            if row["is_bot"] or not is_ranked:
-                row["raw_elo_change"] = 0.0
-                row["performance_score"] = 0.0
-                row["base_elo_component"] = 0.0
-                raw_changes.append(0.0)
-                survived_ticks = row["eliminated_tick"] or total_ticks
-                row["survived_ticks"] = survived_ticks
-                continue
-
-            placement_total = 0.0
-            expected_total = 0.0
-            for opponent in player_rows:
-                if opponent["pid"] == row["pid"] or opponent["is_bot"]:
-                    continue
-                if row["placement"] < opponent["placement"]:
-                    actual_score = 1.0
-                elif row["placement"] > opponent["placement"]:
-                    actual_score = 0.0
-                else:
-                    actual_score = 0.5
-                expected_score = 1 / (1 + 10 ** ((opponent["rating_before"] - row["rating_before"]) / 400))
-                placement_total += actual_score
-                expected_total += expected_score
-
-            survived_ticks = row["eliminated_tick"] or total_ticks
-            row["survived_ticks"] = survived_ticks
-            discipline_penalty = 0.0
-            if row["eliminated_reason"] == "left_match":
-                discipline_penalty = get_module_config("leaderboard", "discipline_penalty_left_match", -0.2)
-            elif row["eliminated_reason"] == "disconnect_timeout":
-                discipline_penalty = get_module_config("leaderboard", "discipline_penalty_disconnect", -0.12)
-
-            w_regions = get_module_config("leaderboard", "perf_weight_regions", 0.35)
-            w_units = get_module_config("leaderboard", "perf_weight_units", 0.25)
-            w_buildings = get_module_config("leaderboard", "perf_weight_buildings", 0.15)
-            w_survival = get_module_config("leaderboard", "perf_weight_survival", 0.25)
-            performance_score = (
-                w_regions * _safe_ratio(row["owned_regions"], max_regions)
-                + w_units * _safe_ratio(row["total_units"], max_units)
-                + w_buildings * _safe_ratio(row["buildings_built"], max_buildings)
-                + w_survival * _safe_ratio(survived_ticks, max_survival_ticks)
-                + discipline_penalty
-            )
-            row["performance_score"] = performance_score
-            row["base_elo_component"] = k_factor * (placement_total - expected_total)
-            raw_changes.append(0.0)  # placeholder, computed below
-
-        if is_ranked:
-            # Recompute raw changes only for humans
-            human_indices = [i for i, r in enumerate(player_rows) if not r["is_bot"]]
-            human_perf = [player_rows[i]["performance_score"] for i in human_indices]
-            average_performance = sum(human_perf) / len(human_perf) if human_perf else 0.0
-
-            perf_component_weight = get_module_config("leaderboard", "performance_component_weight", 0.35)
-            for i in human_indices:
-                row = player_rows[i]
-                performance_component = (
-                    k_factor * perf_component_weight * (row["performance_score"] - average_performance)
-                )
-                row["raw_elo_change"] = row["base_elo_component"] + performance_component
-                raw_changes[i] = row["raw_elo_change"]
-
-        elo_changes = _balanced_round_elo_changes(raw_changes)
+        elo_changes = _compute_elo_changes(player_rows, total_ticks, k_factor, is_ranked)
 
         users_to_update = []
         player_results_to_create = []
@@ -299,20 +352,58 @@ def finalize_match_results_sync(
         # Award XP to non-bot players and check for level-ups
         _award_match_xp(player_rows, winner_id)
 
-        # Send match result notifications to non-bot players
-        try:
-            from apps.notifications.services import notify_match_result
+        if outbox_enabled:
+            # Write outbox events atomically — side effects are handled by handlers
+            outbox_payload = _build_outbox_payload(match_id, winner_id, total_ticks, player_rows)
+            OutboxEvent.objects.bulk_create(
+                [
+                    OutboxEvent(
+                        aggregate_type="match",
+                        aggregate_id=str(match_id),
+                        event_type="match.finalized",
+                        payload=outbox_payload,
+                    ),
+                    OutboxEvent(
+                        aggregate_type="match",
+                        aggregate_id=str(match_id),
+                        event_type="match.notifications",
+                        payload=outbox_payload,
+                    ),
+                    OutboxEvent(
+                        aggregate_type="match",
+                        aggregate_id=str(match_id),
+                        event_type="match.webhooks",
+                        payload=outbox_payload,
+                    ),
+                    OutboxEvent(
+                        aggregate_type="match",
+                        aggregate_id=str(match_id),
+                        event_type="match.clan_war",
+                        payload={
+                            "match_id": str(match_id),
+                            "winner_id": str(winner_id) if winner_id else None,
+                        },
+                    ),
+                ]
+            )
+        else:
+            # OUTBOX: legacy synchronous side effects below (kept for backward compatibility)
 
-            for row in player_rows:
-                if not row["is_bot"]:
-                    notify_match_result(
-                        user=row["match_player"].user,
-                        placement=row["placement"],
-                        elo_change=row.get("final_elo_change", 0),
-                        match_id=str(match_id),
-                    )
-        except Exception as e:
-            logger.error("Failed to send match result notifications for match %s: %s", match_id, e)
+            # Send match result notifications to non-bot players
+            # OUTBOX: moved to handle_match_notifications
+            try:
+                from apps.notifications.services import notify_match_result
+
+                for row in player_rows:
+                    if not row["is_bot"]:
+                        notify_match_result(
+                            user=row["match_player"].user,
+                            placement=row["placement"],
+                            elo_change=row.get("final_elo_change", 0),
+                            match_id=str(match_id),
+                        )
+            except Exception as e:
+                logger.error("Failed to send match result notifications for match %s: %s", match_id, e)
 
     logger.info(
         "Match %s finalized immediately: winner=%s, ticks=%d",
@@ -321,6 +412,142 @@ def finalize_match_results_sync(
         total_ticks,
     )
 
+    if not outbox_enabled:
+        # OUTBOX: legacy synchronous side effects — StatTrak, drops, webhooks, clan war
+
+        # --- StatTrak increment ---
+        # OUTBOX: moved to handle_match_finalized
+        try:
+            from django.db.models import F
+
+            from apps.inventory.models import ItemInstance
+
+            stattrak_instance_ids = set()
+
+            for mp in match.players.all():
+                # Collect instance_ids from deck_snapshot
+                if mp.deck_snapshot:
+                    for iid in mp.deck_snapshot.get("instance_ids", []):
+                        stattrak_instance_ids.add(iid)
+
+                # Collect instance_ids from cosmetic_snapshot
+                if mp.cosmetic_snapshot:
+                    for _slot, val in mp.cosmetic_snapshot.items():
+                        if isinstance(val, dict) and val.get("instance_id"):
+                            stattrak_instance_ids.add(val["instance_id"])
+
+            if stattrak_instance_ids:
+                # Build per-player stats map keyed by user_id string
+                player_stats = {}
+                for row in player_rows:
+                    pid = row["pid"]
+                    player_stats[pid] = {
+                        "regions": row.get("owned_regions", 0),
+                        "units": row.get("total_units", 0),
+                    }
+
+                # Increment matches counter on all StatTrak instances that participated
+                ItemInstance.objects.filter(
+                    id__in=stattrak_instance_ids,
+                    stattrak=True,
+                ).update(
+                    stattrak_matches=F("stattrak_matches") + 1,
+                )
+
+                # Per-player updates for region kills and units produced
+                for mp in match.players.all():
+                    pid = str(mp.user_id)
+                    stats = player_stats.get(pid, {})
+
+                    mp_instance_ids = set()
+                    if mp.deck_snapshot:
+                        for iid in mp.deck_snapshot.get("instance_ids", []):
+                            mp_instance_ids.add(iid)
+                    if mp.cosmetic_snapshot:
+                        for _slot, val in mp.cosmetic_snapshot.items():
+                            if isinstance(val, dict) and val.get("instance_id"):
+                                mp_instance_ids.add(val["instance_id"])
+
+                    if mp_instance_ids:
+                        ItemInstance.objects.filter(
+                            id__in=mp_instance_ids,
+                            stattrak=True,
+                        ).update(
+                            stattrak_kills=F("stattrak_kills") + stats.get("regions", 0),
+                            stattrak_units_produced=F("stattrak_units_produced") + stats.get("units", 0),
+                        )
+        except Exception as e:
+            logger.error("Failed to update StatTrak for match %s: %s", match_id, e)
+
+        # Generate post-match item drops
+        # OUTBOX: moved to handle_match_finalized
+        try:
+            from apps.inventory.tasks import generate_match_drops
+
+            generate_match_drops(match_id)
+        except Exception as e:
+            logger.error("Failed to generate match drops for %s: %s", match_id, e)
+
+        # Dispatch webhook events
+        # OUTBOX: moved to handle_match_webhooks
+        try:
+            from apps.developers.tasks import dispatch_webhook_event
+
+            dispatch_webhook_event(
+                "match.finished",
+                {
+                    "match_id": str(match_id),
+                    "winner_id": str(winner_id) if winner_id else None,
+                },
+            )
+
+            for row in player_rows:
+                if not row["is_bot"] and row.get("final_elo_change", 0) != 0:
+                    user = row["match_player"].user
+                    dispatch_webhook_event(
+                        "player.elo_changed",
+                        {
+                            "user_id": str(user.id),
+                            "username": user.username,
+                            "elo_change": row["final_elo_change"],
+                            "new_elo": user.elo_rating,
+                            "match_id": str(match_id),
+                        },
+                    )
+        except Exception as e:
+            logger.error("Failed to dispatch webhook events: %s", e)
+
+        # --- Clan war resolution ---
+        # OUTBOX: moved to handle_clan_war_resolution
+        try:
+            from apps.clans.models import ClanWar
+
+            clan_war = (
+                ClanWar.objects.filter(
+                    match_id=match_id,
+                    status=ClanWar.Status.IN_PROGRESS,
+                )
+                .select_related("challenger", "defender")
+                .first()
+            )
+
+            if clan_war:
+                _resolve_clan_war(clan_war, match_id, winner_id)
+        except Exception as e:
+            logger.error("Failed to resolve clan war for match %s: %s", match_id, e)
+
+
+# ---------------------------------------------------------------------------
+# Outbox handler tasks — invoked by publish_outbox_events
+# ---------------------------------------------------------------------------
+
+
+@shared_task(bind=True, max_retries=5, default_retry_delay=10)
+def handle_match_finalized(self, payload: dict):
+    """Handle StatTrak updates and item drop generation after match finalization."""
+    match_id = payload["match_id"]
+    players = payload.get("players", [])
+
     # --- StatTrak increment ---
     try:
         from django.db.models import F
@@ -328,50 +555,43 @@ def finalize_match_results_sync(
         from apps.inventory.models import ItemInstance
 
         stattrak_instance_ids = set()
+        player_stats: dict[str, dict] = {}
 
-        for mp in match.players.all():
-            # Collect instance_ids from deck_snapshot
-            if mp.deck_snapshot:
-                for iid in mp.deck_snapshot.get("instance_ids", []):
-                    stattrak_instance_ids.add(iid)
+        for p in players:
+            pid = p["user_id"]
+            player_stats[pid] = {
+                "regions": p.get("owned_regions", 0),
+                "units": p.get("total_units", 0),
+            }
+            deck_snapshot = p.get("deck_snapshot") or {}
+            cosmetic_snapshot = p.get("cosmetic_snapshot") or {}
 
-            # Collect instance_ids from cosmetic_snapshot
-            if mp.cosmetic_snapshot:
-                for _slot, val in mp.cosmetic_snapshot.items():
-                    if isinstance(val, dict) and val.get("instance_id"):
-                        stattrak_instance_ids.add(val["instance_id"])
+            for iid in deck_snapshot.get("instance_ids", []):
+                stattrak_instance_ids.add(iid)
+            for _slot, val in cosmetic_snapshot.items():
+                if isinstance(val, dict) and val.get("instance_id"):
+                    stattrak_instance_ids.add(val["instance_id"])
 
         if stattrak_instance_ids:
-            # Build per-player stats map keyed by user_id string
-            player_stats = {}
-            for row in player_rows:
-                pid = row["pid"]
-                player_stats[pid] = {
-                    "regions": row.get("owned_regions", 0),
-                    "units": row.get("total_units", 0),
-                }
-
-            # Increment matches counter on all StatTrak instances that participated
+            # Increment matches counter on all participating StatTrak instances
             ItemInstance.objects.filter(
                 id__in=stattrak_instance_ids,
                 stattrak=True,
-            ).update(
-                stattrak_matches=F("stattrak_matches") + 1,
-            )
+            ).update(stattrak_matches=F("stattrak_matches") + 1)
 
-            # Per-player updates for region kills and units produced
-            for mp in match.players.all():
-                pid = str(mp.user_id)
+            # Per-player region/unit updates
+            for p in players:
+                pid = p["user_id"]
                 stats = player_stats.get(pid, {})
 
-                mp_instance_ids = set()
-                if mp.deck_snapshot:
-                    for iid in mp.deck_snapshot.get("instance_ids", []):
-                        mp_instance_ids.add(iid)
-                if mp.cosmetic_snapshot:
-                    for _slot, val in mp.cosmetic_snapshot.items():
-                        if isinstance(val, dict) and val.get("instance_id"):
-                            mp_instance_ids.add(val["instance_id"])
+                mp_instance_ids: set = set()
+                deck_snapshot = p.get("deck_snapshot") or {}
+                cosmetic_snapshot = p.get("cosmetic_snapshot") or {}
+                for iid in deck_snapshot.get("instance_ids", []):
+                    mp_instance_ids.add(iid)
+                for _slot, val in cosmetic_snapshot.items():
+                    if isinstance(val, dict) and val.get("instance_id"):
+                        mp_instance_ids.add(val["instance_id"])
 
                 if mp_instance_ids:
                     ItemInstance.objects.filter(
@@ -382,7 +602,8 @@ def finalize_match_results_sync(
                         stattrak_units_produced=F("stattrak_units_produced") + stats.get("units", 0),
                     )
     except Exception as e:
-        logger.error("Failed to update StatTrak for match %s: %s", match_id, e)
+        logger.error("handle_match_finalized: StatTrak failed for match %s: %s", match_id, e)
+        raise self.retry(exc=e) from e
 
     # Generate post-match item drops
     try:
@@ -390,9 +611,51 @@ def finalize_match_results_sync(
 
         generate_match_drops(match_id)
     except Exception as e:
-        logger.error("Failed to generate match drops for %s: %s", match_id, e)
+        logger.error("handle_match_finalized: drop generation failed for match %s: %s", match_id, e)
+        raise self.retry(exc=e) from e
 
-    # Dispatch webhook events
+    logger.info("handle_match_finalized: completed for match %s", match_id)
+
+
+@shared_task(bind=True, max_retries=5, default_retry_delay=10)
+def handle_match_notifications(self, payload: dict):
+    """Send match result notifications to all human players."""
+    match_id = payload["match_id"]
+    players = payload.get("players", [])
+
+    try:
+        from apps.accounts.models import User
+        from apps.notifications.services import notify_match_result
+
+        user_ids = [p["user_id"] for p in players if not p["is_bot"]]
+        user_map = {str(u.id): u for u in User.objects.filter(id__in=user_ids)}
+
+        for p in players:
+            if p["is_bot"]:
+                continue
+            user = user_map.get(p["user_id"])
+            if user is None:
+                continue
+            notify_match_result(
+                user=user,
+                placement=p["placement"],
+                elo_change=p.get("final_elo_change", 0),
+                match_id=str(match_id),
+            )
+    except Exception as e:
+        logger.error("handle_match_notifications: failed for match %s: %s", match_id, e)
+        raise self.retry(exc=e) from e
+
+    logger.info("handle_match_notifications: completed for match %s", match_id)
+
+
+@shared_task(bind=True, max_retries=5, default_retry_delay=10)
+def handle_match_webhooks(self, payload: dict):
+    """Dispatch match.finished and player.elo_changed webhook events."""
+    match_id = payload["match_id"]
+    winner_id = payload.get("winner_id")
+    players = payload.get("players", [])
+
     try:
         from apps.developers.tasks import dispatch_webhook_event
 
@@ -404,23 +667,43 @@ def finalize_match_results_sync(
             },
         )
 
-        for row in player_rows:
-            if not row["is_bot"] and row.get("final_elo_change", 0) != 0:
-                user = row["match_player"].user
-                dispatch_webhook_event(
-                    "player.elo_changed",
-                    {
-                        "user_id": str(user.id),
-                        "username": user.username,
-                        "elo_change": row["final_elo_change"],
-                        "new_elo": user.elo_rating,
-                        "match_id": str(match_id),
-                    },
-                )
-    except Exception as e:
-        logger.error(f"Failed to dispatch webhook events: {e}")
+        from apps.accounts.models import User
 
-    # --- Clan war resolution ---
+        user_ids = [p["user_id"] for p in players if not p["is_bot"] and p.get("final_elo_change", 0) != 0]
+        user_map = {str(u.id): u for u in User.objects.filter(id__in=user_ids)}
+
+        for p in players:
+            if p["is_bot"]:
+                continue
+            elo_change = p.get("final_elo_change", 0)
+            if elo_change == 0:
+                continue
+            user = user_map.get(p["user_id"])
+            if user is None:
+                continue
+            dispatch_webhook_event(
+                "player.elo_changed",
+                {
+                    "user_id": str(user.id),
+                    "username": user.username,
+                    "elo_change": elo_change,
+                    "new_elo": user.elo_rating,
+                    "match_id": str(match_id),
+                },
+            )
+    except Exception as e:
+        logger.error("handle_match_webhooks: failed for match %s: %s", match_id, e)
+        raise self.retry(exc=e) from e
+
+    logger.info("handle_match_webhooks: completed for match %s", match_id)
+
+
+@shared_task(bind=True, max_retries=5, default_retry_delay=10)
+def handle_clan_war_resolution(self, payload: dict):
+    """Resolve a clan war if the finished match was a war match."""
+    match_id = payload["match_id"]
+    winner_id = payload.get("winner_id")
+
     try:
         from apps.clans.models import ClanWar
 
@@ -435,8 +718,79 @@ def finalize_match_results_sync(
 
         if clan_war:
             _resolve_clan_war(clan_war, match_id, winner_id)
+        else:
+            logger.debug("handle_clan_war_resolution: no in-progress clan war for match %s", match_id)
     except Exception as e:
-        logger.error("Failed to resolve clan war for match %s: %s", match_id, e)
+        logger.error("handle_clan_war_resolution: failed for match %s: %s", match_id, e)
+        raise self.retry(exc=e) from e
+
+    logger.info("handle_clan_war_resolution: completed for match %s", match_id)
+
+
+# Mapping of event_type → handler task
+_OUTBOX_HANDLERS: dict[str, "shared_task"] = {}
+
+
+def _get_outbox_handlers() -> dict:
+    """Lazily build the event_type → handler task map to avoid import-time issues."""
+    global _OUTBOX_HANDLERS
+    if not _OUTBOX_HANDLERS:
+        _OUTBOX_HANDLERS = {
+            "match.finalized": handle_match_finalized,
+            "match.notifications": handle_match_notifications,
+            "match.webhooks": handle_match_webhooks,
+            "match.clan_war": handle_clan_war_resolution,
+        }
+    return _OUTBOX_HANDLERS
+
+
+@shared_task
+def publish_outbox_events():
+    """Periodic task: pick up unpublished OutboxEvents and dispatch handler tasks.
+
+    Uses SELECT FOR UPDATE SKIP LOCKED so multiple Celery workers do not race
+    on the same batch.  Marks events published before dispatching so that a
+    crash in the handler does not re-dispatch — handlers themselves carry
+    retry logic.
+    """
+    from django.utils import timezone
+
+    from apps.game.models import OutboxEvent
+
+    handlers = _get_outbox_handlers()
+
+    with transaction.atomic():
+        events = list(
+            OutboxEvent.objects.select_for_update(skip_locked=True).filter(published=False).order_by("created_at")[:100]
+        )
+
+        if not events:
+            return
+
+        now = timezone.now()
+        for event in events:
+            event.published = True
+            event.published_at = now
+        OutboxEvent.objects.bulk_update(events, ["published", "published_at"])
+
+    # Dispatch outside the transaction so the commit is visible before tasks run
+    for event in events:
+        handler = handlers.get(event.event_type)
+        if handler is None:
+            logger.warning("publish_outbox_events: no handler for event_type=%s", event.event_type)
+            continue
+        try:
+            handler.delay(event.payload)
+        except Exception as e:
+            logger.error(
+                "publish_outbox_events: failed to dispatch %s for %s:%s — %s",
+                event.event_type,
+                event.aggregate_type,
+                event.aggregate_id,
+                e,
+            )
+
+    logger.info("publish_outbox_events: dispatched %d events", len(events))
 
 
 def _resolve_clan_war(clan_war, match_id: str, winner_id: str | None) -> None:
